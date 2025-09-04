@@ -8,17 +8,16 @@ import * as dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { 
-  getTempFilename, 
-  buildDeploymentStrategy, 
-  detectDeploymentNeeds,
-  createBatchDeployScript 
+import {
+  getTempFilename,
+  buildDeploymentStrategy,
+  detectDeploymentNeeds
 } from './deploy-helper.js';
-import { 
-  resolveServerName, 
-  loadAliases, 
+import {
+  resolveServerName,
   addAlias,
-  listAliases 
+  removeAlias,
+  listAliases
 } from './server-aliases.js';
 import {
   expandCommandAlias,
@@ -30,8 +29,6 @@ import {
 import {
   initializeHooks,
   executeHook,
-  addHook,
-  removeHook,
   toggleHook,
   listHooks
 } from './hooks-system.js';
@@ -57,19 +54,19 @@ const connections = new Map();
 // Load server configuration from .env
 function loadServerConfig() {
   const servers = {};
-  
+
   // Parse environment variables to extract servers
   const knownFields = ['HOST', 'USER', 'PASSWORD', 'PORT', 'KEYPATH', 'DEFAULT_DIR', 'DESCRIPTION', 'SUDO_PASSWORD', 'ALIAS'];
-  
+
   for (const [key, value] of Object.entries(process.env)) {
     if (key.startsWith('SSH_SERVER_')) {
       // Remove SSH_SERVER_ prefix
       const remaining = key.substring(11);
-      
+
       // Find the last known field in the key
       let serverName = null;
       let field = null;
-      
+
       for (const knownField of knownFields) {
         const idx = remaining.lastIndexOf('_' + knownField);
         if (idx !== -1) {
@@ -78,7 +75,7 @@ function loadServerConfig() {
           break;
         }
       }
-      
+
       if (serverName && field) {
         if (!servers[serverName]) {
           servers[serverName] = {};
@@ -87,37 +84,37 @@ function loadServerConfig() {
       }
     }
   }
-  
+
   return servers;
 }
 
 // Get or create SSH connection
 async function getConnection(serverName) {
   const servers = loadServerConfig();
-  
+
   // Execute pre-connect hook
   await executeHook('pre-connect', { server: serverName });
-  
+
   // Try to resolve through aliases first
   const resolvedName = resolveServerName(serverName, servers);
-  
+
   if (!resolvedName) {
     const availableServers = Object.keys(servers);
     const aliases = listAliases();
-    const aliasInfo = aliases.length > 0 ? 
+    const aliasInfo = aliases.length > 0 ?
       ` Aliases: ${aliases.map(a => `${a.alias}->${a.target}`).join(', ')}` : '';
     throw new Error(
       `Server "${serverName}" not found. Available servers: ${availableServers.join(', ') || 'none'}.${aliasInfo}`
     );
   }
-  
+
   const normalizedName = resolvedName;
-  
+
   if (!connections.has(normalizedName)) {
     const serverConfig = servers[normalizedName];
 
     const ssh = new NodeSSH();
-    
+
     try {
       const connectionConfig = {
         host: serverConfig.host,
@@ -136,7 +133,7 @@ async function getConnection(serverName) {
       await ssh.connect(connectionConfig);
       connections.set(normalizedName, ssh);
       console.error(`✅ Connected to ${serverName}`);
-      
+
       // Execute post-connect hook
       await executeHook('post-connect', { server: serverName });
     } catch (error) {
@@ -145,7 +142,7 @@ async function getConnection(serverName) {
       throw new Error(`Failed to connect to ${serverName}: ${error.message}`);
     }
   }
-  
+
   return connections.get(normalizedName);
 }
 
@@ -169,36 +166,36 @@ server.registerTool(
   async ({ server: serverName, command, cwd }) => {
     try {
       const ssh = await getConnection(serverName);
-      
+
       // Expand command aliases
       const expandedCommand = expandCommandAlias(command);
-      
+
       // Execute hooks for bench commands
       if (expandedCommand.includes('bench update')) {
-        await executeHook('pre-bench-update', { 
-          server: serverName, 
+        await executeHook('pre-bench-update', {
+          server: serverName,
           sshConnection: ssh,
-          defaultDir: cwd 
+          defaultDir: cwd
         });
       }
-      
+
       // Use provided cwd, or default_dir from config, or no cwd
       const servers = loadServerConfig();
       const serverConfig = servers[serverName.toLowerCase()];
       const workingDir = cwd || serverConfig?.default_dir;
       const fullCommand = workingDir ? `cd ${workingDir} && ${expandedCommand}` : expandedCommand;
-      
+
       const result = await ssh.execCommand(fullCommand);
-      
+
       // Execute post-hooks for bench commands
       if (expandedCommand.includes('bench update') && result.code === 0) {
-        await executeHook('post-bench-update', { 
-          server: serverName, 
+        await executeHook('post-bench-update', {
+          server: serverName,
           sshConnection: ssh,
-          defaultDir: cwd 
+          defaultDir: cwd
         });
       }
-      
+
       return {
         content: [
           {
@@ -241,7 +238,7 @@ server.registerTool(
     try {
       const ssh = await getConnection(serverName);
       await ssh.putFile(localPath, remotePath);
-      
+
       return {
         content: [
           {
@@ -277,7 +274,7 @@ server.registerTool(
     try {
       const ssh = await getConnection(serverName);
       await ssh.getFile(localPath, remotePath);
-      
+
       return {
         content: [
           {
@@ -316,7 +313,7 @@ server.registerTool(
       defaultDir: config.default_dir || '',
       description: config.description || ''
     }));
-    
+
     return {
       content: [
         {
@@ -351,52 +348,49 @@ server.registerTool(
   async ({ server, files, options = {} }) => {
     try {
       const ssh = await getConnection(server);
-      
+
       // Execute pre-deploy hook
-      await executeHook('pre-deploy', { 
+      await executeHook('pre-deploy', {
         server: server,
         files: files.map(f => f.local).join(', ')
       });
-      
+
       const deployments = [];
       const results = [];
-      
+
       // Prepare deployment for each file
       for (const file of files) {
         const tempFile = getTempFilename(path.basename(file.local));
         const needs = detectDeploymentNeeds(file.remote);
-        
+
         // Merge detected needs with user options
         const deployOptions = {
           ...options,
           owner: options.owner || needs.suggestedOwner,
           permissions: options.permissions || needs.suggestedPerms
         };
-        
+
         const strategy = buildDeploymentStrategy(file.remote, deployOptions);
-        
+
         // Upload file to temp location first
         await ssh.putFile(file.local, tempFile);
         results.push(`✅ Uploaded ${path.basename(file.local)} to temp location`);
-        
+
         // Execute deployment strategy
         for (const step of strategy.steps) {
           const command = step.command.replace('{{tempFile}}', tempFile);
-          
-          // Mask sudo password in output
-          const displayCommand = command.replace(/echo "[^"]+" \| sudo -S/, 'sudo');
-          
+
           const result = await ssh.execCommand(command);
-          
+
           if (result.code !== 0 && step.type !== 'backup') {
             throw new Error(`${step.type} failed: ${result.stderr}`);
           }
-          
+
           if (step.type !== 'cleanup') {
             results.push(`✅ ${step.type}: ${file.remote}`);
           }
         }
-        
+
         deployments.push({
           local: file.local,
           remote: file.remote,
@@ -404,13 +398,13 @@ server.registerTool(
           strategy
         });
       }
-      
+
       // Execute post-deploy hook
-      await executeHook('post-deploy', { 
+      await executeHook('post-deploy', {
         server: server,
         files: files.map(f => f.remote).join(', ')
       });
-      
+
       return {
         content: [
           {
@@ -450,15 +444,15 @@ server.registerTool(
       const servers = loadServerConfig();
       const resolvedName = resolveServerName(server, servers);
       const serverConfig = servers[resolvedName];
-      
+
       // Build the full command
       let fullCommand = command;
-      
+
       // Add sudo if not already present
       if (!fullCommand.startsWith('sudo ')) {
         fullCommand = `sudo ${fullCommand}`;
       }
-      
+
       // Add password if provided
       if (password) {
         fullCommand = `echo "${password}" | sudo -S ${command.replace(/^sudo /, '')}`;
@@ -466,19 +460,19 @@ server.registerTool(
         // Use configured sudo password if available
         fullCommand = `echo "${serverConfig.sudo_password}" | sudo -S ${command.replace(/^sudo /, '')}`;
       }
-      
+
       // Add working directory if specified
       if (cwd) {
         fullCommand = `cd ${cwd} && ${fullCommand}`;
       } else if (serverConfig?.default_dir) {
         fullCommand = `cd ${serverConfig.default_dir} && ${fullCommand}`;
       }
-      
+
       const result = await ssh.execCommand(fullCommand);
-      
+
       // Mask password in output for security
       const maskedCommand = fullCommand.replace(/echo "[^"]+" \| sudo -S/, 'sudo');
-      
+
       return {
         content: [
           {
@@ -514,79 +508,79 @@ server.registerTool(
   async ({ action, alias, command }) => {
     try {
       switch (action) {
-        case 'add': {
-          if (!alias || !command) {
-            throw new Error('Both alias and command are required for add action');
-          }
-          
-          addCommandAlias(alias, command);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `✅ Command alias created: ${alias} -> ${command}`,
-              },
-            ],
-          };
+      case 'add': {
+        if (!alias || !command) {
+          throw new Error('Both alias and command are required for add action');
         }
-        
-        case 'remove': {
-          if (!alias) {
-            throw new Error('Alias is required for remove action');
-          }
-          
-          removeCommandAlias(alias);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `✅ Command alias removed: ${alias}`,
-              },
-            ],
-          };
+
+        addCommandAlias(alias, command);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `✅ Command alias created: ${alias} -> ${command}`,
+            },
+          ],
+        };
+      }
+
+      case 'remove': {
+        if (!alias) {
+          throw new Error('Alias is required for remove action');
         }
-        
-        case 'list': {
-          const aliases = listCommandAliases();
-          
-          const aliasInfo = aliases.map(({ alias, command, isFromProfile, isCustom }) => 
-            `  ${alias} -> ${command}${isFromProfile ? ' (profile)' : ''}${isCustom ? ' (custom)' : ''}`
-          ).join('\n');
-          
-          return {
-            content: [
-              {
-                type: 'text',
-                text: aliases.length > 0 ? 
-                  `📝 Command aliases:\n${aliasInfo}` :
-                  '📝 No command aliases configured',
-              },
-            ],
-          };
+
+        removeCommandAlias(alias);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `✅ Command alias removed: ${alias}`,
+            },
+          ],
+        };
+      }
+
+      case 'list': {
+        const aliases = listCommandAliases();
+
+        const aliasInfo = aliases.map(({ alias, command, isFromProfile, isCustom }) =>
+          `  ${alias} -> ${command}${isFromProfile ? ' (profile)' : ''}${isCustom ? ' (custom)' : ''}`
+        ).join('\n');
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: aliases.length > 0 ?
+                `📝 Command aliases:\n${aliasInfo}` :
+                '📝 No command aliases configured',
+            },
+          ],
+        };
+      }
+
+      case 'suggest': {
+        if (!command) {
+          throw new Error('Command search term is required for suggest action');
         }
-        
-        case 'suggest': {
-          if (!command) {
-            throw new Error('Command search term is required for suggest action');
-          }
-          
-          const suggestions = suggestAliases(command);
-          
-          const suggestionInfo = suggestions.map(({ alias, command }) => 
-            `  ${alias} -> ${command}`
-          ).join('\n');
-          
-          return {
-            content: [
-              {
-                type: 'text',
-                text: suggestions.length > 0 ? 
-                  `💡 Suggested aliases for "${command}":\n${suggestionInfo}` :
-                  `💡 No aliases found matching "${command}"`,
-              },
-            ],
-          };
-        }
+
+        const suggestions = suggestAliases(command);
+
+        const suggestionInfo = suggestions.map(({ alias, command }) =>
+          `  ${alias} -> ${command}`
+        ).join('\n');
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: suggestions.length > 0 ?
+                `💡 Suggested aliases for "${command}":\n${suggestionInfo}` :
+                `💡 No aliases found matching "${command}"`,
+            },
+          ],
+        };
+      }
       }
     } catch (error) {
       return {
@@ -614,71 +608,71 @@ server.registerTool(
   async ({ action, hook }) => {
     try {
       switch (action) {
-        case 'list': {
-          const hooks = listHooks();
-          
-          const hooksInfo = hooks.map(({ name, enabled, description, actionCount }) => 
-            `  ${enabled ? '✅' : '⭕'} ${name}: ${description} (${actionCount} actions)`
-          ).join('\n');
-          
-          return {
-            content: [
-              {
-                type: 'text',
-                text: hooks.length > 0 ? 
-                  `🎣 Available hooks:\n${hooksInfo}` :
-                  '🎣 No hooks configured',
-              },
-            ],
-          };
+      case 'list': {
+        const hooks = listHooks();
+
+        const hooksInfo = hooks.map(({ name, enabled, description, actionCount }) =>
+          `  ${enabled ? '✅' : '⭕'} ${name}: ${description} (${actionCount} actions)`
+        ).join('\n');
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: hooks.length > 0 ?
+                `🎣 Available hooks:\n${hooksInfo}` :
+                '🎣 No hooks configured',
+            },
+          ],
+        };
+      }
+
+      case 'enable': {
+        if (!hook) {
+          throw new Error('Hook name is required for enable action');
         }
-        
-        case 'enable': {
-          if (!hook) {
-            throw new Error('Hook name is required for enable action');
-          }
-          
-          toggleHook(hook, true);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `✅ Hook enabled: ${hook}`,
-              },
-            ],
-          };
+
+        toggleHook(hook, true);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `✅ Hook enabled: ${hook}`,
+            },
+          ],
+        };
+      }
+
+      case 'disable': {
+        if (!hook) {
+          throw new Error('Hook name is required for disable action');
         }
-        
-        case 'disable': {
-          if (!hook) {
-            throw new Error('Hook name is required for disable action');
-          }
-          
-          toggleHook(hook, false);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `⭕ Hook disabled: ${hook}`,
-              },
-            ],
-          };
-        }
-        
-        case 'status': {
-          const hooks = listHooks();
-          const enabledHooks = hooks.filter(h => h.enabled);
-          const disabledHooks = hooks.filter(h => !h.enabled);
-          
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `🎣 Hook status:\n  Enabled: ${enabledHooks.map(h => h.name).join(', ') || 'none'}\n  Disabled: ${disabledHooks.map(h => h.name).join(', ') || 'none'}`,
-              },
-            ],
-          };
-        }
+
+        toggleHook(hook, false);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `⭕ Hook disabled: ${hook}`,
+            },
+          ],
+        };
+      }
+
+      case 'status': {
+        const hooks = listHooks();
+        const enabledHooks = hooks.filter(h => h.enabled);
+        const disabledHooks = hooks.filter(h => !h.enabled);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `🎣 Hook status:\n  Enabled: ${enabledHooks.map(h => h.name).join(', ') || 'none'}\n  Disabled: ${disabledHooks.map(h => h.name).join(', ') || 'none'}`,
+            },
+          ],
+        };
+      }
       }
     } catch (error) {
       return {
@@ -706,59 +700,59 @@ server.registerTool(
   async ({ action, profile }) => {
     try {
       switch (action) {
-        case 'list': {
-          const profiles = listProfiles();
-          
-          const profileInfo = profiles.map(p => 
-            `  ${p.name}: ${p.description} (${p.aliasCount} aliases, ${p.hookCount} hooks)`
-          ).join('\n');
-          
-          const current = getActiveProfileName();
-          
+      case 'list': {
+        const profiles = listProfiles();
+
+        const profileInfo = profiles.map(p =>
+          `  ${p.name}: ${p.description} (${p.aliasCount} aliases, ${p.hookCount} hooks)`
+        ).join('\n');
+
+        const current = getActiveProfileName();
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: profiles.length > 0 ?
+                `📚 Available profiles (current: ${current}):\n${profileInfo}` :
+                '📚 No profiles found',
+            },
+          ],
+        };
+      }
+
+      case 'switch': {
+        if (!profile) {
+          throw new Error('Profile name is required for switch action');
+        }
+
+        if (setActiveProfile(profile)) {
           return {
             content: [
               {
                 type: 'text',
-                text: profiles.length > 0 ? 
-                  `📚 Available profiles (current: ${current}):\n${profileInfo}` :
-                  '📚 No profiles found',
+                text: `✅ Switched to profile: ${profile}\n⚠️  Restart Claude Code to apply profile changes`,
               },
             ],
           };
+        } else {
+          throw new Error(`Failed to switch to profile: ${profile}`);
         }
-        
-        case 'switch': {
-          if (!profile) {
-            throw new Error('Profile name is required for switch action');
-          }
-          
-          if (setActiveProfile(profile)) {
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: `✅ Switched to profile: ${profile}\n⚠️  Restart Claude Code to apply profile changes`,
-                },
-              ],
-            };
-          } else {
-            throw new Error(`Failed to switch to profile: ${profile}`);
-          }
-        }
-        
-        case 'current': {
-          const current = getActiveProfileName();
-          const profile = loadProfile();
-          
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `📦 Current profile: ${current}\n📝 Description: ${profile.description || 'No description'}\n🔧 Aliases: ${Object.keys(profile.commandAliases || {}).length}\n🎣 Hooks: ${Object.keys(profile.hooks || {}).length}`,
-              },
-            ],
-          };
-        }
+      }
+
+      case 'current': {
+        const current = getActiveProfileName();
+        const profile = loadProfile();
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `📦 Current profile: ${current}\n📝 Description: ${profile.description || 'No description'}\n🔧 Aliases: ${Object.keys(profile.commandAliases || {}).length}\n🎣 Hooks: ${Object.keys(profile.hooks || {}).length}`,
+            },
+          ],
+        };
+      }
       }
     } catch (error) {
       return {
@@ -787,65 +781,65 @@ server.registerTool(
   async ({ action, alias, server }) => {
     try {
       switch (action) {
-        case 'add': {
-          if (!alias || !server) {
-            throw new Error('Both alias and server are required for add action');
-          }
-          
-          const servers = loadServerConfig();
-          const resolvedName = resolveServerName(server, servers);
-          
-          if (!resolvedName) {
-            throw new Error(`Server "${server}" not found`);
-          }
-          
-          addAlias(alias, resolvedName);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `✅ Alias created: ${alias} -> ${resolvedName}`,
-              },
-            ],
-          };
+      case 'add': {
+        if (!alias || !server) {
+          throw new Error('Both alias and server are required for add action');
         }
-        
-        case 'remove': {
-          if (!alias) {
-            throw new Error('Alias is required for remove action');
-          }
-          
-          removeAlias(alias);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `✅ Alias removed: ${alias}`,
-              },
-            ],
-          };
+
+        const servers = loadServerConfig();
+        const resolvedName = resolveServerName(server, servers);
+
+        if (!resolvedName) {
+          throw new Error(`Server "${server}" not found`);
         }
-        
-        case 'list': {
-          const aliases = listAliases();
-          const servers = loadServerConfig();
-          
-          const aliasInfo = aliases.map(({ alias, target }) => {
-            const server = servers[target];
-            return `  ${alias} -> ${target} (${server?.host || 'unknown'})`;
-          }).join('\n');
-          
-          return {
-            content: [
-              {
-                type: 'text',
-                text: aliases.length > 0 ? 
-                  `📝 Server aliases:\n${aliasInfo}` :
-                  '📝 No aliases configured',
-              },
-            ],
-          };
+
+        addAlias(alias, resolvedName);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `✅ Alias created: ${alias} -> ${resolvedName}`,
+            },
+          ],
+        };
+      }
+
+      case 'remove': {
+        if (!alias) {
+          throw new Error('Alias is required for remove action');
         }
+
+        removeAlias(alias);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `✅ Alias removed: ${alias}`,
+            },
+          ],
+        };
+      }
+
+      case 'list': {
+        const aliases = listAliases();
+        const servers = loadServerConfig();
+
+        const aliasInfo = aliases.map(({ alias, target }) => {
+          const server = servers[target];
+          return `  ${alias} -> ${target} (${server?.host || 'unknown'})`;
+        }).join('\n');
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: aliases.length > 0 ?
+                `📝 Server aliases:\n${aliasInfo}` :
+                '📝 No aliases configured',
+            },
+          ],
+        };
+      }
       }
     } catch (error) {
       return {
@@ -874,11 +868,11 @@ process.on('SIGINT', async () => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  
+
   const servers = loadServerConfig();
   const serverList = Object.keys(servers);
   const activeProfile = getActiveProfileName();
-  
+
   console.error('🚀 MCP SSH Manager Server started');
   console.error(`📦 Profile: ${activeProfile}`);
   console.error(`🖥️  Available servers: ${serverList.length > 0 ? serverList.join(', ') : 'none configured'}`);
