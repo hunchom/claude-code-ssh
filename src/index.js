@@ -51,6 +51,18 @@ initializeHooks().catch(console.error);
 // Map to store active connections
 const connections = new Map();
 
+// Map to store connection timestamps for timeout management
+const connectionTimestamps = new Map();
+
+// Connection timeout in milliseconds (30 minutes)
+const CONNECTION_TIMEOUT = 30 * 60 * 1000;
+
+// Keepalive interval in milliseconds (5 minutes)
+const KEEPALIVE_INTERVAL = 5 * 60 * 1000;
+
+// Map to store keepalive intervals
+const keepaliveIntervals = new Map();
+
 // Load server configuration from .env
 function loadServerConfig() {
   const servers = {};
@@ -88,7 +100,78 @@ function loadServerConfig() {
   return servers;
 }
 
-// Get or create SSH connection
+// Check if a connection is still valid
+async function isConnectionValid(ssh) {
+  try {
+    // Try to execute a simple command to check if connection is alive
+    const result = await ssh.execCommand('echo "ping"', { timeout: 5000 });
+    return result.stdout.trim() === 'ping';
+  } catch (error) {
+    return false;
+  }
+}
+
+// Setup keepalive for a connection
+function setupKeepalive(serverName, ssh) {
+  // Clear existing keepalive if any
+  if (keepaliveIntervals.has(serverName)) {
+    clearInterval(keepaliveIntervals.get(serverName));
+  }
+
+  // Set up new keepalive interval
+  const interval = setInterval(async () => {
+    try {
+      const isValid = await isConnectionValid(ssh);
+      if (!isValid) {
+        console.error(`⚠️  Connection to ${serverName} lost, will reconnect on next use`);
+        closeConnection(serverName);
+      } else {
+        // Update timestamp on successful keepalive
+        connectionTimestamps.set(serverName, Date.now());
+      }
+    } catch (error) {
+      console.error(`⚠️  Keepalive failed for ${serverName}: ${error.message}`);
+    }
+  }, KEEPALIVE_INTERVAL);
+
+  keepaliveIntervals.set(serverName, interval);
+}
+
+// Close a connection and clean up
+function closeConnection(serverName) {
+  const normalizedName = serverName.toLowerCase();
+
+  // Clear keepalive interval
+  if (keepaliveIntervals.has(normalizedName)) {
+    clearInterval(keepaliveIntervals.get(normalizedName));
+    keepaliveIntervals.delete(normalizedName);
+  }
+
+  // Close SSH connection
+  const ssh = connections.get(normalizedName);
+  if (ssh) {
+    ssh.dispose();
+    connections.delete(normalizedName);
+  }
+
+  // Remove timestamp
+  connectionTimestamps.delete(normalizedName);
+
+  console.error(`🔌 Disconnected from ${serverName}`);
+}
+
+// Clean up old connections
+function cleanupOldConnections() {
+  const now = Date.now();
+  for (const [serverName, timestamp] of connectionTimestamps.entries()) {
+    if (now - timestamp > CONNECTION_TIMEOUT) {
+      console.error(`⏱️  Connection to ${serverName} timed out, closing...`);
+      closeConnection(serverName);
+    }
+  }
+}
+
+// Get or create SSH connection with reconnection support
 async function getConnection(serverName) {
   const servers = loadServerConfig();
 
@@ -110,37 +193,61 @@ async function getConnection(serverName) {
 
   const normalizedName = resolvedName;
 
-  if (!connections.has(normalizedName)) {
-    const serverConfig = servers[normalizedName];
+  // Check if we have an existing connection
+  if (connections.has(normalizedName)) {
+    const existingSSH = connections.get(normalizedName);
 
-    const ssh = new NodeSSH();
+    // Verify the connection is still valid
+    const isValid = await isConnectionValid(existingSSH);
 
-    try {
-      const connectionConfig = {
-        host: serverConfig.host,
-        username: serverConfig.user,
-        port: parseInt(serverConfig.port || '22'),
-      };
-
-      // Use password or SSH key
-      if (serverConfig.password) {
-        connectionConfig.password = serverConfig.password;
-      } else if (serverConfig.keypath) {
-        const keyPath = serverConfig.keypath.replace('~', process.env.HOME);
-        connectionConfig.privateKey = fs.readFileSync(keyPath, 'utf8');
-      }
-
-      await ssh.connect(connectionConfig);
-      connections.set(normalizedName, ssh);
-      console.error(`✅ Connected to ${serverName}`);
-
-      // Execute post-connect hook
-      await executeHook('post-connect', { server: serverName });
-    } catch (error) {
-      // Execute error hook
-      await executeHook('on-error', { server: serverName, error: error.message });
-      throw new Error(`Failed to connect to ${serverName}: ${error.message}`);
+    if (isValid) {
+      // Update timestamp and return existing connection
+      connectionTimestamps.set(normalizedName, Date.now());
+      return existingSSH;
+    } else {
+      // Connection is dead, remove it
+      console.error(`♻️  Connection to ${serverName} lost, reconnecting...`);
+      closeConnection(normalizedName);
     }
+  }
+
+  // Create new connection
+  const serverConfig = servers[normalizedName];
+  const ssh = new NodeSSH();
+
+  try {
+    const connectionConfig = {
+      host: serverConfig.host,
+      username: serverConfig.user,
+      port: parseInt(serverConfig.port || '22'),
+      keepaliveInterval: 60000, // Send keepalive every 60 seconds
+      keepaliveCountMax: 10, // Allow 10 keepalive failures before disconnecting
+      readyTimeout: 30000, // 30 second timeout for initial connection
+    };
+
+    // Use password or SSH key
+    if (serverConfig.password) {
+      connectionConfig.password = serverConfig.password;
+    } else if (serverConfig.keypath) {
+      const keyPath = serverConfig.keypath.replace('~', process.env.HOME);
+      connectionConfig.privateKey = fs.readFileSync(keyPath, 'utf8');
+    }
+
+    await ssh.connect(connectionConfig);
+    connections.set(normalizedName, ssh);
+    connectionTimestamps.set(normalizedName, Date.now());
+
+    // Setup keepalive
+    setupKeepalive(normalizedName, ssh);
+
+    console.error(`✅ Connected to ${serverName}`);
+
+    // Execute post-connect hook
+    await executeHook('post-connect', { server: serverName });
+  } catch (error) {
+    // Execute error hook
+    await executeHook('on-error', { server: serverName, error: error.message });
+    throw new Error(`Failed to connect to ${serverName}: ${error.message}`);
   }
 
   return connections.get(normalizedName);
@@ -767,6 +874,123 @@ server.registerTool(
   }
 );
 
+// Connection management tool
+server.registerTool(
+  'ssh_connection_status',
+  {
+    description: 'Check status of SSH connections and manage connection pool',
+    inputSchema: {
+      action: z.enum(['status', 'reconnect', 'disconnect', 'cleanup']).describe('Action to perform'),
+      server: z.string().optional().describe('Server name (for reconnect/disconnect)')
+    }
+  },
+  async ({ action, server }) => {
+    try {
+      switch (action) {
+      case 'status': {
+        const activeConnections = [];
+        const now = Date.now();
+
+        for (const [serverName, ssh] of connections.entries()) {
+          const timestamp = connectionTimestamps.get(serverName);
+          const ageMinutes = Math.floor((now - timestamp) / 1000 / 60);
+          const isValid = await isConnectionValid(ssh);
+
+          activeConnections.push({
+            server: serverName,
+            status: isValid ? '✅ Active' : '❌ Dead',
+            age: `${ageMinutes} minutes`,
+            keepalive: keepaliveIntervals.has(serverName) ? '✅' : '❌'
+          });
+        }
+
+        const statusInfo = activeConnections.length > 0 ?
+          activeConnections.map(c => `  ${c.server}: ${c.status} (age: ${c.age}, keepalive: ${c.keepalive})`).join('\n') :
+          '  No active connections';
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `🔌 Connection Pool Status:\n${statusInfo}\n\nSettings:\n  Timeout: ${CONNECTION_TIMEOUT / 1000 / 60} minutes\n  Keepalive: Every ${KEEPALIVE_INTERVAL / 1000 / 60} minutes`,
+            },
+          ],
+        };
+      }
+
+      case 'reconnect': {
+        if (!server) {
+          throw new Error('Server name is required for reconnect action');
+        }
+
+        const normalizedName = server.toLowerCase();
+        if (connections.has(normalizedName)) {
+          closeConnection(normalizedName);
+        }
+
+        await getConnection(server);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `♻️  Reconnected to ${server}`,
+            },
+          ],
+        };
+      }
+
+      case 'disconnect': {
+        if (!server) {
+          throw new Error('Server name is required for disconnect action');
+        }
+
+        closeConnection(server);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `🔌 Disconnected from ${server}`,
+            },
+          ],
+        };
+      }
+
+      case 'cleanup': {
+        const oldCount = connections.size;
+        cleanupOldConnections();
+
+        // Also check and remove dead connections
+        for (const [serverName, ssh] of connections.entries()) {
+          const isValid = await isConnectionValid(ssh);
+          if (!isValid) {
+            closeConnection(serverName);
+          }
+        }
+
+        const cleaned = oldCount - connections.size;
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `🧹 Cleanup complete: ${cleaned} connections closed, ${connections.size} active`,
+            },
+          ],
+        };
+      }
+      }
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Connection management failed: ${error.message}`,
+          },
+        ],
+      };
+    }
+  }
+);
+
 // Manage server aliases
 server.registerTool(
   'ssh_alias',
@@ -877,6 +1101,12 @@ async function main() {
   console.error(`📦 Profile: ${activeProfile}`);
   console.error(`🖥️  Available servers: ${serverList.length > 0 ? serverList.join(', ') : 'none configured'}`);
   console.error('💡 Use server-manager.py to configure servers');
+  console.error('🔄 Connection management: Auto-reconnect enabled, 30min timeout');
+
+  // Set up periodic cleanup of old connections (every 10 minutes)
+  setInterval(() => {
+    cleanupOldConnections();
+  }, 10 * 60 * 1000);
 }
 
 main().catch(console.error);
