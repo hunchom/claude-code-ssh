@@ -5,25 +5,27 @@ Get up and running in 5 minutes! 🚀
 ## 1️⃣ Clone & Install (1 minute)
 
 ```bash
-git clone https://github.com/yourusername/mcp-ssh-manager.git
+git clone https://github.com/bvisible/mcp-ssh-manager.git
 cd mcp-ssh-manager
 npm install
-pip install -r tools/requirements.txt
+cd cli && ./install.sh
 ```
 
 ## 2️⃣ Add Your First Server (2 minutes)
 
 ```bash
-python tools/server_manager.py
+# Launch interactive menu
+ssh-manager
 ```
 
-Choose option `2` and enter:
+Choose: `1) Server Management` → `1) Add New Server`
+
+Enter:
 - Name: `myserver`
 - Host: `your.server.com`
 - Username: `yourusername`
 - Port: `22`
-- Choose `1` for password authentication
-- Enter your password
+- Choose authentication method (SSH key recommended)
 
 ## 3️⃣ Install to Claude Code (1 minute)
 
@@ -33,7 +35,7 @@ claude mcp add ssh-manager node $(pwd)/src/index.js
 
 ## 4️⃣ Test It! (1 minute)
 
-Open Claude Code:
+In Claude Code:
 ```bash
 claude
 ```
@@ -49,15 +51,27 @@ Try these commands:
 
 You're now connected to your server through Claude Code!
 
-## 📚 Next Steps
+## 📝 Common Commands
 
-- Add more servers: `python tools/server_manager.py`
-- Test connections: `python tools/test-connection.py myserver`
-- Read the full [Installation Guide](INSTALLATION.md)
-- Check the [README](README.md) for all features
+```bash
+ssh-manager                    # Interactive menu
+ssh-manager server list        # List servers
+ssh-manager ssh myserver       # Quick SSH
+ssh-manager server test        # Test connections
+ssh-manager sync push myserver ./app /var/www/  # Upload files
+```
 
-## 🆘 Need Help?
+## 💡 Pro Tips
 
-- Server not connecting? Check [Troubleshooting](INSTALLATION.md#troubleshooting)
-- MCP not working? Run `/mcp` in Claude Code to check status
-- Still stuck? [Open an issue](https://github.com/yourusername/mcp-ssh-manager/issues)
+1. **Set environment variable** in `~/.bashrc` or `~/.zshrc`:
+   ```bash
+   export SSH_MANAGER_ENV="/path/to/your/.env"
+   ```
+
+2. **Create shortcuts**:
+   ```bash
+   alias ssm="ssh-manager"
+   alias ssm-list="ssh-manager server list"
+   ```
+
+Need help? Run `ssh-manager --help`

@@ -1,116 +1,57 @@
 # Installation Guide for MCP SSH Manager
 
-## 📋 Table of Contents
+## 📋 Prerequisites
 
-1. [Prerequisites](#prerequisites)
-2. [Installation Methods](#installation-methods)
-3. [Configuration](#configuration)
-4. [Verification](#verification)
-5. [Troubleshooting](#troubleshooting)
-
-## Prerequisites
-
-Before installing MCP SSH Manager, ensure you have:
-
-- **Node.js** (v16 or higher) - [Download](https://nodejs.org/)
-- **Python** (3.8 or higher) - [Download](https://python.org/)
+- **Node.js** (v18 or higher) - [Download](https://nodejs.org/)
 - **Claude Code CLI** - [Installation Guide](https://claude.ai/code)
-- **Git** (for cloning the repository)
+- **Bash** (4.0+) - Pre-installed on macOS/Linux
+- **Git** - For cloning the repository
 
 Verify installations:
 ```bash
-node --version  # Should show v16.x.x or higher
-python --version  # Should show Python 3.8.x or higher
-claude --version  # Should show Claude Code version
+node --version   # Should show v18.x.x or higher
+claude --version # Should show Claude Code version
+bash --version   # Should show version 4.0 or higher
 ```
 
-## Installation Methods
-
-### Method 1: Quick Install (Recommended)
+## 🚀 Quick Installation
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/yourusername/mcp-ssh-manager.git
+git clone https://github.com/bvisible/mcp-ssh-manager.git
 cd mcp-ssh-manager
 
 # 2. Install dependencies
 npm install
-pip install -r tools/requirements.txt
 
-# 3. Configure servers
-python tools/server_manager.py
-# Choose option 2 to add servers
+# 3. Install the Bash CLI
+cd cli && ./install.sh
+cd ..
 
-# 4. Install to Claude Code (choose one)
-# For current user only:
+# 4. Install to Claude Code
 claude mcp add ssh-manager node $(pwd)/src/index.js
-
-# For all your projects:
-claude mcp add ssh-manager --scope user node $(pwd)/src/index.js
-
-# For team sharing (creates .mcp.json):
-claude mcp add ssh-manager --scope project node $(pwd)/src/index.js
 ```
 
-### Method 2: Manual Installation
+## 🔧 Server Configuration
 
-#### Step 1: Download and Setup
+### Interactive Mode (Recommended)
 
 ```bash
-# Download the repository
-git clone https://github.com/yourusername/mcp-ssh-manager.git
-cd mcp-ssh-manager
+# Launch interactive menu
+ssh-manager
 
-# Install Node.js dependencies
-npm install
-
-# Install Python dependencies
-pip install paramiko python-dotenv colorama tabulate
+# Choose "Server Management" → "Add New Server"
+# Follow the guided wizard
 ```
 
-#### Step 2: Configure Servers
-
-Create a `.env` file from the template:
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your server details:
-```env
-SSH_SERVER_PRODUCTION_HOST=your.server.com
-SSH_SERVER_PRODUCTION_USER=yourusername
-SSH_SERVER_PRODUCTION_PASSWORD=yourpassword
-SSH_SERVER_PRODUCTION_PORT=22
-SSH_SERVER_PRODUCTION_DESCRIPTION=My Production Server
-```
-
-#### Step 3: Add to Claude Code
+### Direct Commands
 
 ```bash
-# Get the full path to the project
-pwd  # Copy this path
-
-# Add to Claude Code
-claude mcp add ssh-manager node /full/path/to/mcp-ssh-manager/src/index.js
+ssh-manager server add    # Add new server
+ssh-manager server list   # List all servers
+ssh-manager server test   # Test connection
+ssh-manager server remove # Remove server
 ```
-
-## Configuration
-
-### Using the Configuration Tool
-
-The easiest way to configure servers:
-
-```bash
-python tools/server_manager.py
-```
-
-Menu options:
-1. **List servers** - View all configured servers
-2. **Add server** - Add a new SSH server
-3. **Test connection** - Test server connectivity
-4. **Remove server** - Remove a server
-5. **Update Claude Code** - Update MCP configuration
-6. **Install dependencies** - Install required packages
 
 ### Manual Configuration
 
@@ -119,189 +60,121 @@ Edit the `.env` file directly:
 ```env
 # Pattern: SSH_SERVER_[NAME]_[PROPERTY]
 
-# Password authentication example
-SSH_SERVER_WEBAPP_HOST=web.example.com
-SSH_SERVER_WEBAPP_USER=admin
-SSH_SERVER_WEBAPP_PASSWORD=secure_password
-SSH_SERVER_WEBAPP_PORT=22
-SSH_SERVER_WEBAPP_DESCRIPTION=Web Application Server
+# Password authentication
+SSH_SERVER_PROD1_HOST=example.com
+SSH_SERVER_PROD1_USER=admin
+SSH_SERVER_PROD1_PASSWORD=secure_password
+SSH_SERVER_PROD1_PORT=22
+SSH_SERVER_PROD1_DESCRIPTION="Production Server"
 
-# SSH key authentication example
-SSH_SERVER_DATABASE_HOST=db.example.com
-SSH_SERVER_DATABASE_USER=dbadmin
-SSH_SERVER_DATABASE_KEYPATH=~/.ssh/id_rsa_db
-SSH_SERVER_DATABASE_PORT=22
-SSH_SERVER_DATABASE_DESCRIPTION=Database Server
+# SSH key authentication (recommended)
+SSH_SERVER_DEV1_HOST=dev.example.com
+SSH_SERVER_DEV1_USER=developer
+SSH_SERVER_DEV1_KEYPATH=~/.ssh/id_rsa
+SSH_SERVER_DEV1_PORT=22
+SSH_SERVER_DEV1_DEFAULT_DIR=/var/www
 ```
 
-### Project-Wide Configuration
+## ✅ Verification
 
-To share the MCP configuration with your team:
+### 1. Check CLI Installation
+
+```bash
+ssh-manager --version
+# Should show: SSH Manager CLI v2.0.0
+```
+
+### 2. Check MCP Installation
+
+```bash
+claude mcp list
+# Should show: ssh-manager
+```
+
+### 3. Test in Claude Code
+
+Open Claude Code and try:
+```
+"List all SSH servers"
+"Connect to production server"
+"Upload file to staging"
+```
+
+## 🛠️ Troubleshooting
+
+### CLI not found
+
+```bash
+# Add to your PATH
+echo 'export PATH="$PATH:/usr/local/bin"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### Servers not showing
+
+```bash
+# Check .env file location
+export SSH_MANAGER_ENV="$(pwd)/.env"
+ssh-manager server list
+```
+
+### Permission denied
+
+```bash
+# Fix SSH key permissions
+chmod 600 ~/.ssh/your_key
+```
+
+### MCP tools not available
+
+```bash
+# Restart Claude Code and re-add
+claude mcp remove ssh-manager
+claude mcp add ssh-manager node $(pwd)/src/index.js
+```
+
+## 🌍 Environment Variables
+
+Set these in your shell profile (`~/.bashrc` or `~/.zshrc`):
+
+```bash
+# Point to your .env file
+export SSH_MANAGER_ENV="/path/to/your/.env"
+
+# Optional: Set default log level
+export SSH_LOG_LEVEL="INFO"
+```
+
+## 📦 Project Scope Installation
+
+To share with your team:
 
 ```bash
 # Create project configuration
 claude mcp add ssh-manager --scope project node $(pwd)/src/index.js
 ```
 
-This creates a `.mcp.json` file that can be committed to Git:
-```json
-{
-  "mcpServers": {
-    "ssh-manager": {
-      "command": "node",
-      "args": ["/path/to/mcp-ssh-manager/src/index.js"]
-    }
-  }
-}
-```
+This creates `.mcp.json` that can be committed to Git.
 
-## Verification
-
-### 1. Check MCP Installation
-
-```bash
-claude mcp list
-```
-
-You should see `ssh-manager` in the list.
-
-### 2. Test in Claude Code
-
-```bash
-claude
-```
-
-Then try:
-```
-"List all SSH servers"
-```
-
-### 3. Test Server Connection
-
-```bash
-python tools/test-connection.py production
-```
-
-### 4. Check MCP Status
-
-In Claude Code:
-```
-/mcp
-```
-
-## Troubleshooting
-
-### Issue: MCP tools not available in Claude Code
-
-**Solution:**
-1. Verify installation: `claude mcp list`
-2. Restart Claude Code completely
-3. Re-add the MCP server:
-```bash
-claude mcp remove ssh-manager
-claude mcp add ssh-manager node $(pwd)/src/index.js
-```
-
-### Issue: Connection failed to server
-
-**Solution:**
-1. Test connection directly:
-```bash
-python tools/test-connection.py servername
-```
-2. Verify credentials in `.env` file
-3. Check network connectivity:
-```bash
-ping your.server.com
-```
-4. Ensure SSH is enabled on the server
-
-### Issue: Permission denied errors
-
-**Solution:**
-1. For SSH key authentication, check key permissions:
-```bash
-chmod 600 ~/.ssh/your_private_key
-```
-2. Verify the username has proper permissions on the server
-3. Ensure the SSH key is added to `~/.ssh/authorized_keys` on the server
-
-### Issue: Module not found errors
-
-**Solution:**
-```bash
-# Reinstall Node.js dependencies
-rm -rf node_modules package-lock.json
-npm install
-
-# Reinstall Python dependencies
-pip install --upgrade -r tools/requirements.txt
-```
-
-### Issue: .env file not loading
-
-**Solution:**
-1. Ensure `.env` is in the project root
-2. Check file permissions: `chmod 644 .env`
-3. Verify no syntax errors in `.env`
-4. Test with the configuration tool:
-```bash
-python tools/server_manager.py list
-```
-
-## Advanced Configuration
-
-### Using Environment Variable Expansion
-
-In `.mcp.json`, you can use environment variables:
-
-```json
-{
-  "mcpServers": {
-    "ssh-manager": {
-      "command": "node",
-      "args": ["${HOME}/projects/mcp-ssh-manager/src/index.js"],
-      "env": {
-        "SSH_CONFIG_PATH": "${SSH_CONFIG_PATH:-~/.ssh/config}"
-      }
-    }
-  }
-}
-```
-
-### Custom SSH Port and Options
-
-For non-standard SSH configurations:
-
-```env
-# Custom port
-SSH_SERVER_CUSTOM_PORT=2222
-
-# With jump host (configure in ~/.ssh/config)
-SSH_SERVER_REMOTE_HOST=internal.server
-SSH_SERVER_REMOTE_USER=admin
-SSH_SERVER_REMOTE_KEYPATH=~/.ssh/jump_key
-```
-
-## Uninstallation
-
-To remove MCP SSH Manager:
+## 🗑️ Uninstallation
 
 ```bash
 # Remove from Claude Code
 claude mcp remove ssh-manager
 
-# Delete the project (optional)
-cd ..
-rm -rf mcp-ssh-manager
+# Uninstall CLI
+sudo rm /usr/local/bin/ssh-manager
+
+# Remove configuration
+rm -rf ~/.ssh-manager
 ```
 
-## Next Steps
+## 📚 Next Steps
 
 After installation:
-1. Test your server connections
-2. Try the example commands in Claude Code
-3. Configure additional servers as needed
-4. Share the `.mcp.json` with your team (if using project scope)
+1. Add your servers using the interactive wizard
+2. Test connections: `ssh-manager server test`
+3. Try quick SSH: `ssh-manager ssh servername`
+4. Explore features: `ssh-manager --help`
 
-For more help, see the [README](README.md) or open an issue on GitHub.
+For more information, see the [README](README.md).

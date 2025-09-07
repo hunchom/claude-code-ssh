@@ -31,13 +31,11 @@ A powerful Model Context Protocol (MCP) server that enables Claude Code to manag
 ## 📋 Prerequisites
 
 - Node.js (v18 or higher)
-- Python 3.8+
 - Claude Code CLI installed
 - npm (comes with Node.js)
+- Bash 4.0+ (for CLI)
 
 ## 🚀 Quick Start
-
-### Option A: Using Bash CLI (Recommended for Linux/Mac)
 
 ```bash
 # Clone and install
@@ -48,39 +46,26 @@ npm install
 # Install the Bash CLI
 cd cli && ./install.sh
 
-# Add servers using CLI
-ssh-manager server add
+# Start interactive mode (with menu)
+ssh-manager
 
-# Test connection
-ssh-manager server test production
-
-# Quick SSH connection
-ssh-manager ssh production
+# Or use direct commands
+ssh-manager server add        # Add a new server
+ssh-manager server list       # List all servers
+ssh-manager server test prod1 # Test connection
+ssh-manager ssh prod1         # Quick SSH connection
 ```
 
-### Option B: Using Python Configuration Tool
+### Server Configuration
 
-```bash
-# Clone the repository
-git clone https://github.com/bvisible/mcp-ssh-manager.git
-cd mcp-ssh-manager
-
-# Install dependencies
-npm install
-pip install -r tools/requirements.txt
-
-# Configure servers
-python tools/server_manager.py
-```
-
-Choose option 2 to add a server. You'll be prompted for:
+The CLI provides an interactive wizard to configure servers:
 - Server name (e.g., `production`, `staging`)
 - Host/IP address
 - Username
 - Port (default: 22)
-- Authentication method (password or SSH key)
+- Authentication method (SSH key recommended)
 
-### 4. Install to Claude Code
+### 2. Install to Claude Code
 
 ```bash
 # For personal use (current user only)
@@ -93,7 +78,7 @@ claude mcp add ssh-manager --scope project node /path/to/mcp-ssh-manager/src/ind
 claude mcp add ssh-manager --scope user node /path/to/mcp-ssh-manager/src/index.js
 ```
 
-### 5. Start Using!
+### 3. Start Using!
 
 In Claude Code, you can now:
 
