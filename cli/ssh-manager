@@ -9,6 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Source libraries
 source "$SCRIPT_DIR/lib/colors.sh"
 source "$SCRIPT_DIR/lib/config.sh"
+source "$SCRIPT_DIR/lib/menu.sh"
 
 # Source command modules
 source "$SCRIPT_DIR/commands/server.sh"
@@ -28,7 +29,9 @@ show_help() {
 ${BOLD}SSH Manager CLI${NC} - Simple and powerful SSH server management
 
 ${BOLD}USAGE:${NC}
-    ssh-manager <command> [options]
+    ssh-manager              # Interactive mode (menu)
+    ssh-manager -i           # Interactive mode (menu)
+    ssh-manager <command>    # Direct command mode
 
 ${BOLD}COMMANDS:${NC}
     ${CYAN}server${NC}      Server management
@@ -348,9 +351,9 @@ main() {
                     ;;
             esac
             ;;
-        "")
-            show_help
-            exit 0
+        ""|-i|--interactive|menu)
+            # Interactive mode
+            interactive_mode
             ;;
         *)
             print_error "Unknown command: $command"
@@ -358,6 +361,158 @@ main() {
             exit 1
             ;;
     esac
+}
+
+# Interactive mode with menu
+interactive_mode() {
+    # Initialize configuration
+    init_config
+    
+    # Check dependencies
+    if ! check_dependencies; then
+        exit 1
+    fi
+    
+    while true; do
+        show_main_menu
+        read choice
+        
+        case "$choice" in
+            1)
+                # Server Management submenu
+                while true; do
+                    show_server_menu
+                    read server_choice
+                    
+                    case "$server_choice" in
+                        1)
+                            wizard_add_server
+                            ;;
+                        2)
+                            cmd_server_list
+                            echo
+                            read -p "Press Enter to continue..."
+                            ;;
+                        3)
+                            if select_server_menu "Test Connection"; then
+                                test_ssh_connection "$selected_server"
+                                echo
+                                read -p "Press Enter to continue..."
+                            fi
+                            ;;
+                        4)
+                            if select_server_menu "Show Server Details"; then
+                                cmd_server_show "$selected_server"
+                                echo
+                                read -p "Press Enter to continue..."
+                            fi
+                            ;;
+                        5)
+                            if select_server_menu "Edit Server"; then
+                                print_info "Edit feature coming soon..."
+                                echo
+                                read -p "Press Enter to continue..."
+                            fi
+                            ;;
+                        6)
+                            if select_server_menu "Remove Server"; then
+                                echo
+                                if prompt_yes_no "Remove server '$selected_server'?" "n"; then
+                                    remove_server_from_env "$selected_server"
+                                fi
+                                echo
+                                read -p "Press Enter to continue..."
+                            fi
+                            ;;
+                        7)
+                            cmd_server_edit
+                            echo
+                            read -p "Press Enter to continue..."
+                            ;;
+                        0)
+                            break
+                            ;;
+                    esac
+                done
+                ;;
+            2)
+                # Quick Connect
+                if select_server_menu "Quick Connect"; then
+                    print_info "Connecting to $selected_server..."
+                    cmd_ssh "$selected_server"
+                fi
+                ;;
+            3)
+                # File Sync
+                show_sync_menu
+                ;;
+            4)
+                # SSH Tunnels
+                wizard_create_tunnel
+                ;;
+            5)
+                # System Monitoring
+                if select_server_menu "System Monitoring"; then
+                    echo
+                    print_subheader "Monitor Type"
+                    echo "  1) Overview"
+                    echo "  2) CPU"
+                    echo "  3) Memory"
+                    echo "  4) Disk"
+                    echo "  5) Network"
+                    echo
+                    read -p "Choose [1-5]: " monitor_type
+                    
+                    case "$monitor_type" in
+                        1) cmd_exec "$selected_server" "uptime && free -h && df -h" ;;
+                        2) cmd_exec "$selected_server" "top -bn1 | head -20" ;;
+                        3) cmd_exec "$selected_server" "free -h && ps aux --sort=-%mem | head -10" ;;
+                        4) cmd_exec "$selected_server" "df -h && du -sh /* 2>/dev/null | sort -h | tail -10" ;;
+                        5) cmd_exec "$selected_server" "netstat -tulpn 2>/dev/null | grep LISTEN" ;;
+                    esac
+                    echo
+                    read -p "Press Enter to continue..."
+                fi
+                ;;
+            6)
+                # Execute Commands
+                if select_server_menu "Execute Command"; then
+                    echo
+                    local command
+                    prompt_input "Command to execute" "uptime" "command"
+                    echo
+                    cmd_exec "$selected_server" "$command"
+                    echo
+                    read -p "Press Enter to continue..."
+                fi
+                ;;
+            7)
+                # Configuration
+                clear
+                print_header "Configuration"
+                echo "  1) Edit CLI config"
+                echo "  2) Show CLI config"
+                echo "  3) Edit server config (.env)"
+                echo "  0) Back"
+                echo
+                read -p "Choose [0-3]: " config_choice
+                
+                case "$config_choice" in
+                    1) ${EDITOR:-nano} "$SSH_MANAGER_CONFIG" ;;
+                    2) cat "$SSH_MANAGER_CONFIG"; read -p "Press Enter..." ;;
+                    3) cmd_server_edit ;;
+                esac
+                ;;
+            8)
+                # Help
+                show_help | less
+                ;;
+            0|q|Q)
+                print_info "Goodbye!"
+                exit 0
+                ;;
+        esac
+    done
 }
 
 # Run main function

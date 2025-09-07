@@ -71,8 +71,10 @@ load_servers() {
     
     # Parse .env file for server definitions
     while IFS= read -r line; do
-        if [[ "$line" =~ ^SSH_SERVER_([^_]+)_HOST= ]]; then
-            local server_name="${BASH_REMATCH[1],,}"  # Convert to lowercase
+        if [[ "$line" =~ ^SSH_SERVER_(.+)_HOST= ]]; then
+            local server_name="${BASH_REMATCH[1]}"
+            # Convert to lowercase
+            server_name=$(echo "$server_name" | tr '[:upper:]' '[:lower:]')
             servers+=("$server_name")
         fi
     done < "$SSH_MANAGER_ENV"
@@ -85,13 +87,14 @@ load_servers() {
 get_server_config() {
     local server="$1"
     local field="$2"
-    local server_upper="${server^^}"
+    local server_upper="$(echo "$server" | tr '[:lower:]' '[:upper:]')"
     
     if [ ! -f "$SSH_MANAGER_ENV" ]; then
         return 1
     fi
     
-    local key="SSH_SERVER_${server_upper}_${field^^}"
+    local field_upper="$(echo "$field" | tr '[:lower:]' '[:upper:]')"
+    local key="SSH_SERVER_${server_upper}_${field_upper}"
     grep "^${key}=" "$SSH_MANAGER_ENV" 2>/dev/null | cut -d'=' -f2- | tr -d '"'
 }
 
@@ -105,7 +108,7 @@ add_server_to_env() {
     local port="${6:-22}"
     local description="${7:-}"
     
-    local name_upper="${name^^}"
+    local name_upper="$(echo "$name" | tr '[:lower:]' '[:upper:]')"
     
     # Check if server already exists
     if grep -q "^SSH_SERVER_${name_upper}_HOST=" "$SSH_MANAGER_ENV" 2>/dev/null; then
@@ -141,7 +144,7 @@ add_server_to_env() {
 # Remove server from .env
 remove_server_from_env() {
     local name="$1"
-    local name_upper="${name^^}"
+    local name_upper="$(echo "$name" | tr '[:lower:]' '[:upper:]')"
     
     if ! grep -q "^SSH_SERVER_${name_upper}_HOST=" "$SSH_MANAGER_ENV" 2>/dev/null; then
         print_error "Server '$name' not found"
