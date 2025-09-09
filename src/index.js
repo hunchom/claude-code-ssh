@@ -135,7 +135,9 @@ function loadServerConfig() {
   return servers;
 }
 
-// Execute command with timeout
+// Execute command with timeout - WARNING: timeout is advisory only
+// node-ssh doesn't expose the underlying stream, so we can't force-kill hanging commands
+// The timeout will reject the promise but the command may continue running on the server
 async function execCommandWithTimeout(ssh, command, options = {}, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     let completed = false;
@@ -144,20 +146,24 @@ async function execCommandWithTimeout(ssh, command, options = {}, timeoutMs = 30
     const timer = setTimeout(() => {
       if (!completed) {
         completed = true;
+        logger.warn('Command timeout - command may still be running on server', {
+          command: command.substring(0, 100),
+          timeout: timeoutMs
+        });
         reject(new Error(`Command timeout after ${timeoutMs}ms: ${command.substring(0, 100)}...`));
       }
     }, timeoutMs);
     
     // Execute command
     ssh.execCommand(command, options)
-      .then(result => {
+      .then((result) => {
         if (!completed) {
           completed = true;
           clearTimeout(timer);
           resolve(result);
         }
       })
-      .catch(error => {
+      .catch((error) => {
         if (!completed) {
           completed = true;
           clearTimeout(timer);
