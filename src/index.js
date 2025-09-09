@@ -3,7 +3,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { NodeSSH } from 'node-ssh';
+import SSHManager from './ssh-manager.js';
 import * as dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
@@ -135,50 +135,55 @@ function loadServerConfig() {
   return servers;
 }
 
-// Execute command with timeout - WARNING: timeout is advisory only
-// node-ssh doesn't expose the underlying stream, so we can't force-kill hanging commands
-// The timeout will reject the promise but the command may continue running on the server
+// Execute command with timeout - using child_process timeout for real kill
 async function execCommandWithTimeout(ssh, command, options = {}, timeoutMs = 30000) {
-  return new Promise((resolve, reject) => {
-    let completed = false;
+  // For commands that might hang, use the system's timeout command if available
+  const useSystemTimeout = timeoutMs > 0 && timeoutMs < 300000; // Max 5 minutes
+  
+  if (useSystemTimeout) {
+    // Wrap command with timeout command (works on Linux/Mac)
+    const timeoutSeconds = Math.ceil(timeoutMs / 1000);
+    const wrappedCommand = `timeout ${timeoutSeconds} sh -c '${command.replace(/'/g, "'\\''")}'`;
     
-    // Set up timeout
-    const timer = setTimeout(() => {
-      if (!completed) {
-        completed = true;
-        logger.warn('Command timeout - command may still be running on server', {
-          command: command.substring(0, 100),
-          timeout: timeoutMs
-        });
-        reject(new Error(`Command timeout after ${timeoutMs}ms: ${command.substring(0, 100)}...`));
+    try {
+      const result = await ssh.execCommand(wrappedCommand, options);
+      
+      // Check if timeout occurred (exit code 124 on Linux, 124 or 143 on Mac)
+      if (result.code === 124 || result.code === 143) {
+        throw new Error(`Command timeout after ${timeoutMs}ms: ${command.substring(0, 100)}...`);
       }
-    }, timeoutMs);
-    
-    // Execute command
-    ssh.execCommand(command, options)
-      .then((result) => {
-        if (!completed) {
-          completed = true;
-          clearTimeout(timer);
-          resolve(result);
+      
+      return result;
+    } catch (error) {
+      // If timeout occurred, remove connection from pool
+      if (error.message.includes('timeout')) {
+        for (const [name, conn] of connections.entries()) {
+          if (conn === ssh) {
+            logger.warn(`Removing timed-out connection for ${name}`);
+            connections.delete(name);
+            connectionTimestamps.delete(name);
+            if (keepaliveIntervals.has(name)) {
+              clearInterval(keepaliveIntervals.get(name));
+              keepaliveIntervals.delete(name);
+            }
+            // Force close the connection
+            ssh.dispose();
+            break;
+          }
         }
-      })
-      .catch((error) => {
-        if (!completed) {
-          completed = true;
-          clearTimeout(timer);
-          reject(error);
-        }
-      });
-  });
+      }
+      throw error;
+    }
+  } else {
+    // No timeout or very long timeout, execute normally
+    return ssh.execCommand(command, { ...options, timeout: timeoutMs });
+  }
 }
 
 // Check if a connection is still valid
 async function isConnectionValid(ssh) {
   try {
-    // Try to execute a simple command to check if connection is alive
-    const result = await execCommandWithTimeout(ssh, 'echo "ping"', {}, 5000);
-    return result.stdout.trim() === 'ping';
+    return await ssh.ping();
   } catch (error) {
     logger.debug('Connection validation failed', { error: error.message });
     return false;
@@ -288,27 +293,10 @@ async function getConnection(serverName) {
 
   // Create new connection
   const serverConfig = servers[normalizedName];
-  const ssh = new NodeSSH();
+  const ssh = new SSHManager(serverConfig);
 
   try {
-    const connectionConfig = {
-      host: serverConfig.host,
-      username: serverConfig.user,
-      port: parseInt(serverConfig.port || '22'),
-      keepaliveInterval: 60000, // Send keepalive every 60 seconds
-      keepaliveCountMax: 10, // Allow 10 keepalive failures before disconnecting
-      readyTimeout: 30000, // 30 second timeout for initial connection
-    };
-
-    // Use password or SSH key
-    if (serverConfig.password) {
-      connectionConfig.password = serverConfig.password;
-    } else if (serverConfig.keypath) {
-      const keyPath = serverConfig.keypath.replace('~', process.env.HOME);
-      connectionConfig.privateKey = fs.readFileSync(keyPath, 'utf8');
-    }
-
-    await ssh.connect(connectionConfig);
+    await ssh.connect();
     connections.set(normalizedName, ssh);
     connectionTimestamps.set(normalizedName, Date.now());
 
@@ -545,16 +533,22 @@ server.registerTool(
       const servers = loadServerConfig();
       const serverConfig = servers[serverName.toLowerCase()];
       
-      // Check if server has SSH key authentication
-      if (!serverConfig.keypath) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `❌ Error: ssh_sync requires SSH key authentication.\n\nThe server '${serverName}' is configured with password authentication, which is not supported by rsync in non-interactive mode.\n\nPlease use ssh_upload or ssh_download instead for this server.`
-            }
-          ]
-        };
+      // Check if sshpass is available for password authentication
+      if (!serverConfig.keypath && serverConfig.password) {
+        // Check if sshpass is installed
+        try {
+          const { execSync } = await import('child_process');
+          execSync('which sshpass', { stdio: 'ignore' });
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `❌ Error: ssh_sync with password authentication requires sshpass.\n\nThe server '${serverName}' uses password authentication.\nPlease install sshpass: brew install hudochenkov/sshpass/sshpass (macOS) or apt-get install sshpass (Linux)\n\nAlternatively, use ssh_upload or ssh_download for single file transfers.`
+              }
+            ]
+          };
+        }
       }
       
       // Determine sync direction based on source/destination prefixes
@@ -621,18 +615,24 @@ server.registerTool(
       }
       
       // Add SSH options for non-interactive mode
-      const sshOptions = [
-        '-o BatchMode=yes',           // No password prompts
-        '-o StrictHostKeyChecking=no', // No host key verification prompts
-        '-o ConnectTimeout=10'         // Connection timeout
-      ];
+      const sshOptions = [];
+      
+      // Different options based on authentication method
+      if (serverConfig.keypath) {
+        sshOptions.push('-o BatchMode=yes');           // No password prompts
+        sshOptions.push('-o StrictHostKeyChecking=no'); // No host key verification prompts
+        sshOptions.push('-o ConnectTimeout=10');        // Connection timeout
+        
+        const keyPath = serverConfig.keypath.replace('~', process.env.HOME);
+        sshOptions.push(`-i ${keyPath}`);
+      } else {
+        // With sshpass, we don't use BatchMode
+        sshOptions.push('-o StrictHostKeyChecking=no');
+        sshOptions.push('-o ConnectTimeout=10');
+      }
       
       if (serverConfig.port && serverConfig.port !== '22') {
         sshOptions.push(`-p ${serverConfig.port}`);
-      }
-      if (serverConfig.keypath) {
-        const keyPath = serverConfig.keypath.replace('~', process.env.HOME);
-        sshOptions.push(`-i ${keyPath}`);
       }
       
       logger.info(`Starting rsync ${direction}`, {
@@ -653,16 +653,37 @@ server.registerTool(
         let errorOutput = '';
         let killed = false;
         
-        // Build rsync arguments array directly instead of parsing command string
-        const rsyncCommand = 'rsync';
-        const rsyncArgs = [];
+        // Build command based on authentication method
+        let rsyncCommand;
+        let rsyncArgs = [];
+        let processEnv = { ...process.env };
         
-        // Add rsync options
-        rsyncOptions.forEach(opt => rsyncArgs.push(opt));
-        
-        // Add SSH command with all options
-        const sshCmd = `ssh ${sshOptions.join(' ')}`;
-        rsyncArgs.push('-e', sshCmd);
+        if (serverConfig.password) {
+          // Use sshpass for password authentication
+          rsyncCommand = 'sshpass';
+          rsyncArgs.push('-p', serverConfig.password);
+          rsyncArgs.push('rsync');
+          
+          // Add rsync options
+          rsyncOptions.forEach(opt => rsyncArgs.push(opt));
+          
+          // Add SSH command
+          const sshCmd = `ssh ${sshOptions.join(' ')}`;
+          rsyncArgs.push('-e', sshCmd);
+        } else {
+          // Direct rsync for key authentication
+          rsyncCommand = 'rsync';
+          
+          // Add rsync options
+          rsyncOptions.forEach(opt => rsyncArgs.push(opt));
+          
+          // Add SSH command with all options
+          const sshCmd = `ssh ${sshOptions.join(' ')}`;
+          rsyncArgs.push('-e', sshCmd);
+          
+          processEnv.SSH_ASKPASS = '/bin/false';
+          processEnv.DISPLAY = '';
+        }
         
         // Add source and destination
         if (direction === 'push') {
@@ -675,7 +696,7 @@ server.registerTool(
         
         const rsyncProcess = spawn(rsyncCommand, rsyncArgs, {
           stdio: ['ignore', 'pipe', 'pipe'],
-          env: { ...process.env, SSH_ASKPASS: '/bin/false', DISPLAY: '' }
+          env: processEnv
         });
         
         // Set timeout
@@ -855,15 +876,14 @@ server.registerTool(
         const sessionId = `tail_${Date.now()}`;
         
         // Store the SSH stream for later cleanup
-        const stream = await ssh.execCommand(command, {
+        const stream = await ssh.execCommandStream(command, {
           onStdout: (chunk) => {
             // In a real implementation, this would stream to the client
-            console.error(`[${serverName}:${file}] ${chunk.toString()}`);
+            console.error(`[${serverName}:${file}] ${chunk}`);
           },
           onStderr: (chunk) => {
-            console.error(`[ERROR] ${chunk.toString()}`);
-          },
-          timeout: 0 // No timeout for tail -f
+            console.error(`[ERROR] ${chunk}`);
+          }
         });
         
         return {

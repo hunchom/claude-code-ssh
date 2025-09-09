@@ -34,6 +34,10 @@ A powerful Model Context Protocol (MCP) server that enables Claude Code to manag
 - Claude Code CLI installed
 - npm (comes with Node.js)
 - Bash 4.0+ (for CLI)
+- rsync (for file synchronization)
+- sshpass (optional, for rsync with password authentication)
+  - macOS: `brew install hudochenkov/sshpass/sshpass`
+  - Linux: `apt-get install sshpass`
 
 ## 🚀 Quick Start
 
@@ -393,3 +397,25 @@ For issues, questions, or suggestions:
 ---
 
 Made with ❤️ for the Claude Code community
+
+## Known Limitations
+
+### Command Timeout
+- The timeout parameter for SSH commands is advisory only
+- Due to SSH2 library limitations, commands may continue running on the server even after timeout
+- For critical timeout needs, use the system's `timeout` command directly in your command
+
+### SSH Sync (rsync)
+- Password authentication requires `sshpass` to be installed
+- SSH key authentication is recommended for better security and reliability
+- Large file transfers may take time and appear to hang - be patient
+
+### Connection Management
+- Connections are pooled and reused for performance
+- If a connection becomes stale, it will be automatically reconnected on next use
+- Force reconnection by using the `ssh_connection_status` tool with `reconnect` action
+
+## Support
+
+For issues, feature requests, or contributions, please visit:
+https://github.com/bvisible/mcp-ssh-manager
