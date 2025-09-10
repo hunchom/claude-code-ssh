@@ -30,7 +30,15 @@ export SESSION="💻"
 export CLIPBOARD="📋"
 export EYE="👁️"
 export GEAR="⚙️ "
-
+export PENCIL="✏️ "
+export NOTE="📝"
+export WRENCH="🔧"
+export LOCK="🔒"
+export UNLOCK="🔓"
+export STAR="⭐"
+export HEART="❤️"
+export LIGHTBULB="💡"
+export BUG="🐛"
 
 # Print functions
 print_success() {

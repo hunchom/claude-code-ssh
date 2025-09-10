@@ -44,22 +44,22 @@ show_server_menu() {
     echo -e "  ${CYAN}1)${NC} ${CHECK} Add New Server"
     echo "     Configure a new SSH server"
     echo
-    echo -e "  ${CYAN}2)${NC} 📋 List All Servers"
+    echo -e "  ${CYAN}2)${NC} ${CLIPBOARD} List All Servers"
     echo "     Show configured servers"
     echo
-    echo -e "  ${CYAN}3)${NC} 🔧 Test Connection"
+    echo -e "  ${CYAN}3)${NC} ${WRENCH} Test Connection"
     echo "     Test server connectivity"
     echo
-    echo -e "  ${CYAN}4)${NC} ${INFO}Show Server Details"
+    echo -e "  ${CYAN}4)${NC} ${INFO}  Show Server Details"
     echo "     Display server configuration"
     echo
-    echo -e "  ${CYAN}5)${NC} ✏️ Edit Server"
+    echo -e "  ${CYAN}5)${NC} ${PENCIL}  Edit Server"
     echo "     Modify server settings"
     echo
     echo -e "  ${CYAN}6)${NC} ${CROSS} Remove Server"
     echo "     Delete server configuration"
     echo
-    echo -e "  ${CYAN}7)${NC} 📝 Edit Config File"
+    echo -e "  ${CYAN}7)${NC} ${NOTE} Edit Config File"
     echo "     Directly edit .env file"
     echo
     echo -e "  ${CYAN}0)${NC} ← Back to Main Menu"
@@ -128,7 +128,7 @@ wizard_add_server() {
     echo -e "  ${CYAN}1)${NC} ${KEY} SSH Key (Recommended)"
     echo "     More secure, no password needed"
     echo
-    echo -e "  ${CYAN}2)${NC} 🔒 Password"
+    echo -e "  ${CYAN}2)${NC} ${LOCK} Password"
     echo "     Less secure, password required each time"
     echo
     read -p "Choose [1-2]: " auth_choice
