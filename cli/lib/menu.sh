@@ -6,7 +6,7 @@ show_main_menu() {
     clear
     print_header "SSH Manager CLI v$VERSION"
     echo
-    echo -e "  ${CYAN}1)${NC} ${SERVER}Server Management"
+    echo -e "  ${CYAN}1)${NC} ${SERVER} Server Management"
     echo "     Add, list, test, and manage SSH servers"
     echo
     echo -e "  ${CYAN}2)${NC} ${SESSION} Quick Connect"
@@ -24,10 +24,10 @@ show_main_menu() {
     echo -e "  ${CYAN}6)${NC} ${ROCKET} Execute Commands"
     echo "     Run commands on servers"
     echo
-    echo -e "  ${CYAN}7)${NC} ${GEAR}Configuration"
+    echo -e "  ${CYAN}7)${NC} ${GEAR} Configuration"
     echo "     Edit settings and preferences"
     echo
-    echo -e "  ${CYAN}8)${NC} ${INFO}Help & Documentation"
+    echo -e "  ${CYAN}8)${NC} ${INFO} Help & Documentation"
     echo "     View help and examples"
     echo
     echo -e "  ${CYAN}0)${NC} Exit"
