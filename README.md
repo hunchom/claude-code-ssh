@@ -4,6 +4,7 @@ A powerful Model Context Protocol (MCP) server that enables **Claude Code** and 
 
 <div align="center">
 
+[![Version](https://img.shields.io/badge/Version-3.0.0-brightgreen?style=for-the-badge)](https://github.com/bvisible/mcp-ssh-manager/releases/tag/v3.0.0)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Compatible-5A67D8?style=for-the-badge&logo=anthropic)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Compatible-00A67E?style=for-the-badge&logo=openai)](https://openai.com/codex)
 [![MCP](https://img.shields.io/badge/MCP-Server-orange?style=for-the-badge)](https://modelcontextprotocol.io)
@@ -14,6 +15,36 @@ A powerful Model Context Protocol (MCP) server that enables **Claude Code** and 
 </a>
 
 </div>
+
+---
+
+## 🎉 What's New in v3.0.0
+
+**Major Release - Enterprise DevOps Platform** (Released: October 1, 2025)
+
+This release adds **12 new MCP tools** transforming SSH Manager into a comprehensive DevOps automation platform:
+
+### 💾 Backup & Restore System (4 tools)
+- **Automated backups** for MySQL, PostgreSQL, MongoDB, and file systems
+- **Smart scheduling** with cron integration and retention policies
+- **One-click restore** with cross-database support
+- **Metadata tracking** for audit and compliance
+
+### 🏥 Health & Monitoring (4 tools)
+- **Real-time health checks** with CPU, RAM, Disk, and Network metrics
+- **Service monitoring** for nginx, mysql, docker, and custom services
+- **Process management** with CPU/RAM sorting and kill capabilities
+- **Alert thresholds** with configurable notifications
+
+### 🗄️ Database Management (4 tools)
+- **Safe database dumps** with compression and selective exports
+- **Database imports** with automatic decompression
+- **Schema exploration** listing databases, tables, and collections
+- **Secure queries** with SQL injection prevention (SELECT-only)
+
+**📊 Total: 37 MCP Tools** | **🔧 ~4,100 Lines of Code Added** | **✅ Production Ready**
+
+[Read Full Changelog →](CHANGELOG.md#300---2025-10-01)
 
 ---
 
@@ -42,7 +73,14 @@ A powerful Model Context Protocol (MCP) server that enables **Claude Code** and 
 - **📂 Default Directories** - Set default working directories per server for convenience
 - **🎯 Easy Configuration** - Simple `.env` file setup with guided configuration tool
 
-### New v2.0 Features 🆕
+### Enterprise DevOps Features (v3.0) 🎉
+- **💾 Backup & Restore** - Automated backups for MySQL, PostgreSQL, MongoDB, and files
+- **🏥 Health Monitoring** - Real-time server health checks (CPU, RAM, Disk, Services)
+- **🗄️ Database Management** - Safe database operations with SQL injection prevention
+- **📊 Process Management** - Monitor and control server processes
+- **⚠️ Smart Alerts** - Configurable health thresholds and notifications
+
+### v2.0 Features
 - **🚀 Bash CLI** - Lightning-fast pure Bash CLI for server management
 - **📊 Advanced Logging** - Comprehensive logging system with levels and history
 - **🔄 Rsync Integration** - Bidirectional file sync with rsync support
