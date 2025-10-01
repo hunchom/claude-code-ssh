@@ -126,6 +126,32 @@ import {
   getCommonServices,
   resolveServiceName
 } from './health-monitor.js';
+import {
+  DB_TYPES,
+  DB_PORTS,
+  buildMySQLDumpCommand as buildDBMySQLDumpCommand,
+  buildPostgreSQLDumpCommand as buildDBPostgreSQLDumpCommand,
+  buildMongoDBDumpCommand as buildDBMongoDBDumpCommand,
+  buildMySQLImportCommand,
+  buildPostgreSQLImportCommand,
+  buildMongoDBRestoreCommand,
+  buildMySQLListDatabasesCommand,
+  buildMySQLListTablesCommand,
+  buildPostgreSQLListDatabasesCommand,
+  buildPostgreSQLListTablesCommand,
+  buildMongoDBListDatabasesCommand,
+  buildMongoDBListCollectionsCommand,
+  buildMySQLQueryCommand,
+  buildPostgreSQLQueryCommand,
+  buildMongoDBQueryCommand,
+  isSafeQuery,
+  parseDatabaseList,
+  parseTableList,
+  buildEstimateSizeCommand,
+  parseSize,
+  formatBytes,
+  getConnectionInfo
+} from './database-manager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -3968,6 +3994,467 @@ server.registerTool(
           {
             type: 'text',
             text: `❌ Alert setup failed: ${error.message}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+// ============================================================================
+// DATABASE MANAGEMENT TOOLS
+// ============================================================================
+
+server.registerTool(
+  'ssh_db_dump',
+  {
+    description: 'Dump database to file (MySQL, PostgreSQL, MongoDB)',
+    inputSchema: {
+      server: z.string().describe('Server name'),
+      type: z.enum(['mysql', 'postgresql', 'mongodb'])
+        .describe('Database type'),
+      database: z.string().describe('Database name'),
+      outputFile: z.string().describe('Output file path (will be created on remote server)'),
+      dbUser: z.string().optional().describe('Database user'),
+      dbPassword: z.string().optional().describe('Database password'),
+      dbHost: z.string().optional().describe('Database host (default: localhost)'),
+      dbPort: z.number().optional().describe('Database port'),
+      compress: z.boolean().optional().describe('Compress output with gzip (default: true)'),
+      tables: z.array(z.string()).optional().describe('Specific tables to dump (MySQL/PostgreSQL only)')
+    }
+  },
+  async ({ server: serverName, type, database, outputFile, dbUser, dbPassword, dbHost, dbPort, compress = true, tables }) => {
+    try {
+      const ssh = await getConnection(serverName);
+
+      logger.info(`Dumping ${type} database: ${database}`, {
+        server: serverName,
+        compress
+      });
+
+      // Build dump command based on type
+      let dumpCommand;
+      const options = {
+        database,
+        user: dbUser,
+        password: dbPassword,
+        host: dbHost,
+        port: dbPort,
+        outputFile,
+        compress,
+        tables
+      };
+
+      switch (type) {
+        case DB_TYPES.MYSQL:
+          dumpCommand = buildDBMySQLDumpCommand(options);
+          break;
+        case DB_TYPES.POSTGRESQL:
+          dumpCommand = buildDBPostgreSQLDumpCommand(options);
+          break;
+        case DB_TYPES.MONGODB:
+          options.outputDir = outputFile.replace(/\.(tar\.gz|gz)$/, '');
+          dumpCommand = buildDBMongoDBDumpCommand(options);
+          break;
+        default:
+          throw new Error(`Unsupported database type: ${type}`);
+      }
+
+      // Execute dump
+      const result = await ssh.execCommand(dumpCommand);
+
+      if (result.code !== 0) {
+        throw new Error(`Dump failed: ${result.stderr || result.stdout}`);
+      }
+
+      // Get file size
+      const sizeCommand = `stat -f%z "${outputFile}" 2>/dev/null || stat -c%s "${outputFile}" 2>/dev/null`;
+      const sizeResult = await ssh.execCommand(sizeCommand);
+      const size = parseSize(sizeResult.stdout);
+
+      logger.info(`Database dump completed: ${formatBytes(size)}`, {
+        server: serverName,
+        database,
+        size
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: true,
+              server: serverName,
+              type,
+              database,
+              output_file: outputFile,
+              size_bytes: size,
+              size_human: formatBytes(size),
+              compressed: compress,
+              timestamp: new Date().toISOString()
+            }, null, 2)
+          }
+        ]
+      };
+
+    } catch (error) {
+      logger.error('Database dump failed', {
+        server: serverName,
+        type,
+        database,
+        error: error.message
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Database dump failed: ${error.message}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+server.registerTool(
+  'ssh_db_import',
+  {
+    description: 'Import database from SQL file (MySQL, PostgreSQL, MongoDB)',
+    inputSchema: {
+      server: z.string().describe('Server name'),
+      type: z.enum(['mysql', 'postgresql', 'mongodb'])
+        .describe('Database type'),
+      database: z.string().describe('Target database name'),
+      inputFile: z.string().describe('Input file path (on remote server)'),
+      dbUser: z.string().optional().describe('Database user'),
+      dbPassword: z.string().optional().describe('Database password'),
+      dbHost: z.string().optional().describe('Database host (default: localhost)'),
+      dbPort: z.number().optional().describe('Database port'),
+      drop: z.boolean().optional().describe('Drop existing collections/tables before import (MongoDB only, default: true)')
+    }
+  },
+  async ({ server: serverName, type, database, inputFile, dbUser, dbPassword, dbHost, dbPort, drop = true }) => {
+    try {
+      const ssh = await getConnection(serverName);
+
+      logger.info(`Importing ${type} database: ${database}`, {
+        server: serverName,
+        inputFile
+      });
+
+      // Build import command based on type
+      let importCommand;
+      const options = {
+        database,
+        user: dbUser,
+        password: dbPassword,
+        host: dbHost,
+        port: dbPort,
+        inputFile,
+        drop
+      };
+
+      switch (type) {
+        case DB_TYPES.MYSQL:
+          importCommand = buildMySQLImportCommand(options);
+          break;
+        case DB_TYPES.POSTGRESQL:
+          importCommand = buildPostgreSQLImportCommand(options);
+          break;
+        case DB_TYPES.MONGODB:
+          options.inputPath = inputFile;
+          importCommand = buildMongoDBRestoreCommand(options);
+          break;
+        default:
+          throw new Error(`Unsupported database type: ${type}`);
+      }
+
+      // Execute import
+      const result = await ssh.execCommand(importCommand);
+
+      if (result.code !== 0) {
+        throw new Error(`Import failed: ${result.stderr || result.stdout}`);
+      }
+
+      logger.info(`Database import completed`, {
+        server: serverName,
+        database
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: true,
+              server: serverName,
+              type,
+              database,
+              input_file: inputFile,
+              timestamp: new Date().toISOString(),
+              message: `Database ${database} imported successfully`
+            }, null, 2)
+          }
+        ]
+      };
+
+    } catch (error) {
+      logger.error('Database import failed', {
+        server: serverName,
+        type,
+        database,
+        error: error.message
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Database import failed: ${error.message}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+server.registerTool(
+  'ssh_db_list',
+  {
+    description: 'List databases or tables/collections',
+    inputSchema: {
+      server: z.string().describe('Server name'),
+      type: z.enum(['mysql', 'postgresql', 'mongodb'])
+        .describe('Database type'),
+      database: z.string().optional()
+        .describe('Database name (if provided, lists tables/collections; if omitted, lists databases)'),
+      dbUser: z.string().optional().describe('Database user'),
+      dbPassword: z.string().optional().describe('Database password'),
+      dbHost: z.string().optional().describe('Database host (default: localhost)'),
+      dbPort: z.number().optional().describe('Database port')
+    }
+  },
+  async ({ server: serverName, type, database, dbUser, dbPassword, dbHost, dbPort }) => {
+    try {
+      const ssh = await getConnection(serverName);
+
+      const listType = database ? 'tables/collections' : 'databases';
+      logger.info(`Listing ${listType} for ${type}`, {
+        server: serverName,
+        database
+      });
+
+      let listCommand;
+      const options = {
+        database,
+        user: dbUser,
+        password: dbPassword,
+        host: dbHost,
+        port: dbPort
+      };
+
+      // Build command based on type and what to list
+      if (database) {
+        // List tables/collections
+        switch (type) {
+          case DB_TYPES.MYSQL:
+            listCommand = buildMySQLListTablesCommand(options);
+            break;
+          case DB_TYPES.POSTGRESQL:
+            listCommand = buildPostgreSQLListTablesCommand(options);
+            break;
+          case DB_TYPES.MONGODB:
+            listCommand = buildMongoDBListCollectionsCommand(options);
+            break;
+        }
+      } else {
+        // List databases
+        switch (type) {
+          case DB_TYPES.MYSQL:
+            listCommand = buildMySQLListDatabasesCommand(options);
+            break;
+          case DB_TYPES.POSTGRESQL:
+            listCommand = buildPostgreSQLListDatabasesCommand(options);
+            break;
+          case DB_TYPES.MONGODB:
+            listCommand = buildMongoDBListDatabasesCommand(options);
+            break;
+        }
+      }
+
+      // Execute list command
+      const result = await ssh.execCommand(listCommand);
+
+      if (result.code !== 0 && result.stderr) {
+        throw new Error(`List failed: ${result.stderr}`);
+      }
+
+      // Parse results
+      const items = database
+        ? parseTableList(result.stdout)
+        : parseDatabaseList(result.stdout, type);
+
+      const response = {
+        success: true,
+        server: serverName,
+        type,
+        listing: database ? 'tables' : 'databases'
+      };
+
+      if (database) {
+        response.database = database;
+        response.tables = items;
+        response.count = items.length;
+      } else {
+        response.databases = items;
+        response.count = items.length;
+      }
+
+      logger.info(`Listed ${items.length} ${listType}`, {
+        server: serverName,
+        type
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(response, null, 2)
+          }
+        ]
+      };
+
+    } catch (error) {
+      logger.error('Database list failed', {
+        server: serverName,
+        type,
+        error: error.message
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Database list failed: ${error.message}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+server.registerTool(
+  'ssh_db_query',
+  {
+    description: 'Execute SELECT query on database (read-only, SELECT queries only)',
+    inputSchema: {
+      server: z.string().describe('Server name'),
+      type: z.enum(['mysql', 'postgresql', 'mongodb'])
+        .describe('Database type'),
+      database: z.string().describe('Database name'),
+      query: z.string().describe('SQL query (SELECT only) or MongoDB find query'),
+      collection: z.string().optional()
+        .describe('Collection name (MongoDB only)'),
+      dbUser: z.string().optional().describe('Database user'),
+      dbPassword: z.string().optional().describe('Database password'),
+      dbHost: z.string().optional().describe('Database host (default: localhost)'),
+      dbPort: z.number().optional().describe('Database port')
+    }
+  },
+  async ({ server: serverName, type, database, query, collection, dbUser, dbPassword, dbHost, dbPort }) => {
+    try {
+      const ssh = await getConnection(serverName);
+
+      // Validate query safety for SQL databases
+      if (type !== DB_TYPES.MONGODB && !isSafeQuery(query)) {
+        throw new Error('Only SELECT queries are allowed for security reasons');
+      }
+
+      logger.info(`Executing ${type} query`, {
+        server: serverName,
+        database,
+        query: query.substring(0, 100)
+      });
+
+      let queryCommand;
+      const options = {
+        database,
+        query,
+        user: dbUser,
+        password: dbPassword,
+        host: dbHost,
+        port: dbPort
+      };
+
+      // Build query command based on type
+      switch (type) {
+        case DB_TYPES.MYSQL:
+          queryCommand = buildMySQLQueryCommand(options);
+          break;
+        case DB_TYPES.POSTGRESQL:
+          queryCommand = buildPostgreSQLQueryCommand(options);
+          break;
+        case DB_TYPES.MONGODB:
+          if (!collection) {
+            throw new Error('collection parameter required for MongoDB queries');
+          }
+          options.collection = collection;
+          queryCommand = buildMongoDBQueryCommand(options);
+          break;
+        default:
+          throw new Error(`Unsupported database type: ${type}`);
+      }
+
+      // Execute query
+      const result = await ssh.execCommand(queryCommand);
+
+      if (result.code !== 0) {
+        throw new Error(`Query failed: ${result.stderr || result.stdout}`);
+      }
+
+      // Parse output (basic parsing, output depends on database type)
+      const output = result.stdout.trim();
+      const lines = output.split('\n');
+
+      logger.info(`Query executed successfully`, {
+        server: serverName,
+        database,
+        rows: lines.length
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: true,
+              server: serverName,
+              type,
+              database,
+              collection: collection || null,
+              query,
+              row_count: lines.length,
+              output: output,
+              timestamp: new Date().toISOString()
+            }, null, 2)
+          }
+        ]
+      };
+
+    } catch (error) {
+      logger.error('Database query failed', {
+        server: serverName,
+        type,
+        database,
+        error: error.message
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Database query failed: ${error.message}`
           }
         ]
       };

@@ -90,6 +90,12 @@ The server exposes these tools to Claude Code and OpenAI Codex:
 - `ssh_process_manager`: List, monitor, or kill processes
 - `ssh_alert_setup`: Configure health monitoring alerts and thresholds
 
+### Database Management (v2.3+)
+- `ssh_db_dump`: Create database dumps (MySQL, PostgreSQL, MongoDB)
+- `ssh_db_import`: Import SQL dumps or restore databases
+- `ssh_db_list`: List databases or tables/collections
+- `ssh_db_query`: Execute read-only SELECT queries (security validated)
+
 ### Deployment & Management
 - `ssh_deploy`: Deploy files with automatic permission/backup handling
 - `ssh_execute_sudo`: Execute commands with sudo privileges

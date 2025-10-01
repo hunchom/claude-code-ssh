@@ -296,6 +296,36 @@ Configure health monitoring alerts and thresholds.
 - Configurable CPU, memory, and disk thresholds
 - Automatic alert triggering when thresholds exceeded
 
+### Database Management Tools (v2.3+) 🗄️
+
+#### `ssh_db_dump`
+Create database dump/backup on remote server.
+- Supports: MySQL, PostgreSQL, MongoDB
+- Parameters: `server`, `type`, `database`, `outputFile`, `dbUser`, `dbPassword`, `dbHost`, `dbPort`
+- Optional: `compress` (gzip), `tables` (specific tables only)
+- Returns dump size and location
+
+#### `ssh_db_import`
+Import SQL dump or restore database on remote server.
+- Supports: MySQL, PostgreSQL, MongoDB
+- Parameters: `server`, `type`, `database`, `inputFile`, `dbUser`, `dbPassword`, `dbHost`, `dbPort`
+- Handles compressed (.gz) files automatically
+- Optional: `drop` (drop database before restore for MongoDB)
+
+#### `ssh_db_list`
+List databases or tables on remote server.
+- Parameters: `server`, `type`, `database` (optional), `dbUser`, `dbPassword`, `dbHost`, `dbPort`
+- Without database: lists all databases (filters system DBs)
+- With database: lists all tables/collections
+- Returns structured list with count
+
+#### `ssh_db_query`
+Execute read-only SQL queries on remote database.
+- Parameters: `server`, `type`, `database`, `query`, `dbUser`, `dbPassword`, `dbHost`, `dbPort`
+- **Security**: Only SELECT queries allowed for safety
+- MongoDB: Use `collection` parameter for find queries
+- Returns query results with row count
+
 ### Deployment Tools (v1.2+)
 
 #### `ssh_deploy` 🚀
