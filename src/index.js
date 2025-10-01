@@ -97,6 +97,35 @@ import {
   buildCronScheduleCommand,
   parseCronJobs
 } from './backup-manager.js';
+import {
+  HEALTH_STATUS,
+  COMMON_SERVICES,
+  buildCPUCheckCommand,
+  buildMemoryCheckCommand,
+  buildDiskCheckCommand,
+  buildNetworkCheckCommand,
+  buildLoadAverageCommand,
+  buildUptimeCommand,
+  parseCPUUsage,
+  parseMemoryUsage,
+  parseDiskUsage,
+  parseNetworkStats,
+  determineOverallHealth,
+  buildServiceStatusCommand,
+  parseServiceStatus,
+  buildProcessListCommand,
+  parseProcessList,
+  buildKillProcessCommand,
+  buildProcessInfoCommand,
+  createAlertConfig,
+  buildSaveAlertConfigCommand,
+  buildLoadAlertConfigCommand,
+  checkAlertThresholds,
+  buildComprehensiveHealthCheckCommand,
+  parseComprehensiveHealthCheck,
+  getCommonServices,
+  resolveServiceName
+} from './health-monitor.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -3432,6 +3461,513 @@ server.registerTool(
           {
             type: 'text',
             text: `❌ Failed to schedule backup: ${error.message}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+// ============================================================================
+// HEALTH CHECKS & MONITORING TOOLS
+// ============================================================================
+
+server.registerTool(
+  'ssh_health_check',
+  {
+    description: 'Perform comprehensive health check on remote server',
+    inputSchema: {
+      server: z.string().describe('Server name'),
+      detailed: z.boolean().optional()
+        .describe('Include detailed metrics (network, load average)')
+    }
+  },
+  async ({ server: serverName, detailed = false }) => {
+    try {
+      const ssh = await getConnection(serverName);
+
+      logger.info(`Running health check on ${serverName}`, { detailed });
+
+      // Build and execute comprehensive health check
+      const healthCommand = buildComprehensiveHealthCheckCommand();
+      const result = await ssh.execCommand(healthCommand);
+
+      if (result.code !== 0) {
+        throw new Error(`Health check failed: ${result.stderr}`);
+      }
+
+      // Parse results
+      const health = parseComprehensiveHealthCheck(result.stdout);
+
+      // Build response
+      const response = {
+        server: serverName,
+        timestamp: new Date().toISOString(),
+        overall_status: health.overall_status || HEALTH_STATUS.UNKNOWN,
+        cpu: health.cpu,
+        memory: health.memory,
+        disks: health.disks,
+        uptime: health.uptime
+      };
+
+      if (detailed) {
+        response.load_average = health.load_average;
+        response.network = health.network;
+      }
+
+      // Check if there are any critical issues
+      const criticalIssues = [];
+      if (health.cpu && health.cpu.status === HEALTH_STATUS.CRITICAL) {
+        criticalIssues.push(`CPU usage critical: ${health.cpu.percent}%`);
+      }
+      if (health.memory && health.memory.status === HEALTH_STATUS.CRITICAL) {
+        criticalIssues.push(`Memory usage critical: ${health.memory.percent}%`);
+      }
+      if (health.disks) {
+        for (const disk of health.disks) {
+          if (disk.status === HEALTH_STATUS.CRITICAL) {
+            criticalIssues.push(`Disk ${disk.mount} critical: ${disk.percent}%`);
+          }
+        }
+      }
+
+      if (criticalIssues.length > 0) {
+        response.critical_issues = criticalIssues;
+      }
+
+      logger.info(`Health check completed: ${health.overall_status}`, {
+        server: serverName,
+        status: health.overall_status
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(response, null, 2)
+          }
+        ]
+      };
+
+    } catch (error) {
+      logger.error('Health check failed', {
+        server: serverName,
+        error: error.message
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Health check failed: ${error.message}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+server.registerTool(
+  'ssh_service_status',
+  {
+    description: 'Check status of services on remote server',
+    inputSchema: {
+      server: z.string().describe('Server name'),
+      services: z.array(z.string())
+        .describe('Service names to check (e.g., nginx, mysql, docker)')
+    }
+  },
+  async ({ server: serverName, services }) => {
+    try {
+      const ssh = await getConnection(serverName);
+
+      logger.info(`Checking service status on ${serverName}`, {
+        services: services.join(', ')
+      });
+
+      const serviceStatuses = [];
+
+      // Check each service
+      for (const serviceName of services) {
+        const resolvedName = resolveServiceName(serviceName);
+        const statusCommand = buildServiceStatusCommand(resolvedName);
+        const result = await ssh.execCommand(statusCommand);
+
+        const status = parseServiceStatus(result.stdout, serviceName);
+        serviceStatuses.push(status);
+      }
+
+      // Count running vs stopped
+      const running = serviceStatuses.filter(s => s.status === 'running').length;
+      const stopped = serviceStatuses.filter(s => s.status === 'stopped').length;
+
+      const response = {
+        server: serverName,
+        timestamp: new Date().toISOString(),
+        total: serviceStatuses.length,
+        running,
+        stopped,
+        services: serviceStatuses,
+        overall_health: stopped === 0 ? HEALTH_STATUS.HEALTHY :
+                       running > stopped ? HEALTH_STATUS.WARNING :
+                       HEALTH_STATUS.CRITICAL
+      };
+
+      logger.info(`Service check completed`, {
+        server: serverName,
+        running,
+        stopped
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(response, null, 2)
+          }
+        ]
+      };
+
+    } catch (error) {
+      logger.error('Service status check failed', {
+        server: serverName,
+        error: error.message
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Service status check failed: ${error.message}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+server.registerTool(
+  'ssh_process_manager',
+  {
+    description: 'List, monitor, or kill processes on remote server',
+    inputSchema: {
+      server: z.string().describe('Server name'),
+      action: z.enum(['list', 'kill', 'info'])
+        .describe('Action: list processes, kill process, or get process info'),
+      pid: z.number().optional()
+        .describe('Process ID (required for kill and info actions)'),
+      signal: z.enum(['TERM', 'KILL', 'HUP', 'INT', 'QUIT']).optional()
+        .describe('Signal to send when killing (default: TERM)'),
+      sortBy: z.enum(['cpu', 'memory']).optional()
+        .describe('Sort processes by CPU or memory (default: cpu)'),
+      limit: z.number().optional()
+        .describe('Number of processes to return (default: 20)'),
+      filter: z.string().optional()
+        .describe('Filter processes by name/command')
+    }
+  },
+  async ({ server: serverName, action, pid, signal = 'TERM', sortBy = 'cpu', limit = 20, filter }) => {
+    try {
+      const ssh = await getConnection(serverName);
+
+      logger.info(`Process manager action: ${action}`, {
+        server: serverName,
+        pid,
+        filter
+      });
+
+      let response;
+
+      switch (action) {
+        case 'list': {
+          const listCommand = buildProcessListCommand({ sortBy, limit, filter });
+          const result = await ssh.execCommand(listCommand);
+
+          if (result.code !== 0) {
+            throw new Error(`Failed to list processes: ${result.stderr}`);
+          }
+
+          const processes = parseProcessList(result.stdout);
+
+          response = {
+            server: serverName,
+            action: 'list',
+            count: processes.length,
+            sorted_by: sortBy,
+            processes
+          };
+          break;
+        }
+
+        case 'kill': {
+          if (!pid) {
+            throw new Error('pid parameter required for kill action');
+          }
+
+          // Get process info first
+          const infoCommand = buildProcessInfoCommand(pid);
+          const infoResult = await ssh.execCommand(infoCommand);
+
+          let processInfo = {};
+          if (infoResult.code === 0 && infoResult.stdout) {
+            try {
+              processInfo = JSON.parse(infoResult.stdout);
+            } catch (e) {
+              // Process might not exist
+            }
+          }
+
+          // Kill the process
+          const killCommand = buildKillProcessCommand(pid, signal);
+          const killResult = await ssh.execCommand(killCommand);
+
+          if (killResult.code !== 0) {
+            throw new Error(`Failed to kill process ${pid}: ${killResult.stderr}`);
+          }
+
+          response = {
+            server: serverName,
+            action: 'kill',
+            pid,
+            signal,
+            process: processInfo,
+            success: true
+          };
+
+          logger.info(`Process killed: ${pid}`, {
+            server: serverName,
+            signal
+          });
+          break;
+        }
+
+        case 'info': {
+          if (!pid) {
+            throw new Error('pid parameter required for info action');
+          }
+
+          const infoCommand = buildProcessInfoCommand(pid);
+          const result = await ssh.execCommand(infoCommand);
+
+          if (result.code !== 0 || !result.stdout) {
+            throw new Error(`Process ${pid} not found`);
+          }
+
+          const processInfo = JSON.parse(result.stdout);
+
+          response = {
+            server: serverName,
+            action: 'info',
+            process: processInfo
+          };
+          break;
+        }
+
+        default:
+          throw new Error(`Unknown action: ${action}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(response, null, 2)
+          }
+        ]
+      };
+
+    } catch (error) {
+      logger.error('Process manager failed', {
+        server: serverName,
+        action,
+        error: error.message
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Process manager failed: ${error.message}`
+          }
+        ]
+      };
+    }
+  }
+);
+
+server.registerTool(
+  'ssh_alert_setup',
+  {
+    description: 'Configure health monitoring alerts and thresholds',
+    inputSchema: {
+      server: z.string().describe('Server name'),
+      action: z.enum(['set', 'get', 'check'])
+        .describe('Action: set thresholds, get config, or check current metrics against thresholds'),
+      cpuThreshold: z.number().optional()
+        .describe('CPU usage threshold percentage (e.g., 80)'),
+      memoryThreshold: z.number().optional()
+        .describe('Memory usage threshold percentage (e.g., 90)'),
+      diskThreshold: z.number().optional()
+        .describe('Disk usage threshold percentage (e.g., 85)'),
+      enabled: z.boolean().optional()
+        .describe('Enable or disable alerts (default: true)')
+    }
+  },
+  async ({ server: serverName, action, cpuThreshold, memoryThreshold, diskThreshold, enabled = true }) => {
+    try {
+      const ssh = await getConnection(serverName);
+      const configPath = '/etc/ssh-manager-alerts.json';
+
+      logger.info(`Alert setup action: ${action}`, {
+        server: serverName
+      });
+
+      let response;
+
+      switch (action) {
+        case 'set': {
+          // Create alert configuration
+          const config = createAlertConfig({
+            cpu: cpuThreshold,
+            memory: memoryThreshold,
+            disk: diskThreshold,
+            enabled
+          });
+
+          // Save to server
+          const saveCommand = buildSaveAlertConfigCommand(config, configPath);
+          const saveResult = await ssh.execCommand(saveCommand);
+
+          if (saveResult.code !== 0) {
+            throw new Error(`Failed to save alert config: ${saveResult.stderr}`);
+          }
+
+          response = {
+            server: serverName,
+            action: 'set',
+            config,
+            config_path: configPath,
+            success: true
+          };
+
+          logger.info('Alert thresholds configured', {
+            server: serverName,
+            thresholds: config
+          });
+          break;
+        }
+
+        case 'get': {
+          // Load configuration
+          const loadCommand = buildLoadAlertConfigCommand(configPath);
+          const result = await ssh.execCommand(loadCommand);
+
+          let config = {};
+          if (result.stdout && result.stdout.trim()) {
+            try {
+              config = JSON.parse(result.stdout);
+            } catch (e) {
+              config = { error: 'Failed to parse config' };
+            }
+          }
+
+          response = {
+            server: serverName,
+            action: 'get',
+            config,
+            config_path: configPath
+          };
+          break;
+        }
+
+        case 'check': {
+          // Load thresholds
+          const loadCommand = buildLoadAlertConfigCommand(configPath);
+          const loadResult = await ssh.execCommand(loadCommand);
+
+          let thresholds = {};
+          if (loadResult.stdout && loadResult.stdout.trim()) {
+            try {
+              thresholds = JSON.parse(loadResult.stdout);
+            } catch (e) {
+              throw new Error('No alert configuration found. Use action=set to configure.');
+            }
+          } else {
+            throw new Error('No alert configuration found. Use action=set to configure.');
+          }
+
+          if (!thresholds.enabled) {
+            response = {
+              server: serverName,
+              action: 'check',
+              message: 'Alerts are disabled',
+              thresholds
+            };
+            break;
+          }
+
+          // Get current metrics
+          const healthCommand = buildComprehensiveHealthCheckCommand();
+          const healthResult = await ssh.execCommand(healthCommand);
+
+          if (healthResult.code !== 0) {
+            throw new Error('Failed to get current metrics');
+          }
+
+          const metrics = parseComprehensiveHealthCheck(healthResult.stdout);
+
+          // Check thresholds
+          const alerts = checkAlertThresholds(metrics, thresholds);
+
+          response = {
+            server: serverName,
+            action: 'check',
+            thresholds,
+            current_metrics: {
+              cpu: metrics.cpu,
+              memory: metrics.memory,
+              disks: metrics.disks
+            },
+            alerts,
+            alert_count: alerts.length,
+            status: alerts.length === 0 ? 'ok' : 'alerts_triggered'
+          };
+
+          if (alerts.length > 0) {
+            logger.warn('Health alerts triggered', {
+              server: serverName,
+              alert_count: alerts.length,
+              alerts
+            });
+          }
+          break;
+        }
+
+        default:
+          throw new Error(`Unknown action: ${action}`);
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(response, null, 2)
+          }
+        ]
+      };
+
+    } catch (error) {
+      logger.error('Alert setup failed', {
+        server: serverName,
+        action,
+        error: error.message
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Alert setup failed: ${error.message}`
           }
         ]
       };

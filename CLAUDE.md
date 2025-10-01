@@ -84,6 +84,12 @@ The server exposes these tools to Claude Code and OpenAI Codex:
 - `ssh_backup_restore`: Restore from previous backups
 - `ssh_backup_schedule`: Schedule automatic backups using cron
 
+### Health & Monitoring (v2.2+)
+- `ssh_health_check`: Comprehensive server health check (CPU, RAM, Disk, Network)
+- `ssh_service_status`: Check status of services (nginx, mysql, docker, etc.)
+- `ssh_process_manager`: List, monitor, or kill processes
+- `ssh_alert_setup`: Configure health monitoring alerts and thresholds
+
 ### Deployment & Management
 - `ssh_deploy`: Deploy files with automatic permission/backup handling
 - `ssh_execute_sudo`: Execute commands with sudo privileges

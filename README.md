@@ -270,6 +270,32 @@ Schedule automatic backups using cron.
 - Parameters: `server`, `schedule` (cron format), `type`, `name`
 - Automatic cleanup based on retention policy
 
+### Health & Monitoring Tools (v2.2+) 🏥
+
+#### `ssh_health_check`
+Perform comprehensive health check on remote server.
+- Checks: CPU, Memory, Disk, Network, Uptime, Load average
+- Returns overall health status (healthy/warning/critical)
+- Optional detailed mode for extended metrics
+
+#### `ssh_service_status`
+Check status of services (nginx, mysql, docker, etc.).
+- Parameters: `server`, `services` (array)
+- Returns running/stopped status for each service
+- Works with both systemd and sysv init systems
+
+#### `ssh_process_manager`
+List, monitor, or kill processes on remote server.
+- Actions: list (top processes), kill (terminate), info (details)
+- Sort by CPU or memory usage
+- Filter processes by name
+
+#### `ssh_alert_setup`
+Configure health monitoring alerts and thresholds.
+- Actions: set (configure), get (view), check (test thresholds)
+- Configurable CPU, memory, and disk thresholds
+- Automatic alert triggering when thresholds exceeded
+
 ### Deployment Tools (v1.2+)
 
 #### `ssh_deploy` 🚀
