@@ -1,9 +1,17 @@
-# MCP SSH Manager 🚀
+# MCP SSH Manager - SSH Remote Server Management via Model Context Protocol 🚀
 
-A powerful Model Context Protocol (MCP) server that enables **Claude Code** and **OpenAI Codex** to manage multiple SSH connections seamlessly. Control remote servers, execute commands, and transfer files directly from your AI assistant.
+> **Looking for MCP SSH tools?** This is the **MCP SSH Manager** - a complete Model Context Protocol (MCP) server for SSH remote server management compatible with Claude Code and OpenAI Codex.
+
+A powerful Model Context Protocol (MCP) server that enables **Claude Code** and **OpenAI Codex** to manage multiple SSH connections seamlessly. Control remote servers, execute commands, transfer files, manage databases, and automate DevOps tasks directly from your AI assistant.
+
+**Keywords:** MCP SSH, MCP SSH Manager, SSH MCP, Model Context Protocol SSH, Claude Code SSH, SSH MCP Server, Remote SSH Management, MCP Server SSH
 
 <div align="center">
 
+[![npm version](https://img.shields.io/npm/v/mcp-ssh-manager.svg?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/mcp-ssh-manager)
+[![npm downloads](https://img.shields.io/npm/dt/mcp-ssh-manager.svg?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/mcp-ssh-manager)
+[![MCP SSH Server](https://img.shields.io/badge/MCP_SSH-Server-orange?style=for-the-badge)](https://github.com/bvisible/mcp-ssh-manager)
+[![SSH MCP](https://img.shields.io/badge/SSH_MCP-Compatible-blue?style=for-the-badge)](https://modelcontextprotocol.io)
 [![Version](https://img.shields.io/badge/Version-3.0.0-brightgreen?style=for-the-badge)](https://github.com/bvisible/mcp-ssh-manager/releases/tag/v3.0.0)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Compatible-5A67D8?style=for-the-badge&logo=anthropic)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Compatible-00A67E?style=for-the-badge&logo=openai)](https://openai.com/codex)
@@ -93,6 +101,24 @@ This release adds **12 new MCP tools** transforming SSH Manager into a comprehen
 - **🔑 Sudo Support** - Execute commands with sudo privileges securely
 - **📝 OpenAI Codex Support** - Compatible with OpenAI Codex via TOML configuration
 
+---
+
+## 🔍 Alternative Search Terms
+
+Looking for:
+- **MCP SSH** server? ✅ You're in the right place
+- **SSH MCP** integration? ✅ This is it
+- **Claude Code SSH** tools? ✅ Fully compatible
+- **Model Context Protocol SSH** manager? ✅ Complete solution
+- **OpenAI Codex SSH** server? ✅ Full support
+- **Remote SSH MCP** server? ✅ Works seamlessly
+- **MCP Server for SSH**? ✅ Production ready
+- **SSH automation with AI**? ✅ Perfect tool
+
+This is **the** MCP SSH Manager you've been searching for! 🎯
+
+---
+
 ## 📋 Prerequisites
 
 - Node.js (v18 or higher)
@@ -108,6 +134,18 @@ This release adds **12 new MCP tools** transforming SSH Manager into a comprehen
 ## 🚀 Quick Start - Claude Code
 
 ### 1. Install MCP SSH Manager
+
+**Option A: Install from npm (recommended)**
+
+```bash
+# Install globally from npm
+npm install -g mcp-ssh-manager
+
+# Or install locally
+npx mcp-ssh-manager
+```
+
+**Option B: Install from source**
 
 ```bash
 # Clone and install

@@ -1,7 +1,7 @@
 {
   "name": "mcp-ssh-manager",
   "version": "3.0.0",
-  "description": "MCP server for Claude Code and OpenAI Codex with advanced SSH management, backups, health monitoring, database operations, deployment, and automation",
+  "description": "MCP SSH Manager: Model Context Protocol server for SSH remote server management. Control SSH connections from Claude Code and OpenAI Codex - execute commands, transfer files, database operations, backups, health monitoring, and DevOps automation",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
@@ -21,12 +21,24 @@
   "keywords": [
     "mcp",
     "ssh",
+    "mcp-ssh",
+    "mcp ssh",
+    "ssh-mcp",
+    "ssh mcp",
+    "model-context-protocol-ssh",
+    "mcp-server",
+    "mcp server ssh",
     "claude-code",
+    "claude-ssh",
+    "claude-code-ssh",
     "openai-codex",
     "codex",
     "model-context-protocol",
     "remote-server",
     "ssh-manager",
+    "ssh manager mcp",
+    "remote-ssh",
+    "ssh-automation",
     "deployment",
     "devops",
     "automation",
@@ -41,18 +53,20 @@
     "hooks",
     "aliases",
     "toml",
-    "ai-assistant"
+    "ai-assistant",
+    "ai-tools",
+    "llm-tools"
   ],
   "author": "MCP SSH Manager Contributors",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/mcp-ssh-manager.git"
+    "url": "git+https://github.com/bvisible/mcp-ssh-manager.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/mcp-ssh-manager/issues"
+    "url": "https://github.com/bvisible/mcp-ssh-manager/issues"
   },
-  "homepage": "https://github.com/yourusername/mcp-ssh-manager#readme",
+  "homepage": "https://github.com/bvisible/mcp-ssh-manager#readme",
   "dependencies": {
     "@iarna/toml": "^2.2.5",
     "@modelcontextprotocol/sdk": "^1.17.2",
