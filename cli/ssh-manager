@@ -414,11 +414,9 @@ interactive_mode() {
                             fi
                             ;;
                         5)
-                            if select_server_menu "Edit Server"; then
-                                print_info "Edit feature coming soon..."
-                                echo
-                                read -p "Press Enter to continue..."
-                            fi
+                            wizard_edit_server
+                            echo
+                            read -p "Press Enter to continue..."
                             ;;
                         6)
                             if select_server_menu "Remove Server"; then
@@ -431,7 +429,7 @@ interactive_mode() {
                             fi
                             ;;
                         7)
-                            cmd_server_edit
+                            cmd_server_edit_file
                             echo
                             read -p "Press Enter to continue..."
                             ;;

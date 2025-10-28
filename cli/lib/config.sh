@@ -174,6 +174,62 @@ add_server_to_env() {
     print_success "Server '$name' added successfully"
 }
 
+# Update server in .env
+update_server_in_env() {
+    local name="$1"
+    local host="$2"
+    local user="$3"
+    local auth_type="$4"
+    local auth_value="$5"
+    local port="${6:-22}"
+    local description="${7:-}"
+    local default_dir="${8:-}"
+
+    local name_upper="$(echo "$name" | tr '[:lower:]' '[:upper:]')"
+
+    # Check if server exists
+    if ! grep -q "^SSH_SERVER_${name_upper}_HOST=" "$SSH_MANAGER_ENV" 2>/dev/null; then
+        print_error "Server '$name' not found"
+        return 1
+    fi
+
+    # Backup .env file
+    cp "$SSH_MANAGER_ENV" "$SSH_MANAGER_ENV.bak"
+
+    # Remove old server configuration (all lines including comments and old auth methods)
+    local temp=$(mktemp)
+    # Remove server config lines and the comment line before them
+    sed "/^# Server: $name$/d; /^SSH_SERVER_${name_upper}_/d" "$SSH_MANAGER_ENV" > "$temp"
+
+    # Find position to insert (after other servers or at end)
+    # Add updated server configuration
+    {
+        cat "$temp"
+        echo ""
+        echo "# Server: $name"
+        echo "SSH_SERVER_${name_upper}_HOST=$host"
+        echo "SSH_SERVER_${name_upper}_USER=$user"
+        echo "SSH_SERVER_${name_upper}_PORT=$port"
+
+        if [ "$auth_type" = "password" ]; then
+            echo "SSH_SERVER_${name_upper}_PASSWORD=$auth_value"
+        else
+            echo "SSH_SERVER_${name_upper}_KEYPATH=$auth_value"
+        fi
+
+        if [ -n "$description" ]; then
+            echo "SSH_SERVER_${name_upper}_DESCRIPTION=\"$description\""
+        fi
+
+        if [ -n "$default_dir" ]; then
+            echo "SSH_SERVER_${name_upper}_DEFAULT_DIR=$default_dir"
+        fi
+    } > "$SSH_MANAGER_ENV"
+
+    rm -f "$temp"
+    print_success "Server '$name' updated successfully"
+}
+
 # Remove server from .env
 remove_server_from_env() {
     local name="$1"

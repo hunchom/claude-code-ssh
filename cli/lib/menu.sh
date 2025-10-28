@@ -231,6 +231,130 @@ wizard_add_server() {
     fi
 }
 
+# Edit server wizard
+wizard_edit_server() {
+    # Select server to edit
+    if ! select_server_menu "Select Server to Edit"; then
+        return 1
+    fi
+
+    local server_name="$SELECTED_SERVER"
+
+    # Load existing configuration
+    local current_host=$(get_server_config "$server_name" "HOST")
+    local current_user=$(get_server_config "$server_name" "USER")
+    local current_port=$(get_server_config "$server_name" "PORT")
+    local current_keypath=$(get_server_config "$server_name" "KEYPATH")
+    local current_password=$(get_server_config "$server_name" "PASSWORD")
+    local current_description=$(get_server_config "$server_name" "DESCRIPTION")
+    local current_default_dir=$(get_server_config "$server_name" "DEFAULT_DIR")
+
+    current_port=${current_port:-22}
+
+    # Determine current auth type
+    local current_auth_type="key"
+    if [ -n "$current_password" ]; then
+        current_auth_type="password"
+    fi
+
+    clear
+    print_header "Edit Server - $server_name"
+    print_info "Press Enter to keep current value, or type new value"
+    echo
+
+    # Step 1: Connection Details
+    print_subheader "Step 1: Connection Details"
+    echo "----------------------------------------"
+
+    local host
+    prompt_input "Host/IP" "$current_host" "host"
+
+    local user
+    prompt_input "Username" "$current_user" "user"
+
+    local port
+    prompt_input "Port" "$current_port" "port"
+
+    # Step 2: Authentication Method
+    echo
+    print_subheader "Step 2: Authentication Method"
+    echo "----------------------------------------"
+    echo "Current method: $current_auth_type"
+    echo
+    echo "  1) 🔑 SSH Key (Recommended)"
+    echo "     More secure, no password needed"
+    echo
+    echo "  2) 🔒 Password"
+    echo "     Less secure, password required each time"
+    echo
+    read -p "Choose [1-2] or Enter to keep current: " auth_choice
+
+    local auth_type auth_value
+    if [ -z "$auth_choice" ]; then
+        # Keep current auth method
+        auth_type="$current_auth_type"
+        if [ "$auth_type" = "password" ]; then
+            auth_value="$current_password"
+        else
+            auth_value="$current_keypath"
+        fi
+    else
+        case "$auth_choice" in
+            2)
+                auth_type="password"
+                prompt_password "Password" "auth_value"
+                ;;
+            *)
+                auth_type="key"
+                prompt_input "SSH key path" "${current_keypath:-$HOME/.ssh/id_rsa}" "auth_value"
+                # Expand ~ to home directory
+                auth_value="${auth_value/#\~/$HOME}"
+                ;;
+        esac
+    fi
+
+    # Step 3: Optional Settings
+    echo
+    print_subheader "Step 3: Optional Settings"
+    echo "----------------------------------------"
+
+    local description
+    prompt_input "Description (optional)" "$current_description" "description"
+
+    local default_dir
+    prompt_input "Default directory (optional)" "$current_default_dir" "default_dir"
+
+    # Show summary
+    echo
+    print_subheader "Configuration Summary"
+    print_table_row "Name:" "$server_name"
+    print_table_row "Host:" "$host"
+    print_table_row "User:" "$user"
+    print_table_row "Port:" "$port"
+    print_table_row "Auth:" "$auth_type"
+    if [ "$auth_type" = "key" ]; then
+        print_table_row "Key:" "$auth_value"
+    fi
+    if [ -n "$description" ]; then
+        print_table_row "Description:" "$description"
+    fi
+    if [ -n "$default_dir" ]; then
+        print_table_row "Default Dir:" "$default_dir"
+    fi
+
+    echo
+    if prompt_yes_no "Save changes?" "y"; then
+        update_server_in_env "$server_name" "$host" "$user" "$auth_type" "$auth_value" "$port" "$description" "$default_dir"
+
+        echo
+        if prompt_yes_no "Test connection now?" "y"; then
+            test_ssh_connection "$server_name"
+        fi
+    else
+        print_info "Changes cancelled"
+    fi
+}
+
 # Server selection menu
 select_server_menu() {
     local prompt_text="${1:-Select a server}"

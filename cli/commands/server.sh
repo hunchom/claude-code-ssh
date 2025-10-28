@@ -191,19 +191,41 @@ cmd_server_remove() {
     fi
 }
 
-# Edit server configuration
-cmd_server_edit() {
+# Edit server configuration (full .env file)
+cmd_server_edit_file() {
     local editor=$(get_config "default_editor" "${EDITOR:-nano}")
-    
+
     if [ ! -f "$SSH_MANAGER_ENV" ]; then
         print_error "Configuration file not found: $SSH_MANAGER_ENV"
         return 1
     fi
-    
+
     print_info "Opening configuration in $editor..."
     $editor "$SSH_MANAGER_ENV"
-    
+
     print_success "Configuration updated"
+}
+
+# Edit server interactively
+cmd_server_edit() {
+    local server="$1"
+
+    if [ -z "$server" ]; then
+        # No server specified, launch wizard
+        wizard_edit_server
+    else
+        # Server specified, edit that specific server
+        # Check if server exists
+        local host=$(get_server_config "$server" "HOST")
+        if [ -z "$host" ]; then
+            print_error "Server '$server' not found"
+            return 1
+        fi
+
+        # Set SELECTED_SERVER for wizard
+        SELECTED_SERVER="$server"
+        wizard_edit_server
+    fi
 }
 
 # Show server details
