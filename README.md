@@ -12,7 +12,7 @@ A powerful Model Context Protocol (MCP) server that enables **Claude Code** and 
 [![npm downloads](https://img.shields.io/npm/dt/mcp-ssh-manager.svg?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/mcp-ssh-manager)
 [![MCP SSH Server](https://img.shields.io/badge/MCP_SSH-Server-orange?style=for-the-badge)](https://github.com/bvisible/mcp-ssh-manager)
 [![SSH MCP](https://img.shields.io/badge/SSH_MCP-Compatible-blue?style=for-the-badge)](https://modelcontextprotocol.io)
-[![Version](https://img.shields.io/badge/Version-3.0.0-brightgreen?style=for-the-badge)](https://github.com/bvisible/mcp-ssh-manager/releases/tag/v3.0.0)
+[![Version](https://img.shields.io/badge/Version-3.1.0-brightgreen?style=for-the-badge)](https://github.com/bvisible/mcp-ssh-manager/releases/tag/v3.1.0)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Compatible-5A67D8?style=for-the-badge&logo=anthropic)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Compatible-00A67E?style=for-the-badge&logo=openai)](https://openai.com/codex)
 [![MCP](https://img.shields.io/badge/MCP-Server-orange?style=for-the-badge)](https://modelcontextprotocol.io)
@@ -26,9 +26,21 @@ A powerful Model Context Protocol (MCP) server that enables **Claude Code** and 
 
 ---
 
-## 🎉 What's New in v3.0.0
+## 🎉 What's New in v3.1.0
 
-**Major Release - Enterprise DevOps Platform** (Released: October 1, 2025)
+**Tool Activation System** (Released: November 15, 2025)
+
+### 🎯 Context Usage Optimization
+- **92% context reduction**: Enable only the tools you need (minimal mode: 5 tools vs all 37)
+- **Tool management CLI**: `ssh-manager tools list/configure/enable/disable`
+- **6 tool groups**: Core, Sessions, Monitoring, Backup, Database, Advanced
+- **Auto-approval export**: Generate Claude Code auto-approval configs
+
+---
+
+## Previous Releases
+
+### v3.0.0 - Enterprise DevOps Platform (October 1, 2025)
 
 This release adds **12 new MCP tools** transforming SSH Manager into a comprehensive DevOps automation platform:
 
