@@ -207,16 +207,16 @@ export function buildFilesBackupCommand(options) {
  */
 export function buildRestoreCommand(backupType, backupFile, options = {}) {
   switch (backupType) {
-    case BACKUP_TYPES.MYSQL:
-      return buildMySQLRestoreCommand(backupFile, options);
-    case BACKUP_TYPES.POSTGRESQL:
-      return buildPostgreSQLRestoreCommand(backupFile, options);
-    case BACKUP_TYPES.MONGODB:
-      return buildMongoDBRestoreCommand(backupFile, options);
-    case BACKUP_TYPES.FILES:
-      return buildFilesRestoreCommand(backupFile, options);
-    default:
-      throw new Error(`Unknown backup type: ${backupType}`);
+  case BACKUP_TYPES.MYSQL:
+    return buildMySQLRestoreCommand(backupFile, options);
+  case BACKUP_TYPES.POSTGRESQL:
+    return buildPostgreSQLRestoreCommand(backupFile, options);
+  case BACKUP_TYPES.MONGODB:
+    return buildMongoDBRestoreCommand(backupFile, options);
+  case BACKUP_TYPES.FILES:
+    return buildFilesRestoreCommand(backupFile, options);
+  default:
+    throw new Error(`Unknown backup type: ${backupType}`);
   }
 }
 
@@ -379,7 +379,7 @@ export function createBackupMetadata(backupId, type, options = {}) {
 export function buildSaveMetadataCommand(metadata, metadataPath) {
   const jsonData = JSON.stringify(metadata, null, 2);
   // Escape single quotes in JSON for shell
-  const escapedJson = jsonData.replace(/'/g, "'\\''");
+  const escapedJson = jsonData.replace(/'/g, '\'\\\'\'');
   return `echo '${escapedJson}' > "${metadataPath}"`;
 }
 
@@ -394,7 +394,7 @@ export function buildListBackupsCommand(backupDir = DEFAULT_BACKUP_DIR, type = n
   }
 
   // Read and parse each metadata file
-  command += ` | while read -r file; do cat "$file"; echo "---"; done`;
+  command += ' | while read -r file; do cat "$file"; echo "---"; done';
 
   return command;
 }

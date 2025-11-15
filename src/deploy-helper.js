@@ -1,4 +1,3 @@
-import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 
@@ -43,8 +42,8 @@ export function buildDeploymentStrategy(remotePath, options = {}) {
   }
 
   // Step 2: Determine if we need sudo
-  const needsSudo = remotePath.startsWith('/etc/') || 
-                    remotePath.startsWith('/var/') || 
+  const needsSudo = remotePath.startsWith('/etc/') ||
+                    remotePath.startsWith('/var/') ||
                     remotePath.startsWith('/usr/') ||
                     owner || permissions;
 
@@ -53,11 +52,11 @@ export function buildDeploymentStrategy(remotePath, options = {}) {
   }
 
   // Step 3: Copy from temp to final location
-  const copyCmd = needsSudo && sudoPassword ? 
+  const copyCmd = needsSudo && sudoPassword ?
     `echo "${sudoPassword}" | sudo -S cp {{tempFile}} "${remotePath}"` :
     needsSudo ?
-    `sudo cp {{tempFile}} "${remotePath}"` :
-    `cp {{tempFile}} "${remotePath}"`;
+      `sudo cp {{tempFile}} "${remotePath}"` :
+      `cp {{tempFile}} "${remotePath}"`;
 
   strategy.steps.push({
     type: 'copy',
@@ -69,7 +68,7 @@ export function buildDeploymentStrategy(remotePath, options = {}) {
     const chownCmd = sudoPassword ?
       `echo "${sudoPassword}" | sudo -S chown ${owner} "${remotePath}"` :
       `sudo chown ${owner} "${remotePath}"`;
-    
+
     strategy.steps.push({
       type: 'chown',
       command: chownCmd
@@ -81,7 +80,7 @@ export function buildDeploymentStrategy(remotePath, options = {}) {
     const chmodCmd = sudoPassword ?
       `echo "${sudoPassword}" | sudo -S chmod ${permissions} "${remotePath}"` :
       `sudo chmod ${permissions} "${remotePath}"`;
-    
+
     strategy.steps.push({
       type: 'chmod',
       command: chmodCmd
@@ -151,11 +150,11 @@ export function detectDeploymentNeeds(remotePath) {
  */
 export function createBatchDeployScript(deployments) {
   const script = ['#!/bin/bash', 'set -e', ''];
-  
+
   script.push('# Batch deployment script');
   script.push(`# Generated at ${new Date().toISOString()}`);
   script.push('');
-  
+
   deployments.forEach((deploy, index) => {
     script.push(`# File ${index + 1}: ${deploy.localPath} -> ${deploy.remotePath}`);
     deploy.strategy.steps.forEach(step => {
@@ -165,12 +164,12 @@ export function createBatchDeployScript(deployments) {
     });
     script.push('');
   });
-  
+
   // Cleanup all temp files at the end
   script.push('# Cleanup temporary files');
   deployments.forEach(deploy => {
     script.push(`rm -f ${deploy.tempFile}`);
   });
-  
+
   return script.join('\n');
 }

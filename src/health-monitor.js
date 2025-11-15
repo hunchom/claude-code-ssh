@@ -30,7 +30,7 @@ export const COMMON_SERVICES = {
  */
 export function buildCPUCheckCommand() {
   // Get CPU usage using top, show idle percentage, calculate used
-  return `top -bn1 | grep "Cpu(s)" | sed "s/.*, *\\([0-9.]*\\)%* id.*/\\1/" | awk '{print 100 - $1}'`;
+  return 'top -bn1 | grep "Cpu(s)" | sed "s/.*, *\\([0-9.]*\\)%* id.*/\\1/" | awk \'{print 100 - $1}\'';
 }
 
 /**
@@ -38,7 +38,7 @@ export function buildCPUCheckCommand() {
  */
 export function buildMemoryCheckCommand() {
   // Returns: total, used, free, available in MB and percentage
-  return `free -m | awk 'NR==2{printf "{\\"total\\":%s,\\"used\\":%s,\\"free\\":%s,\\"percent\\":%.2f}", $2,$3,$4,$3*100/$2}'`;
+  return 'free -m | awk \'NR==2{printf "{\\"total\\":%s,\\"used\\":%s,\\"free\\":%s,\\"percent\\":%.2f}", $2,$3,$4,$3*100/$2}\'';
 }
 
 /**
@@ -47,7 +47,7 @@ export function buildMemoryCheckCommand() {
 export function buildDiskCheckCommand(mountPoint = '/') {
   // Returns JSON with disk usage for specific mount point or all
   if (mountPoint === 'all') {
-    return `df -h | awk 'NR>1 {gsub(/%/,"",$5); printf "{\\"mount\\":\\"%s\\",\\"size\\":\\"%s\\",\\"used\\":\\"%s\\",\\"avail\\":\\"%s\\",\\"percent\\":%s}\\n", $6,$2,$3,$4,$5}'`;
+    return 'df -h | awk \'NR>1 {gsub(/%/,"",$5); printf "{\\"mount\\":\\"%s\\",\\"size\\":\\"%s\\",\\"used\\":\\"%s\\",\\"avail\\":\\"%s\\",\\"percent\\":%s}\\n", $6,$2,$3,$4,$5}\'';
   }
   return `df -h "${mountPoint}" | awk 'NR>1 {gsub(/%/,"",$5); printf "{\\"mount\\":\\"%s\\",\\"size\\":\\"%s\\",\\"used\\":\\"%s\\",\\"avail\\":\\"%s\\",\\"percent\\":%s}", $6,$2,$3,$4,$5}'`;
 }
@@ -57,21 +57,21 @@ export function buildDiskCheckCommand(mountPoint = '/') {
  */
 export function buildNetworkCheckCommand() {
   // Get basic network stats (RX/TX bytes)
-  return `cat /proc/net/dev | awk 'NR>2 {printf "{\\"interface\\":\\"%s\\",\\"rx_bytes\\":%s,\\"tx_bytes\\":%s}\\n", $1,$2,$10}' | grep -v "lo:"`;
+  return 'cat /proc/net/dev | awk \'NR>2 {printf "{\\"interface\\":\\"%s\\",\\"rx_bytes\\":%s,\\"tx_bytes\\":%s}\\n", $1,$2,$10}\' | grep -v "lo:"';
 }
 
 /**
  * Build command to check load average
  */
 export function buildLoadAverageCommand() {
-  return `uptime | awk -F'load average:' '{print $2}' | sed 's/^[ \\t]*//'`;
+  return 'uptime | awk -F\'load average:\' \'{print $2}\' | sed \'s/^[ \\t]*//\'';
 }
 
 /**
  * Build command to check system uptime
  */
 export function buildUptimeCommand() {
-  return `uptime -p 2>/dev/null || uptime | awk '{print $3,$4}' | sed 's/,//'`;
+  return 'uptime -p 2>/dev/null || uptime | awk \'{print $3,$4}\' | sed \'s/,//\'';
 }
 
 /**
@@ -225,7 +225,7 @@ export function buildProcessListCommand(options = {}) {
   }
 
   // Format output as JSON-like structure
-  command += ` | awk 'NR>1 {printf "{\\"user\\":\\"%s\\",\\"pid\\":%s,\\"cpu\\":%.1f,\\"mem\\":%.1f,\\"vsz\\":%s,\\"rss\\":%s,\\"stat\\":\\"%s\\",\\"start\\":\\"%s\\",\\"time\\":\\"%s\\",\\"command\\":\\"%s\\"}\\n", $1,$2,$3,$4,$5,$6,$8,$9,$10,substr($0,index($0,$11))}'`;
+  command += ' | awk \'NR>1 {printf "{\\"user\\":\\"%s\\",\\"pid\\":%s,\\"cpu\\":%.1f,\\"mem\\":%.1f,\\"vsz\\":%s,\\"rss\\":%s,\\"stat\\":\\"%s\\",\\"start\\":\\"%s\\",\\"time\\":\\"%s\\",\\"command\\":\\"%s\\"}\\n", $1,$2,$3,$4,$5,$6,$8,$9,$10,substr($0,index($0,$11))}\'';
 
   return command;
 }
@@ -296,7 +296,7 @@ export function createAlertConfig(thresholds) {
  */
 export function buildSaveAlertConfigCommand(config, configPath = '/etc/ssh-manager-alerts.json') {
   const jsonData = JSON.stringify(config, null, 2);
-  const escapedJson = jsonData.replace(/'/g, "'\\''");
+  const escapedJson = jsonData.replace(/'/g, '\'\\\'\'');
   return `echo '${escapedJson}' > "${configPath}"`;
 }
 
@@ -383,24 +383,24 @@ export function parseComprehensiveHealthCheck(output) {
     const data = content.join('\n').trim();
 
     switch (name.toLowerCase().trim()) {
-      case 'cpu ===':
-        result.cpu = parseCPUUsage(data);
-        break;
-      case 'memory ===':
-        result.memory = parseMemoryUsage(data);
-        break;
-      case 'disk ===':
-        result.disks = parseDiskUsage(data);
-        break;
-      case 'load ===':
-        result.load_average = data;
-        break;
-      case 'uptime ===':
-        result.uptime = data;
-        break;
-      case 'network ===':
-        result.network = parseNetworkStats(data);
-        break;
+    case 'cpu ===':
+      result.cpu = parseCPUUsage(data);
+      break;
+    case 'memory ===':
+      result.memory = parseMemoryUsage(data);
+      break;
+    case 'disk ===':
+      result.disks = parseDiskUsage(data);
+      break;
+    case 'load ===':
+      result.load_average = data;
+      break;
+    case 'uptime ===':
+      result.uptime = data;
+      break;
+    case 'network ===':
+      result.network = parseNetworkStats(data);
+      break;
     }
   }
 

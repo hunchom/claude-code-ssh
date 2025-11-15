@@ -45,22 +45,22 @@ export function saveAliases(aliases) {
  */
 export function resolveServerName(nameOrAlias, servers) {
   const aliases = loadAliases();
-  
+
   // Check if it's an alias
   if (aliases[nameOrAlias]) {
     return aliases[nameOrAlias];
   }
-  
+
   // Check if it's a direct server name
   const normalizedName = nameOrAlias.toLowerCase();
   if (servers[normalizedName]) {
     return normalizedName;
   }
-  
+
   // Try to find partial match
   const serverNames = Object.keys(servers);
   const matches = serverNames.filter(name => name.includes(normalizedName));
-  
+
   if (matches.length === 1) {
     return matches[0];
   } else if (matches.length > 1) {
@@ -68,7 +68,7 @@ export function resolveServerName(nameOrAlias, servers) {
       `Ambiguous server name "${nameOrAlias}". Matches: ${matches.join(', ')}`
     );
   }
-  
+
   // Check if nameOrAlias contains a domain that matches a server
   if (nameOrAlias.includes('.')) {
     const matchingServer = serverNames.find(name => {
@@ -79,12 +79,12 @@ export function resolveServerName(nameOrAlias, servers) {
         nameOrAlias.includes(serverHost)
       );
     });
-    
+
     if (matchingServer) {
       return matchingServer;
     }
   }
-  
+
   return null;
 }
 
@@ -93,7 +93,7 @@ export function resolveServerName(nameOrAlias, servers) {
  */
 export function createDefaultAliases(servers) {
   const aliases = {};
-  
+
   Object.entries(servers).forEach(([name, config]) => {
     // Create short aliases for common patterns
     if (name.includes('production')) {
@@ -105,7 +105,7 @@ export function createDefaultAliases(servers) {
     } else if (name.includes('testing')) {
       aliases['test'] = name;
     }
-    
+
     // Create aliases from hostname patterns
     const host = config.host;
     if (host) {
@@ -116,7 +116,7 @@ export function createDefaultAliases(servers) {
       }
     }
   });
-  
+
   return aliases;
 }
 

@@ -29,13 +29,13 @@ export function loadCommandAliases() {
   try {
     // Start with profile aliases
     let aliases = { ...profileAliases };
-    
+
     // Merge with custom aliases from file
     if (fs.existsSync(ALIASES_FILE)) {
       const data = fs.readFileSync(ALIASES_FILE, 'utf8');
       aliases = { ...aliases, ...JSON.parse(data) };
     }
-    
+
     return aliases;
   } catch (error) {
     console.error(`Error loading command aliases: ${error.message}`);
@@ -55,7 +55,7 @@ export function saveCommandAliases(aliases) {
         customAliases[key] = value;
       }
     }
-    
+
     fs.writeFileSync(ALIASES_FILE, JSON.stringify(customAliases, null, 2));
     return true;
   } catch (error) {
@@ -69,21 +69,21 @@ export function saveCommandAliases(aliases) {
  */
 export function expandCommandAlias(command) {
   const aliases = loadCommandAliases();
-  
+
   // Check if the entire command is an alias
   if (aliases[command]) {
     return aliases[command];
   }
-  
+
   // Check if the command starts with an alias
   const parts = command.split(' ');
   const firstPart = parts[0];
-  
+
   if (aliases[firstPart]) {
     parts[0] = aliases[firstPart];
     return parts.join(' ');
   }
-  
+
   return command;
 }
 
@@ -101,14 +101,14 @@ export function addCommandAlias(alias, command) {
  */
 export function removeCommandAlias(alias) {
   const aliases = loadCommandAliases();
-  
+
   // Don't remove profile aliases, just reset them
   if (profileAliases[alias]) {
     aliases[alias] = profileAliases[alias];
   } else {
     delete aliases[alias];
   }
-  
+
   return saveCommandAliases(aliases);
 }
 
@@ -118,7 +118,7 @@ export function removeCommandAlias(alias) {
 export function listCommandAliases() {
   const aliases = loadCommandAliases();
   const result = [];
-  
+
   for (const [alias, command] of Object.entries(aliases)) {
     result.push({
       alias,
@@ -127,7 +127,7 @@ export function listCommandAliases() {
       isCustom: profileAliases[alias] !== command
     });
   }
-  
+
   return result.sort((a, b) => a.alias.localeCompare(b.alias));
 }
 
@@ -137,15 +137,15 @@ export function listCommandAliases() {
 export function suggestAliases(command) {
   const suggestions = [];
   const aliases = loadCommandAliases();
-  
+
   const commandLower = command.toLowerCase();
-  
+
   for (const [alias, aliasCommand] of Object.entries(aliases)) {
-    if (aliasCommand.toLowerCase().includes(commandLower) || 
+    if (aliasCommand.toLowerCase().includes(commandLower) ||
         alias.toLowerCase().includes(commandLower)) {
       suggestions.push({ alias, command: aliasCommand });
     }
   }
-  
+
   return suggestions;
 }

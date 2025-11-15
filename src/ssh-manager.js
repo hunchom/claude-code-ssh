@@ -130,7 +130,7 @@ class SSHManager {
         timeoutId = setTimeout(() => {
           if (!completed) {
             completed = true;
-            
+
             // Try multiple ways to kill the stream
             if (stream) {
               try {
@@ -141,7 +141,7 @@ class SSHManager {
                 // Ignore errors
               }
             }
-            
+
             // Kill the entire client connection as last resort
             try {
               this.client.end();
@@ -149,7 +149,7 @@ class SSHManager {
             } catch (e) {
               // Ignore errors
             }
-            
+
             reject(new Error(`Command timeout after ${timeout}ms: ${command.substring(0, 100)}...`));
           }
         }, timeout);
@@ -279,12 +279,12 @@ class SSHManager {
     }
 
     let homeDir = null;
-    
+
     // Method 1: Try getent (most reliable)
     try {
-      const result = await this.execCommand('getent passwd $USER | cut -d: -f6', { 
-        timeout: 5000, 
-        rawCommand: true 
+      const result = await this.execCommand('getent passwd $USER | cut -d: -f6', {
+        timeout: 5000,
+        rawCommand: true
       });
       homeDir = result.stdout.trim();
       if (homeDir && homeDir.startsWith('/')) {
@@ -327,9 +327,9 @@ class SSHManager {
 
     // Method 4: Last resort - try cd ~ && pwd
     try {
-      const result = await this.execCommand('cd ~ && pwd', { 
-        timeout: 5000, 
-        rawCommand: true 
+      const result = await this.execCommand('cd ~ && pwd', {
+        timeout: 5000,
+        rawCommand: true
       });
       homeDir = result.stdout.trim();
       if (homeDir && homeDir.startsWith('/')) {
@@ -364,7 +364,7 @@ class SSHManager {
         throw new Error(`Failed to resolve home directory for path: ${remotePath}. ${err.message}`);
       }
     }
-    
+
     const sftp = await this.getSFTP();
     return new Promise((resolve, reject) => {
       // Check if local file exists and is readable
@@ -372,7 +372,7 @@ class SSHManager {
         reject(new Error(`Local file does not exist: ${localPath}`));
         return;
       }
-      
+
       sftp.fastPut(localPath, resolvedRemotePath, (err) => {
         if (err) reject(err);
         else resolve();
@@ -401,7 +401,7 @@ class SSHManager {
         throw new Error(`Failed to resolve home directory for path: ${remotePath}. ${err.message}`);
       }
     }
-    
+
     const sftp = await this.getSFTP();
     return new Promise((resolve, reject) => {
       sftp.fastGet(resolvedRemotePath, localPath, (err) => {
@@ -414,7 +414,7 @@ class SSHManager {
   async putFiles(files, options = {}) {
     const sftp = await this.getSFTP();
     const results = [];
-    
+
     for (const file of files) {
       try {
         await this.putFile(file.local, file.remote);
@@ -424,7 +424,7 @@ class SSHManager {
         if (options.stopOnError) break;
       }
     }
-    
+
     return results;
   }
 

@@ -73,15 +73,15 @@ export async function initializeHooks() {
   if (!fs.existsSync(HOOKS_DIR)) {
     fs.mkdirSync(HOOKS_DIR, { recursive: true });
   }
-  
+
   // Merge profile hooks with defaults
   const mergedHooks = { ...DEFAULT_HOOKS, ...profileHooks };
-  
+
   // Create hooks configuration if it doesn't exist
   if (!fs.existsSync(HOOKS_CONFIG_FILE)) {
     saveHooksConfig(mergedHooks);
   }
-  
+
   return true;
 }
 
@@ -92,12 +92,12 @@ export function loadHooksConfig() {
   try {
     // Start with profile hooks
     let hooks = { ...profileHooks };
-    
+
     // Merge with custom hooks from file
     if (fs.existsSync(HOOKS_CONFIG_FILE)) {
       const data = fs.readFileSync(HOOKS_CONFIG_FILE, 'utf8');
       const customHooks = JSON.parse(data);
-      
+
       // Deep merge hooks
       for (const [hookName, hookConfig] of Object.entries(customHooks)) {
         if (hooks[hookName]) {
@@ -112,7 +112,7 @@ export function loadHooksConfig() {
         }
       }
     }
-    
+
     return hooks;
   } catch (error) {
     console.error(`Error loading hooks config: ${error.message}`);
@@ -139,14 +139,14 @@ export function saveHooksConfig(config) {
 export async function executeHook(hookName, context = {}) {
   const config = loadHooksConfig();
   const hook = config[hookName];
-  
+
   if (!hook || !hook.enabled) {
     return { success: true, skipped: true };
   }
-  
+
   console.error(`🎣 Executing hook: ${hookName}`);
   const results = [];
-  
+
   for (const action of hook.actions) {
     try {
       // Check environment variables if required
@@ -160,25 +160,25 @@ export async function executeHook(hookName, context = {}) {
           continue;
         }
       }
-      
+
       // Replace placeholders in command
       let command = action.command || action.remoteCommand || '';
       for (const [key, value] of Object.entries(context)) {
         command = command.replace(new RegExp(`{${key}}`, 'g'), value);
       }
-      
+
       // Execute action based on type
       const result = await executeAction(action, command, context);
       results.push(result);
-      
+
       // Check validation results
       if (action.type === 'validation' && !result.success && !action.optional) {
         const errorMsg = action.errorMessage || `Validation failed: ${action.name}`;
         throw new Error(errorMsg);
       }
-      
+
       console.error(`  ✅ ${action.name}: completed`);
-      
+
     } catch (error) {
       if (!action.optional) {
         console.error(`  ❌ ${action.name}: ${error.message}`);
@@ -193,7 +193,7 @@ export async function executeHook(hookName, context = {}) {
       console.error(`  ⚠️  ${action.name}: ${error.message} (optional, continuing)`);
     }
   }
-  
+
   return {
     success: true,
     hook: hookName,
@@ -210,61 +210,61 @@ async function executeAction(action, command, context) {
     type: action.type,
     timestamp: new Date().toISOString()
   };
-  
+
   try {
     if (action.remoteCommand && context.sshConnection) {
       // Execute on remote server
       const output = await context.sshConnection.execCommand(command, {
         cwd: context.cwd || context.defaultDir
       });
-      
+
       result.output = output.stdout;
       result.error = output.stderr;
       result.success = output.code === 0;
-      
+
       if (action.expectEmpty && output.stdout.trim()) {
         result.success = false;
       }
     } else if (action.command) {
       // Execute locally
       const { stdout, stderr } = await execAsync(command);
-      
+
       result.output = stdout;
       result.error = stderr;
       result.success = true;
-      
+
       if (action.expectEmpty && stdout.trim()) {
         result.success = false;
       }
     }
-    
+
     // Handle specific action types
     switch (action.type) {
-      case 'backup':
-        result.backupInfo = {
-          timestamp: new Date().toISOString(),
-          command: command
-        };
-        break;
-        
-      case 'notification':
-        result.notified = true;
-        break;
-        
-      case 'validation':
-        result.validated = result.success;
-        break;
-        
-      case 'verification':
-        result.verified = result.success;
-        break;
+    case 'backup':
+      result.backupInfo = {
+        timestamp: new Date().toISOString(),
+        command: command
+      };
+      break;
+
+    case 'notification':
+      result.notified = true;
+      break;
+
+    case 'validation':
+      result.validated = result.success;
+      break;
+
+    case 'verification':
+      result.verified = result.success;
+      break;
     }
-    
+
   } catch (error) {
     result.success = false;
     result.error = error.message;
   }
-  
+
   return result;
 }
 
@@ -316,7 +316,7 @@ export function listHooks() {
  */
 export async function createHookScript(scriptName, scriptContent) {
   const scriptPath = path.join(HOOKS_DIR, scriptName);
-  
+
   try {
     fs.writeFileSync(scriptPath, scriptContent);
     fs.chmodSync(scriptPath, '755');

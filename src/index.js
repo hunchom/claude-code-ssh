@@ -76,7 +76,7 @@ import {
   hasHostKeyChanged,
   listKnownHosts,
   detectSSHKeyError,
-  handleSSHKeyError
+  extractHostFromSSHError
 } from './ssh-key-manager.js';
 import {
   BACKUP_TYPES,
@@ -228,23 +228,23 @@ function loadServerConfig() {
 async function execCommandWithTimeout(ssh, command, options = {}, timeoutMs = 30000) {
   // Pass through rawCommand if specified
   const { rawCommand, ...otherOptions } = options;
-  
+
   // For commands that might hang, use the system's timeout command if available
   const useSystemTimeout = timeoutMs > 0 && timeoutMs < 300000 && !rawCommand; // Max 5 minutes, not for raw commands
-  
+
   if (useSystemTimeout) {
     // Wrap command with timeout command (works on Linux/Mac)
     const timeoutSeconds = Math.ceil(timeoutMs / 1000);
-    const wrappedCommand = `timeout ${timeoutSeconds} sh -c '${command.replace(/'/g, "'\\''")}'`;
-    
+    const wrappedCommand = `timeout ${timeoutSeconds} sh -c '${command.replace(/'/g, '\'\\\'\'')}'`;
+
     try {
       const result = await ssh.execCommand(wrappedCommand, otherOptions);
-      
+
       // Check if timeout occurred (exit code 124 on Linux, 124 or 143 on Mac)
       if (result.code === 124 || result.code === 143) {
         throw new Error(`Command timeout after ${timeoutMs}ms: ${command.substring(0, 100)}...`);
       }
-      
+
       return result;
     } catch (error) {
       // If timeout occurred, remove connection from pool
@@ -474,7 +474,7 @@ registerToolConditional(
       const startTime = logger.logCommand(serverName, fullCommand, workingDir);
 
       const result = await execCommandWithTimeout(ssh, fullCommand, {}, timeout);
-      
+
       // Log command result
       logger.logCommandResult(serverName, fullCommand, startTime, result);
 
@@ -528,12 +528,12 @@ registerToolConditional(
   async ({ server: serverName, localPath, remotePath }) => {
     try {
       const ssh = await getConnection(serverName);
-      
+
       logger.logTransfer('upload', serverName, localPath, remotePath);
       const startTime = Date.now();
-      
+
       await ssh.putFile(localPath, remotePath);
-      
+
       const fileStats = fs.statSync(localPath);
       logger.logTransfer('upload', serverName, localPath, remotePath, {
         success: true,
@@ -579,12 +579,12 @@ registerToolConditional(
   async ({ server: serverName, remotePath, localPath }) => {
     try {
       const ssh = await getConnection(serverName);
-      
+
       logger.logTransfer('download', serverName, remotePath, localPath);
       const startTime = Date.now();
-      
+
       await ssh.getFile(localPath, remotePath);
-      
+
       const fileStats = fs.statSync(localPath);
       logger.logTransfer('download', serverName, remotePath, localPath, {
         success: true,
@@ -639,7 +639,7 @@ registerToolConditional(
       const ssh = await getConnection(serverName);
       const servers = loadServerConfig();
       const serverConfig = servers[serverName.toLowerCase()];
-      
+
       // Check if sshpass is available for password authentication
       if (!serverConfig.keypath && serverConfig.password) {
         // Check if sshpass is installed
@@ -657,61 +657,61 @@ registerToolConditional(
           };
         }
       }
-      
+
       // Determine sync direction based on source/destination prefixes
       const isLocalSource = source.startsWith('local:');
       const isRemoteSource = source.startsWith('remote:');
       const isLocalDest = destination.startsWith('local:');
       const isRemoteDest = destination.startsWith('remote:');
-      
+
       // Clean paths
       const cleanSource = source.replace(/^(local:|remote:)/, '');
       const cleanDest = destination.replace(/^(local:|remote:)/, '');
-      
+
       // Validate direction
       if ((isLocalSource && isLocalDest) || (isRemoteSource && isRemoteDest)) {
         throw new Error('Source and destination must be different (one local, one remote). Use prefixes: local: or remote:');
       }
-      
+
       // If no prefixes, assume old format (local source to remote dest)
       const direction = (isLocalSource || (!isLocalSource && !isRemoteSource)) ? 'push' : 'pull';
-      
+
       // Build rsync command
       let rsyncOptions = ['-avz'];
-      
+
       if (!compress) {
         rsyncOptions = ['-av'];
       }
-      
+
       if (checksum) {
         rsyncOptions.push('--checksum');
       }
-      
+
       if (deleteFiles) {
         rsyncOptions.push('--delete');
       }
-      
+
       if (dryRun) {
         rsyncOptions.push('--dry-run');
       }
-      
+
       if (verbose || logger.verbose) {
         // Only add stats, not progress to avoid blocking with too much output
         rsyncOptions.push('--stats');
       }
-      
+
       // Add exclude patterns
       exclude.forEach(pattern => {
         rsyncOptions.push('--exclude', pattern);
       });
-      
+
       let localPath;
       let remotePath;
-      
+
       if (direction === 'push') {
         localPath = cleanSource;
         remotePath = cleanDest;
-        
+
         // Check if local path exists
         if (!fs.existsSync(localPath)) {
           throw new Error(`Local path does not exist: ${localPath}`);
@@ -720,7 +720,7 @@ registerToolConditional(
         localPath = cleanDest;
         remotePath = cleanSource;
       }
-      
+
       // Add SSH options for non-interactive mode
       const sshOptions = [];
 
@@ -737,11 +737,11 @@ registerToolConditional(
         sshOptions.push('-o StrictHostKeyChecking=accept-new'); // Accept new keys, reject changed ones
         sshOptions.push('-o ConnectTimeout=10');
       }
-      
+
       if (serverConfig.port && serverConfig.port !== '22') {
         sshOptions.push(`-p ${serverConfig.port}`);
       }
-      
+
       logger.info(`Starting rsync ${direction}`, {
         server: serverName,
         source: direction === 'push' ? localPath : remotePath,
@@ -749,49 +749,49 @@ registerToolConditional(
         dryRun,
         deleteFiles
       });
-      
+
       const startTime = Date.now();
-      
+
       // Execute rsync via spawn for non-blocking streaming
       const { spawn } = await import('child_process');
-      
+
       return new Promise((resolve, reject) => {
         let output = '';
         let errorOutput = '';
         let killed = false;
-        
+
         // Build command based on authentication method
         let rsyncCommand;
         let rsyncArgs = [];
         let processEnv = { ...process.env };
-        
+
         if (serverConfig.password) {
           // Use sshpass for password authentication
           rsyncCommand = 'sshpass';
           rsyncArgs.push('-p', serverConfig.password);
           rsyncArgs.push('rsync');
-          
+
           // Add rsync options
           rsyncOptions.forEach(opt => rsyncArgs.push(opt));
-          
+
           // Add SSH command
           const sshCmd = `ssh ${sshOptions.join(' ')}`;
           rsyncArgs.push('-e', sshCmd);
         } else {
           // Direct rsync for key authentication
           rsyncCommand = 'rsync';
-          
+
           // Add rsync options
           rsyncOptions.forEach(opt => rsyncArgs.push(opt));
-          
+
           // Add SSH command with all options
           const sshCmd = `ssh ${sshOptions.join(' ')}`;
           rsyncArgs.push('-e', sshCmd);
-          
+
           processEnv.SSH_ASKPASS = '/bin/false';
           processEnv.DISPLAY = '';
         }
-        
+
         // Add source and destination
         if (direction === 'push') {
           rsyncArgs.push(localPath);
@@ -800,19 +800,19 @@ registerToolConditional(
           rsyncArgs.push(`${serverConfig.user}@${serverConfig.host}:${remotePath}`);
           rsyncArgs.push(localPath);
         }
-        
+
         const rsyncProcess = spawn(rsyncCommand, rsyncArgs, {
           stdio: ['ignore', 'pipe', 'pipe'],
           env: processEnv
         });
-        
+
         // Set timeout
         const timer = setTimeout(() => {
           killed = true;
           rsyncProcess.kill('SIGTERM');
           reject(new Error(`Rsync timeout after ${timeout}ms`));
         }, timeout);
-        
+
         // Collect output with size limit
         rsyncProcess.stdout.on('data', (data) => {
           const chunk = data.toString();
@@ -822,7 +822,7 @@ registerToolConditional(
             output = output.slice(-50000);
           }
         });
-        
+
         rsyncProcess.stderr.on('data', (data) => {
           const chunk = data.toString();
           errorOutput += chunk;
@@ -830,21 +830,21 @@ registerToolConditional(
             errorOutput = errorOutput.slice(-25000);
           }
         });
-        
+
         rsyncProcess.on('error', (err) => {
           clearTimeout(timer);
           reject(new Error(`Failed to start rsync: ${err.message}`));
         });
-        
+
         rsyncProcess.on('close', (code) => {
           clearTimeout(timer);
-          
+
           if (killed) {
             return; // Already rejected due to timeout
           }
-          
+
           const duration = Date.now() - startTime;
-          
+
           if (code !== 0) {
             logger.error(`Rsync ${direction} failed`, {
               server: serverName,
@@ -862,10 +862,10 @@ registerToolConditional(
                 errorMsg += `Host: ${hostInfo.host}:${hostInfo.port}\n`;
               }
 
-              errorMsg += `\n📍 To fix this issue:\n`;
-              errorMsg += `1. Verify the server identity\n`;
-              errorMsg += `2. Use 'ssh_key_manage' tool with action 'verify' to check the key\n`;
-              errorMsg += `3. Use 'ssh_key_manage' tool with action 'accept' to update the key if you trust the server\n`;
+              errorMsg += '\n📍 To fix this issue:\n';
+              errorMsg += '1. Verify the server identity\n';
+              errorMsg += '2. Use \'ssh_key_manage\' tool with action \'verify\' to check the key\n';
+              errorMsg += '3. Use \'ssh_key_manage\' tool with action \'accept\' to update the key if you trust the server\n';
               errorMsg += `\nOriginal error:\n${errorOutput}`;
 
               reject(new Error(errorMsg));
@@ -874,23 +874,23 @@ registerToolConditional(
             }
             return;
           }
-          
+
           // Parse rsync output for statistics
           let stats = {
             filesTransferred: 0,
             totalSize: 0,
             totalTime: duration
           };
-          
+
           // Extract statistics from rsync output
           const filesMatch = output.match(/Number of files transferred: (\d+)/);
           const sizeMatch = output.match(/Total transferred file size: ([\d,]+) bytes/);
           const speedMatch = output.match(/([\d.]+) bytes\/sec/);
-          
+
           if (filesMatch) stats.filesTransferred = parseInt(filesMatch[1]);
           if (sizeMatch) stats.totalSize = parseInt(sizeMatch[1].replace(/,/g, ''));
           if (speedMatch) stats.speed = parseFloat(speedMatch[1]);
-          
+
           logger.info(`Rsync ${direction} completed`, {
             server: serverName,
             direction,
@@ -899,14 +899,14 @@ registerToolConditional(
             totalSize: stats.totalSize,
             dryRun
           });
-          
+
           // Format output
           let resultText = dryRun ? '🔍 Dry run completed\n' : '✅ Sync completed successfully\n';
           resultText += `Direction: ${direction === 'push' ? 'Local → Remote' : 'Remote → Local'}\n`;
           resultText += `Server: ${serverName}\n`;
           resultText += `Source: ${direction === 'push' ? localPath : remotePath}\n`;
           resultText += `Destination: ${direction === 'push' ? remotePath : localPath}\n`;
-          
+
           if (stats.filesTransferred > 0) {
             resultText += `Files transferred: ${stats.filesTransferred}\n`;
             if (stats.totalSize > 0) {
@@ -920,23 +920,23 @@ registerToolConditional(
           } else {
             resultText += 'No files needed to be transferred\n';
           }
-          
+
           resultText += `Time: ${(duration / 1000).toFixed(2)} seconds\n`;
-          
+
           if (verbose && output.length < 5000) {
             resultText += '\n📋 Sync statistics:\n';
             // Only show relevant stats lines
-            const statsLines = output.split('\n').filter(line => 
-              line.includes('Number of') || 
-              line.includes('Total') || 
-              line.includes('sent') || 
+            const statsLines = output.split('\n').filter(line =>
+              line.includes('Number of') ||
+              line.includes('Total') ||
+              line.includes('sent') ||
               line.includes('received')
             );
             if (statsLines.length > 0) {
               resultText += statsLines.join('\n');
             }
           }
-          
+
           resolve({
             content: [
               {
@@ -975,31 +975,31 @@ registerToolConditional(
   async ({ server: serverName, file, lines = 10, follow = true, grep }) => {
     try {
       const ssh = await getConnection(serverName);
-      
+
       // Build tail command
       let command = `tail -n ${lines}`;
       if (follow) {
         command += ' -f';
       }
       command += ` "${file}"`;
-      
+
       // Add grep filter if specified
       if (grep) {
         command += ` | grep "${grep}"`;
       }
-      
+
       logger.info(`Starting tail on ${serverName}`, {
         file,
         lines,
         follow,
         grep
       });
-      
+
       // For follow mode, we need to handle streaming
       if (follow) {
         // Create a unique session ID for this tail
         const sessionId = `tail_${Date.now()}`;
-        
+
         // Store the SSH stream for later cleanup
         const stream = await ssh.execCommandStream(command, {
           onStdout: (chunk) => {
@@ -1010,7 +1010,7 @@ registerToolConditional(
             console.error(`[ERROR] ${chunk}`);
           }
         });
-        
+
         return {
           content: [
             {
@@ -1022,16 +1022,16 @@ registerToolConditional(
       } else {
         // Non-follow mode - just get the output
         const result = await execCommandWithTimeout(ssh, command, {}, 15000);
-        
+
         if (result.code !== 0) {
           throw new Error(result.stderr || 'Failed to tail file');
         }
-        
+
         logger.info(`Tail completed on ${serverName}`, {
           file,
           lines: result.stdout.split('\n').length
         });
-        
+
         return {
           content: [
             {
@@ -1046,7 +1046,7 @@ registerToolConditional(
         file,
         error: error.message
       });
-      
+
       return {
         content: [
           {
@@ -1073,62 +1073,62 @@ registerToolConditional(
   async ({ server: serverName, type = 'overview', interval, duration }) => {
     try {
       const ssh = await getConnection(serverName);
-      
+
       logger.info(`Starting system monitoring on ${serverName}`, {
         type,
         interval,
         duration
       });
-      
+
       let commands = {};
       let output = {};
-      
+
       // Define monitoring commands based on type
       switch (type) {
-        case 'cpu':
-          commands.cpu = "top -bn1 | head -20";
-          commands.load = "uptime";
-          commands.cores = "nproc";
-          break;
-          
-        case 'memory':
-          commands.memory = "free -h";
-          commands.swap = "swapon --show";
-          commands.top_mem = "ps aux --sort=-%mem | head -10";
-          break;
-          
-        case 'disk':
-          commands.disk = "df -h";
-          commands.inodes = "df -i";
-          commands.io = "iostat -x 1 2 | tail -n +4";
-          break;
-          
-        case 'network':
-          commands.interfaces = "ip -s link show";
-          commands.connections = "ss -tunap | head -20";
-          commands.netstat = "netstat -i";
-          break;
-          
-        case 'process':
-          commands.process = "ps aux --sort=-%cpu | head -20";
-          commands.count = "ps aux | wc -l";
-          commands.zombies = "ps aux | grep -c defunct || echo 0";
-          break;
-          
-        case 'overview':
-        default:
-          commands.uptime = "uptime";
-          commands.cpu = "mpstat 1 1 2>/dev/null || top -bn1 | grep 'Cpu'";
-          commands.memory = "free -h";
-          commands.disk = "df -h | grep -E '^/dev/' | head -5";
-          commands.load = "cat /proc/loadavg";
-          commands.processes = "ps aux | wc -l";
-          break;
+      case 'cpu':
+        commands.cpu = 'top -bn1 | head -20';
+        commands.load = 'uptime';
+        commands.cores = 'nproc';
+        break;
+
+      case 'memory':
+        commands.memory = 'free -h';
+        commands.swap = 'swapon --show';
+        commands.top_mem = 'ps aux --sort=-%mem | head -10';
+        break;
+
+      case 'disk':
+        commands.disk = 'df -h';
+        commands.inodes = 'df -i';
+        commands.io = 'iostat -x 1 2 | tail -n +4';
+        break;
+
+      case 'network':
+        commands.interfaces = 'ip -s link show';
+        commands.connections = 'ss -tunap | head -20';
+        commands.netstat = 'netstat -i';
+        break;
+
+      case 'process':
+        commands.process = 'ps aux --sort=-%cpu | head -20';
+        commands.count = 'ps aux | wc -l';
+        commands.zombies = 'ps aux | grep -c defunct || echo 0';
+        break;
+
+      case 'overview':
+      default:
+        commands.uptime = 'uptime';
+        commands.cpu = 'mpstat 1 1 2>/dev/null || top -bn1 | grep \'Cpu\'';
+        commands.memory = 'free -h';
+        commands.disk = 'df -h | grep -E \'^/dev/\' | head -5';
+        commands.load = 'cat /proc/loadavg';
+        commands.processes = 'ps aux | wc -l';
+        break;
       }
-      
+
       // Execute all monitoring commands
       const startTime = Date.now();
-      
+
       for (const [key, cmd] of Object.entries(commands)) {
         try {
           const result = await execCommandWithTimeout(ssh, cmd, {}, 10000);
@@ -1141,69 +1141,69 @@ registerToolConditional(
           output[key] = `Error: ${err.message}`;
         }
       }
-      
+
       const monitoringDuration = Date.now() - startTime;
-      
+
       // Format the output based on type
       let formattedOutput = `📊 System Monitor - ${serverName}\n`;
       formattedOutput += `Type: ${type} | Time: ${new Date().toISOString()}\n`;
       formattedOutput += `Collection time: ${monitoringDuration}ms\n`;
       formattedOutput += '━'.repeat(50) + '\n\n';
-      
+
       switch (type) {
-        case 'overview':
-          formattedOutput += `⏱️ UPTIME\n${output.uptime || 'N/A'}\n\n`;
-          formattedOutput += `💻 CPU\n${output.cpu || 'N/A'}\n\n`;
-          formattedOutput += `📈 LOAD AVERAGE\n${output.load || 'N/A'}\n\n`;
-          formattedOutput += `💾 MEMORY\n${output.memory || 'N/A'}\n\n`;
-          formattedOutput += `💿 DISK USAGE\n${output.disk || 'N/A'}\n\n`;
-          formattedOutput += `📝 PROCESSES: ${output.processes || 'N/A'}\n`;
-          break;
-          
-        case 'cpu':
-          formattedOutput += `🖥️ CPU CORES: ${output.cores || 'N/A'}\n\n`;
-          formattedOutput += `📊 LOAD\n${output.load || 'N/A'}\n\n`;
-          formattedOutput += `📈 TOP PROCESSES\n${output.cpu || 'N/A'}\n`;
-          break;
-          
-        case 'memory':
-          formattedOutput += `💾 MEMORY USAGE\n${output.memory || 'N/A'}\n\n`;
-          formattedOutput += `🔄 SWAP\n${output.swap || 'No swap configured'}\n\n`;
-          formattedOutput += `📊 TOP MEMORY CONSUMERS\n${output.top_mem || 'N/A'}\n`;
-          break;
-          
-        case 'disk':
-          formattedOutput += `💿 DISK SPACE\n${output.disk || 'N/A'}\n\n`;
-          formattedOutput += `📁 INODE USAGE\n${output.inodes || 'N/A'}\n\n`;
-          formattedOutput += `⚡ I/O STATS\n${output.io || 'N/A'}\n`;
-          break;
-          
-        case 'network':
-          formattedOutput += `🌐 NETWORK INTERFACES\n${output.interfaces || 'N/A'}\n\n`;
-          formattedOutput += `🔌 CONNECTIONS\n${output.connections || 'N/A'}\n\n`;
-          formattedOutput += `📊 INTERFACE STATS\n${output.netstat || 'N/A'}\n`;
-          break;
-          
-        case 'process':
-          formattedOutput += `📝 PROCESS COUNT: ${output.count || 'N/A'}\n`;
-          formattedOutput += `⚠️ ZOMBIE PROCESSES: ${output.zombies || '0'}\n\n`;
-          formattedOutput += `📊 TOP PROCESSES BY CPU\n${output.process || 'N/A'}\n`;
-          break;
+      case 'overview':
+        formattedOutput += `⏱️ UPTIME\n${output.uptime || 'N/A'}\n\n`;
+        formattedOutput += `💻 CPU\n${output.cpu || 'N/A'}\n\n`;
+        formattedOutput += `📈 LOAD AVERAGE\n${output.load || 'N/A'}\n\n`;
+        formattedOutput += `💾 MEMORY\n${output.memory || 'N/A'}\n\n`;
+        formattedOutput += `💿 DISK USAGE\n${output.disk || 'N/A'}\n\n`;
+        formattedOutput += `📝 PROCESSES: ${output.processes || 'N/A'}\n`;
+        break;
+
+      case 'cpu':
+        formattedOutput += `🖥️ CPU CORES: ${output.cores || 'N/A'}\n\n`;
+        formattedOutput += `📊 LOAD\n${output.load || 'N/A'}\n\n`;
+        formattedOutput += `📈 TOP PROCESSES\n${output.cpu || 'N/A'}\n`;
+        break;
+
+      case 'memory':
+        formattedOutput += `💾 MEMORY USAGE\n${output.memory || 'N/A'}\n\n`;
+        formattedOutput += `🔄 SWAP\n${output.swap || 'No swap configured'}\n\n`;
+        formattedOutput += `📊 TOP MEMORY CONSUMERS\n${output.top_mem || 'N/A'}\n`;
+        break;
+
+      case 'disk':
+        formattedOutput += `💿 DISK SPACE\n${output.disk || 'N/A'}\n\n`;
+        formattedOutput += `📁 INODE USAGE\n${output.inodes || 'N/A'}\n\n`;
+        formattedOutput += `⚡ I/O STATS\n${output.io || 'N/A'}\n`;
+        break;
+
+      case 'network':
+        formattedOutput += `🌐 NETWORK INTERFACES\n${output.interfaces || 'N/A'}\n\n`;
+        formattedOutput += `🔌 CONNECTIONS\n${output.connections || 'N/A'}\n\n`;
+        formattedOutput += `📊 INTERFACE STATS\n${output.netstat || 'N/A'}\n`;
+        break;
+
+      case 'process':
+        formattedOutput += `📝 PROCESS COUNT: ${output.count || 'N/A'}\n`;
+        formattedOutput += `⚠️ ZOMBIE PROCESSES: ${output.zombies || '0'}\n\n`;
+        formattedOutput += `📊 TOP PROCESSES BY CPU\n${output.process || 'N/A'}\n`;
+        break;
       }
-      
+
       // Log monitoring results
       logger.info(`System monitoring completed on ${serverName}`, {
         type,
         duration: `${monitoringDuration}ms`,
         metrics: Object.keys(output).length
       });
-      
+
       // If continuous monitoring requested
       if (interval && duration) {
         formattedOutput += `\n\n⏰ Continuous monitoring: Every ${interval}s for ${duration}s\n`;
-        formattedOutput += `(Not implemented in this version - would require streaming support)`;
+        formattedOutput += '(Not implemented in this version - would require streaming support)';
       }
-      
+
       return {
         content: [
           {
@@ -1217,7 +1217,7 @@ registerToolConditional(
         type,
         error: error.message
       });
-      
+
       return {
         content: [
           {
@@ -1245,38 +1245,38 @@ registerToolConditional(
     try {
       // Get history from logger
       let history = logger.getHistory(limit * 2); // Get more to account for filtering
-      
+
       // Apply filters
       if (server) {
         history = history.filter(h => h.server?.toLowerCase().includes(server.toLowerCase()));
       }
-      
+
       if (success !== undefined) {
         history = history.filter(h => h.success === success);
       }
-      
+
       if (search) {
         history = history.filter(h => h.command?.toLowerCase().includes(search.toLowerCase()));
       }
-      
+
       // Limit results
       history = history.slice(-limit);
-      
+
       // Format output
-      let output = `📜 SSH Command History\n`;
+      let output = '📜 SSH Command History\n';
       output += `Showing last ${history.length} commands`;
-      
+
       const filters = [];
       if (server) filters.push(`server: ${server}`);
       if (success !== undefined) filters.push(success ? 'successful only' : 'failed only');
       if (search) filters.push(`search: ${search}`);
-      
+
       if (filters.length > 0) {
         output += ` (filtered: ${filters.join(', ')})`;
       }
-      
+
       output += '\n' + '━'.repeat(60) + '\n\n';
-      
+
       if (history.length === 0) {
         output += 'No commands found matching the criteria.\n';
       } else {
@@ -1284,7 +1284,7 @@ registerToolConditional(
           const time = new Date(entry.timestamp).toLocaleString();
           const status = entry.success ? '✅' : '❌';
           const duration = entry.duration || 'N/A';
-          
+
           output += `${history.length - index}. ${status} [${time}]\n`;
           output += `   Server: ${entry.server || 'unknown'}\n`;
           output += `   Command: ${entry.command?.substring(0, 100) || 'N/A'}`;
@@ -1293,24 +1293,24 @@ registerToolConditional(
           }
           output += '\n';
           output += `   Duration: ${duration}`;
-          
+
           if (!entry.success && entry.error) {
             output += `\n   Error: ${entry.error}`;
           }
-          
+
           output += '\n\n';
         });
       }
-      
+
       output += '━'.repeat(60) + '\n';
       output += `Total commands in history: ${logger.getHistory(1000).length}\n`;
-      
+
       logger.info('Command history retrieved', {
         limit,
         filters: filters.length,
         results: history.length
       });
-      
+
       return {
         content: [
           {
@@ -1347,15 +1347,15 @@ registerToolConditional(
     try {
       const ssh = await getConnection(serverName);
       const session = await createSession(serverName, ssh);
-      
+
       const sessionName = name || `Session on ${serverName}`;
-      
+
       logger.info('SSH session started', {
         id: session.id,
         server: serverName,
         name: sessionName
       });
-      
+
       return {
         content: [
           {
@@ -1369,7 +1369,7 @@ registerToolConditional(
         server: serverName,
         error: error.message
       });
-      
+
       return {
         content: [
           {
@@ -1395,36 +1395,36 @@ registerToolConditional(
   async ({ session: sessionId, command, timeout = 30000 }) => {
     try {
       const session = getSession(sessionId);
-      
+
       const startTime = Date.now();
       const result = await session.execute(command, { timeout });
       const duration = Date.now() - startTime;
-      
+
       logger.info('Session command executed', {
         session: sessionId,
         command: command.substring(0, 50),
         success: result.success,
         duration: `${duration}ms`
       });
-      
+
       let output = `📟 Session: ${sessionId}\n`;
       output += `Server: ${session.serverName}\n`;
       output += `Working Directory: ${session.context.cwd}\n`;
       output += `Command: ${command}\n`;
       output += `Duration: ${duration}ms\n`;
       output += '━'.repeat(60) + '\n\n';
-      
+
       if (result.success) {
         output += '✅ Output:\n' + result.output;
       } else {
         output += '❌ Error:\n' + (result.error || result.output);
       }
-      
+
       // Add session state info
       output += '\n\n' + '━'.repeat(60) + '\n';
       output += `Session State: ${session.state}\n`;
       output += `Commands Executed: ${session.context.history.length}\n`;
-      
+
       return {
         content: [
           {
@@ -1439,7 +1439,7 @@ registerToolConditional(
         command,
         error: error.message
       });
-      
+
       return {
         content: [
           {
@@ -1463,17 +1463,17 @@ registerToolConditional(
   async ({ server }) => {
     try {
       let sessions = listSessions();
-      
+
       // Filter by server if specified
       if (server) {
-        sessions = sessions.filter(s => 
+        sessions = sessions.filter(s =>
           s.server.toLowerCase().includes(server.toLowerCase())
         );
       }
-      
-      let output = `📋 Active SSH Sessions\n`;
+
+      let output = '📋 Active SSH Sessions\n';
       output += '━'.repeat(60) + '\n\n';
-      
+
       if (sessions.length === 0) {
         output += 'No active sessions';
         if (server) {
@@ -1484,7 +1484,7 @@ registerToolConditional(
         sessions.forEach((session, index) => {
           const age = Math.floor((Date.now() - new Date(session.created).getTime()) / 1000);
           const idle = Math.floor((Date.now() - new Date(session.lastActivity).getTime()) / 1000);
-          
+
           output += `${index + 1}. Session: ${session.id}\n`;
           output += `   Server: ${session.server}\n`;
           output += `   State: ${session.state}\n`;
@@ -1492,23 +1492,23 @@ registerToolConditional(
           output += `   Commands Run: ${session.historyCount}\n`;
           output += `   Age: ${formatDuration(age)}\n`;
           output += `   Idle: ${formatDuration(idle)}\n`;
-          
+
           if (session.variables.length > 0) {
             output += `   Variables: ${session.variables.join(', ')}\n`;
           }
-          
+
           output += '\n';
         });
       }
-      
+
       output += '━'.repeat(60) + '\n';
       output += `Total Active Sessions: ${sessions.length}\n`;
-      
+
       logger.info('Listed SSH sessions', {
         total: sessions.length,
         filter: server
       });
-      
+
       return {
         content: [
           {
@@ -1543,7 +1543,7 @@ registerToolConditional(
       if (sessionId === 'all') {
         const sessions = listSessions();
         const count = sessions.length;
-        
+
         sessions.forEach(s => {
           try {
             closeSession(s.id);
@@ -1551,9 +1551,9 @@ registerToolConditional(
             // Ignore individual close errors
           }
         });
-        
+
         logger.info('Closed all SSH sessions', { count });
-        
+
         return {
           content: [
             {
@@ -1564,9 +1564,9 @@ registerToolConditional(
         };
       } else {
         closeSession(sessionId);
-        
+
         logger.info('SSH session closed', { session: sessionId });
-        
+
         return {
           content: [
             {
@@ -1581,7 +1581,7 @@ registerToolConditional(
         session: sessionId,
         error: error.message
       });
-      
+
       return {
         content: [
           {
@@ -1627,15 +1627,15 @@ registerToolConditional(
         groupName,
         async (serverName) => {
           const ssh = await getConnection(serverName);
-          
+
           // Build full command with cwd if provided
           const servers = loadServerConfig();
           const serverConfig = servers[serverName.toLowerCase()];
           const workingDir = cwd || serverConfig?.default_dir;
           const fullCommand = workingDir ? `cd ${workingDir} && ${command}` : command;
-          
+
           const execResult = await execCommandWithTimeout(ssh, fullCommand, {}, 30000);
-          
+
           return {
             stdout: execResult.stdout,
             stderr: execResult.stderr,
@@ -1645,17 +1645,17 @@ registerToolConditional(
         },
         { strategy, delay, stopOnError }
       );
-      
+
       // Format output
       let output = `🚀 Group Execution: ${groupName}\n`;
       output += `Command: ${command}\n`;
       output += `Strategy: ${result.strategy}\n`;
       output += '━'.repeat(60) + '\n\n';
-      
+
       // Show results for each server
       result.results.forEach(({ server, success, result: execResult, error }) => {
         output += `📍 ${server}: ${success ? '✅ SUCCESS' : '❌ FAILED'}\n`;
-        
+
         if (success && execResult) {
           if (execResult.stdout) {
             output += `   Output: ${execResult.stdout.substring(0, 200)}`;
@@ -1670,7 +1670,7 @@ registerToolConditional(
         }
         output += '\n';
       });
-      
+
       // Summary
       output += '━'.repeat(60) + '\n';
       output += `Summary: ${result.summary.successful}/${result.summary.total} successful`;
@@ -1678,13 +1678,13 @@ registerToolConditional(
         output += ` (${result.summary.failed} failed)`;
       }
       output += '\n';
-      
+
       logger.info('Group command executed', {
         group: groupName,
         command: command.substring(0, 50),
         ...result.summary
       });
-      
+
       return {
         content: [
           {
@@ -1698,7 +1698,7 @@ registerToolConditional(
         group: groupName,
         error: error.message
       });
-      
+
       return {
         content: [
           {
@@ -1729,94 +1729,95 @@ registerToolConditional(
     try {
       let result;
       let output = '';
-      
+
       switch (action) {
-        case 'create':
-          if (!name) throw new Error('Group name required for create');
-          result = createGroup(name, servers || [], {
-            description,
-            strategy,
-            delay,
-            stopOnError
-          });
-          output = `✅ Group '${name}' created\n`;
-          output += `Servers: ${result.servers.join(', ') || 'none'}\n`;
-          output += `Strategy: ${result.strategy}\n`;
-          break;
-          
-        case 'update':
-          if (!name) throw new Error('Group name required for update');
-          result = updateGroup(name, {
-            servers,
-            description,
-            strategy,
-            delay,
-            stopOnError
-          });
-          output = `✅ Group '${name}' updated\n`;
-          output += `Servers: ${result.servers.join(', ')}\n`;
-          break;
-          
-        case 'delete':
-          if (!name) throw new Error('Group name required for delete');
-          deleteGroup(name);
-          output = `✅ Group '${name}' deleted`;
-          break;
-          
-        case 'add-servers':
-          if (!name) throw new Error('Group name required');
-          if (!servers || servers.length === 0) throw new Error('Servers required');
-          result = addServersToGroup(name, servers);
-          output = `✅ Added ${servers.length} servers to '${name}'\n`;
-          output += `Total servers: ${result.servers.length}\n`;
-          output += `Members: ${result.servers.join(', ')}`;
-          break;
-          
-        case 'remove-servers':
-          if (!name) throw new Error('Group name required');
-          if (!servers || servers.length === 0) throw new Error('Servers required');
-          result = removeServersFromGroup(name, servers);
-          output = `✅ Removed ${servers.length} servers from '${name}'\n`;
-          output += `Remaining: ${result.servers.length}\n`;
-          output += `Members: ${result.servers.join(', ') || 'none'}`;
-          break;
-          
-        case 'list':
-          const groups = listGroups();
-          output = `📋 Server Groups\n`;
-          output += '━'.repeat(60) + '\n\n';
-          
-          groups.forEach(group => {
-            output += `📁 ${group.name}`;
-            if (group.dynamic) output += ' (dynamic)';
+      case 'create':
+        if (!name) throw new Error('Group name required for create');
+        result = createGroup(name, servers || [], {
+          description,
+          strategy,
+          delay,
+          stopOnError
+        });
+        output = `✅ Group '${name}' created\n`;
+        output += `Servers: ${result.servers.join(', ') || 'none'}\n`;
+        output += `Strategy: ${result.strategy}\n`;
+        break;
+
+      case 'update':
+        if (!name) throw new Error('Group name required for update');
+        result = updateGroup(name, {
+          servers,
+          description,
+          strategy,
+          delay,
+          stopOnError
+        });
+        output = `✅ Group '${name}' updated\n`;
+        output += `Servers: ${result.servers.join(', ')}\n`;
+        break;
+
+      case 'delete':
+        if (!name) throw new Error('Group name required for delete');
+        deleteGroup(name);
+        output = `✅ Group '${name}' deleted`;
+        break;
+
+      case 'add-servers':
+        if (!name) throw new Error('Group name required');
+        if (!servers || servers.length === 0) throw new Error('Servers required');
+        result = addServersToGroup(name, servers);
+        output = `✅ Added ${servers.length} servers to '${name}'\n`;
+        output += `Total servers: ${result.servers.length}\n`;
+        output += `Members: ${result.servers.join(', ')}`;
+        break;
+
+      case 'remove-servers':
+        if (!name) throw new Error('Group name required');
+        if (!servers || servers.length === 0) throw new Error('Servers required');
+        result = removeServersFromGroup(name, servers);
+        output = `✅ Removed ${servers.length} servers from '${name}'\n`;
+        output += `Remaining: ${result.servers.length}\n`;
+        output += `Members: ${result.servers.join(', ') || 'none'}`;
+        break;
+
+      case 'list': {
+        const groups = listGroups();
+        output = '📋 Server Groups\n';
+        output += '━'.repeat(60) + '\n\n';
+
+        groups.forEach(group => {
+          output += `📁 ${group.name}`;
+          if (group.dynamic) output += ' (dynamic)';
+          output += '\n';
+          output += `   Description: ${group.description}\n`;
+          output += `   Servers: ${group.serverCount} servers\n`;
+          if (group.servers.length > 0) {
+            output += `   Members: ${group.servers.slice(0, 5).join(', ')}`;
+            if (group.servers.length > 5) output += ` ... +${group.servers.length - 5} more`;
             output += '\n';
-            output += `   Description: ${group.description}\n`;
-            output += `   Servers: ${group.serverCount} servers\n`;
-            if (group.servers.length > 0) {
-              output += `   Members: ${group.servers.slice(0, 5).join(', ')}`;
-              if (group.servers.length > 5) output += ` ... +${group.servers.length - 5} more`;
-              output += '\n';
-            }
-            output += `   Strategy: ${group.strategy || 'parallel'}\n`;
-            if (group.delay) output += `   Delay: ${group.delay}ms\n`;
-            if (group.stopOnError) output += `   Stop on error: yes\n`;
-            output += '\n';
-          });
-          
-          output += '━'.repeat(60) + '\n';
-          output += `Total groups: ${groups.length}`;
-          break;
-          
-        default:
-          throw new Error(`Unknown action: ${action}`);
+          }
+          output += `   Strategy: ${group.strategy || 'parallel'}\n`;
+          if (group.delay) output += `   Delay: ${group.delay}ms\n`;
+          if (group.stopOnError) output += '   Stop on error: yes\n';
+          output += '\n';
+        });
+
+        output += '━'.repeat(60) + '\n';
+        output += `Total groups: ${groups.length}`;
+        break;
       }
-      
+
+      default:
+        throw new Error(`Unknown action: ${action}`);
+      }
+
       logger.info('Group management action completed', {
         action,
         name,
         servers: servers?.length
       });
-      
+
       return {
         content: [
           {
@@ -1831,7 +1832,7 @@ registerToolConditional(
         name,
         error: error.message
       });
-      
+
       return {
         content: [
           {
@@ -2451,13 +2452,15 @@ registerToolConditional(
     try {
       const servers = loadServerConfig();
       const resolvedName = resolveServerName(server, servers);
-      
+
       if (!resolvedName) {
         throw new Error(`Server "${server}" not found`);
       }
-      
-      const ssh = await getSSHConnection(resolvedName);
-      
+
+      const serverConfig = servers[resolvedName];
+      const ssh = new SSHManager(serverConfig);
+      await ssh.connect();
+
       const config = {
         type,
         localHost: localHost || '127.0.0.1',
@@ -2465,14 +2468,14 @@ registerToolConditional(
         remoteHost,
         remotePort
       };
-      
+
       const tunnel = await createTunnel(resolvedName, ssh, config);
-      
-      let output = `✅ SSH tunnel created\n`;
+
+      let output = '✅ SSH tunnel created\n';
       output += `ID: ${tunnel.id}\n`;
       output += `Type: ${type}\n`;
       output += `Local: ${config.localHost}:${localPort}\n`;
-      
+
       if (type === 'local') {
         output += `Remote: ${remoteHost}:${remotePort}\n`;
         output += `\n📌 Access remote ${remoteHost}:${remotePort} via local ${config.localHost}:${localPort}`;
@@ -2484,14 +2487,14 @@ registerToolConditional(
         output += `\n📌 SOCKS5 proxy available at ${config.localHost}:${localPort}`;
         output += `\n💡 Configure browser/app: SOCKS5 proxy ${config.localHost}:${localPort}`;
       }
-      
+
       logger.info('SSH tunnel created', {
         id: tunnel.id,
         server: resolvedName,
         type,
         local: `${config.localHost}:${localPort}`
       });
-      
+
       return {
         content: [
           {
@@ -2527,16 +2530,16 @@ registerToolConditional(
     try {
       const servers = loadServerConfig();
       let resolvedName = null;
-      
+
       if (server) {
         resolvedName = resolveServerName(server, servers);
         if (!resolvedName) {
           throw new Error(`Server "${server}" not found`);
         }
       }
-      
+
       const tunnels = listTunnels(resolvedName);
-      
+
       if (tunnels.length === 0) {
         return {
           content: [
@@ -2547,21 +2550,21 @@ registerToolConditional(
           ]
         };
       }
-      
-      let output = `📋 Active SSH Tunnels\n`;
+
+      let output = '📋 Active SSH Tunnels\n';
       output += '━'.repeat(60) + '\n\n';
-      
+
       tunnels.forEach(tunnel => {
         output += `🔧 ${tunnel.id}\n`;
         output += `   Server: ${tunnel.server}\n`;
         output += `   Type: ${tunnel.type}\n`;
         output += `   State: ${tunnel.state}\n`;
         output += `   Local: ${tunnel.config.localHost}:${tunnel.config.localPort}\n`;
-        
+
         if (tunnel.type !== 'dynamic') {
           output += `   Remote: ${tunnel.config.remoteHost}:${tunnel.config.remotePort}\n`;
         }
-        
+
         output += `   Active connections: ${tunnel.activeConnections}\n`;
         output += `   Total connections: ${tunnel.stats.connectionsTotal}\n`;
         output += `   Bytes transferred: ${(tunnel.stats.bytesTransferred / 1024).toFixed(2)} KB\n`;
@@ -2570,10 +2573,10 @@ registerToolConditional(
         output += `   Last activity: ${new Date(tunnel.lastActivity).toLocaleString()}\n`;
         output += '\n';
       });
-      
+
       output += '━'.repeat(60) + '\n';
       output += `Total tunnels: ${tunnels.length}`;
-      
+
       return {
         content: [
           {
@@ -2611,33 +2614,33 @@ registerToolConditional(
       if (!tunnelId && !server) {
         throw new Error('Either tunnelId or server must be specified');
       }
-      
+
       let output = '';
-      
+
       if (tunnelId) {
         // Close specific tunnel
         closeTunnel(tunnelId);
         output = `✅ Tunnel ${tunnelId} closed`;
-        
+
         logger.info('SSH tunnel closed', { id: tunnelId });
       } else if (server) {
         // Close all tunnels for server
         const servers = loadServerConfig();
         const resolvedName = resolveServerName(server, servers);
-        
+
         if (!resolvedName) {
           throw new Error(`Server "${server}" not found`);
         }
-        
+
         const count = closeServerTunnels(resolvedName);
         output = `✅ Closed ${count} tunnel(s) for server ${resolvedName}`;
-        
+
         logger.info('Server tunnels closed', {
           server: resolvedName,
           count
         });
       }
-      
+
       return {
         content: [
           {
@@ -2688,149 +2691,46 @@ registerToolConditional(
       }
 
       switch (action) {
-        case 'verify': {
-          // Check if host key has changed
-          const verification = await hasHostKeyChanged(host, port);
+      case 'verify': {
+        // Check if host key has changed
+        const verification = await hasHostKeyChanged(host, port);
 
-          if (verification.changed) {
-            // Execute pre-connect-key-change hook
-            await executeHook('pre-connect-key-change', {
-              server: resolvedName,
-              host,
-              port,
-              currentFingerprints: verification.currentFingerprints,
-              newFingerprints: verification.newFingerprints
-            });
+        if (verification.changed) {
+          // Execute pre-connect-key-change hook
+          await executeHook('pre-connect-key-change', {
+            server: resolvedName,
+            host,
+            port,
+            currentFingerprints: verification.currentFingerprints,
+            newFingerprints: verification.newFingerprints
+          });
 
-            let output = `⚠️  SSH host key has changed for ${server} (${host}:${port})\n\n`;
-            output += `Current fingerprints:\n`;
-            verification.currentFingerprints.forEach(fp => {
-              output += `  ${fp}\n`;
-            });
-            output += `\nNew fingerprints:\n`;
-            verification.newFingerprints.forEach(fp => {
-              output += `  ${fp}\n`;
-            });
-            output += `\n⚠️  This could indicate a security issue or server reinstallation.\n`;
-            output += `Use 'ssh_key_manage' with action 'accept' to update the key if you trust this change.`;
-
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: output
-                }
-              ]
-            };
-          } else {
-            let output = `✅ SSH host key verified for ${server} (${host}:${port})\n`;
-            output += `Reason: ${verification.reason}\n`;
-
-            if (verification.reason === 'not_in_known_hosts') {
-              output += `\nℹ️  Host not in known_hosts. Use 'accept' action to add it.`;
-            }
-
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: output
-                }
-              ]
-            };
-          }
-        }
-
-        case 'accept': {
-          // Check if key exists
-          const isKnown = isHostKnown(host, port);
-
-          if (isKnown) {
-            // Update existing key
-            await updateHostKey(host, port);
-
-            // Execute post-key-update hook
-            await executeHook('post-key-update', {
-              server: resolvedName,
-              host,
-              port,
-              action: 'updated'
-            });
-
-            logger.info('SSH host key updated', { server: resolvedName, host, port });
-
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: `✅ SSH host key updated for ${server} (${host}:${port})\nThe new key has been accepted and saved.`
-                }
-              ]
-            };
-          } else {
-            // Add new key
-            await addHostKey(host, port);
-
-            // Execute post-key-update hook
-            await executeHook('post-key-update', {
-              server: resolvedName,
-              host,
-              port,
-              action: 'added'
-            });
-
-            logger.info('SSH host key added', { server: resolvedName, host, port });
-
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: `✅ SSH host key added for ${server} (${host}:${port})\nThe key has been saved to known_hosts.`
-                }
-              ]
-            };
-          }
-        }
-
-        case 'remove': {
-          removeHostKey(host, port);
-
-          logger.info('SSH host key removed', { server: resolvedName, host, port });
+          let output = `⚠️  SSH host key has changed for ${server} (${host}:${port})\n\n`;
+          output += 'Current fingerprints:\n';
+          verification.currentFingerprints.forEach(fp => {
+            output += `  ${fp}\n`;
+          });
+          output += '\nNew fingerprints:\n';
+          verification.newFingerprints.forEach(fp => {
+            output += `  ${fp}\n`;
+          });
+          output += '\n⚠️  This could indicate a security issue or server reinstallation.\n';
+          output += 'Use \'ssh_key_manage\' with action \'accept\' to update the key if you trust this change.';
 
           return {
             content: [
               {
                 type: 'text',
-                text: `✅ SSH host key removed for ${server} (${host}:${port})`
+                text: output
               }
             ]
           };
-        }
+        } else {
+          let output = `✅ SSH host key verified for ${server} (${host}:${port})\n`;
+          output += `Reason: ${verification.reason}\n`;
 
-        case 'check': {
-          // Get current fingerprints
-          const currentKeys = getCurrentHostKey(host, port);
-          const newKeys = await getHostKeyFingerprint(host, port);
-
-          let output = `🔑 SSH Host Keys for ${server} (${host}:${port})\n`;
-          output += '━'.repeat(60) + '\n\n';
-
-          if (currentKeys && currentKeys.length > 0) {
-            output += `📋 Keys in known_hosts:\n`;
-            currentKeys.forEach(key => {
-              output += `  ${key.type}: ${key.fingerprint}\n`;
-            });
-          } else {
-            output += `⚠️  No keys found in known_hosts\n`;
-          }
-
-          output += `\n🌐 Keys from server:\n`;
-          if (newKeys && newKeys.length > 0) {
-            newKeys.forEach(key => {
-              output += `  ${key.type}: ${key.fingerprint}\n`;
-            });
-          } else {
-            output += `  ❌ Could not fetch keys from server\n`;
+          if (verification.reason === 'not_in_known_hosts') {
+            output += '\nℹ️  Host not in known_hosts. Use \'accept\' action to add it.';
           }
 
           return {
@@ -2842,53 +2742,156 @@ registerToolConditional(
             ]
           };
         }
+      }
 
-        case 'list': {
-          const knownHosts = listKnownHosts();
+      case 'accept': {
+        // Check if key exists
+        const isKnown = isHostKnown(host, port);
 
-          let output = `🔑 Known SSH Hosts\n`;
-          output += '━'.repeat(60) + '\n\n';
+        if (isKnown) {
+          // Update existing key
+          await updateHostKey(host, port);
 
-          if (knownHosts.length === 0) {
-            output += 'No hosts in known_hosts file\n';
-          } else {
-            // Map server names to known hosts
-            const serverMap = new Map();
-            for (const [name, config] of Object.entries(servers)) {
-              const key = `${config.host}:${config.port || 22}`;
-              serverMap.set(key, name);
-            }
+          // Execute post-key-update hook
+          await executeHook('post-key-update', {
+            server: resolvedName,
+            host,
+            port,
+            action: 'updated'
+          });
 
-            knownHosts.forEach(entry => {
-              const serverName = serverMap.get(`${entry.host}:${entry.port}`);
-              output += `📍 ${entry.host}:${entry.port}`;
-              if (serverName) {
-                output += ` (${serverName})`;
-              }
-              output += '\n';
-
-              entry.keys.forEach(key => {
-                output += `   ${key.type}: ${key.fingerprint}\n`;
-              });
-              output += '\n';
-            });
-          }
-
-          output += '━'.repeat(60) + '\n';
-          output += `Total: ${knownHosts.length} hosts`;
+          logger.info('SSH host key updated', { server: resolvedName, host, port });
 
           return {
             content: [
               {
                 type: 'text',
-                text: output
+                text: `✅ SSH host key updated for ${server} (${host}:${port})\nThe new key has been accepted and saved.`
+              }
+            ]
+          };
+        } else {
+          // Add new key
+          await addHostKey(host, port);
+
+          // Execute post-key-update hook
+          await executeHook('post-key-update', {
+            server: resolvedName,
+            host,
+            port,
+            action: 'added'
+          });
+
+          logger.info('SSH host key added', { server: resolvedName, host, port });
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `✅ SSH host key added for ${server} (${host}:${port})\nThe key has been saved to known_hosts.`
               }
             ]
           };
         }
+      }
 
-        default:
-          throw new Error(`Unknown action: ${action}`);
+      case 'remove': {
+        removeHostKey(host, port);
+
+        logger.info('SSH host key removed', { server: resolvedName, host, port });
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `✅ SSH host key removed for ${server} (${host}:${port})`
+            }
+          ]
+        };
+      }
+
+      case 'check': {
+        // Get current fingerprints
+        const currentKeys = getCurrentHostKey(host, port);
+        const newKeys = await getHostKeyFingerprint(host, port);
+
+        let output = `🔑 SSH Host Keys for ${server} (${host}:${port})\n`;
+        output += '━'.repeat(60) + '\n\n';
+
+        if (currentKeys && currentKeys.length > 0) {
+          output += '📋 Keys in known_hosts:\n';
+          currentKeys.forEach(key => {
+            output += `  ${key.type}: ${key.fingerprint}\n`;
+          });
+        } else {
+          output += '⚠️  No keys found in known_hosts\n';
+        }
+
+        output += '\n🌐 Keys from server:\n';
+        if (newKeys && newKeys.length > 0) {
+          newKeys.forEach(key => {
+            output += `  ${key.type}: ${key.fingerprint}\n`;
+          });
+        } else {
+          output += '  ❌ Could not fetch keys from server\n';
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: output
+            }
+          ]
+        };
+      }
+
+      case 'list': {
+        const knownHosts = listKnownHosts();
+
+        let output = '🔑 Known SSH Hosts\n';
+        output += '━'.repeat(60) + '\n\n';
+
+        if (knownHosts.length === 0) {
+          output += 'No hosts in known_hosts file\n';
+        } else {
+          // Map server names to known hosts
+          const serverMap = new Map();
+          for (const [name, config] of Object.entries(servers)) {
+            const key = `${config.host}:${config.port || 22}`;
+            serverMap.set(key, name);
+          }
+
+          knownHosts.forEach(entry => {
+            const serverName = serverMap.get(`${entry.host}:${entry.port}`);
+            output += `📍 ${entry.host}:${entry.port}`;
+            if (serverName) {
+              output += ` (${serverName})`;
+            }
+            output += '\n';
+
+            entry.keys.forEach(key => {
+              output += `   ${key.type}: ${key.fingerprint}\n`;
+            });
+            output += '\n';
+          });
+        }
+
+        output += '━'.repeat(60) + '\n';
+        output += `Total: ${knownHosts.length} hosts`;
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: output
+            }
+          ]
+        };
+      }
+
+      default:
+        throw new Error(`Unknown action: ${action}`);
       }
     } catch (error) {
       logger.error('SSH key management failed', { action, server, error: error.message });
@@ -3061,70 +3064,71 @@ registerToolConditional(
       let backupCommand;
 
       switch (type) {
-        case BACKUP_TYPES.MYSQL:
-          if (!database) {
-            throw new Error('database parameter required for MySQL backup');
-          }
-          backupCommand = buildMySQLDumpCommand({
-            database,
-            user: dbUser,
-            password: dbPassword,
-            host: dbHost,
-            port: dbPort,
-            outputFile: backupFile,
-            compress
-          });
-          break;
+      case BACKUP_TYPES.MYSQL:
+        if (!database) {
+          throw new Error('database parameter required for MySQL backup');
+        }
+        backupCommand = buildMySQLDumpCommand({
+          database,
+          user: dbUser,
+          password: dbPassword,
+          host: dbHost,
+          port: dbPort,
+          outputFile: backupFile,
+          compress
+        });
+        break;
 
-        case BACKUP_TYPES.POSTGRESQL:
-          if (!database) {
-            throw new Error('database parameter required for PostgreSQL backup');
-          }
-          backupCommand = buildPostgreSQLDumpCommand({
-            database,
-            user: dbUser,
-            password: dbPassword,
-            host: dbHost,
-            port: dbPort,
-            outputFile: backupFile,
-            compress
-          });
-          break;
+      case BACKUP_TYPES.POSTGRESQL:
+        if (!database) {
+          throw new Error('database parameter required for PostgreSQL backup');
+        }
+        backupCommand = buildPostgreSQLDumpCommand({
+          database,
+          user: dbUser,
+          password: dbPassword,
+          host: dbHost,
+          port: dbPort,
+          outputFile: backupFile,
+          compress
+        });
+        break;
 
-        case BACKUP_TYPES.MONGODB:
-          if (!database) {
-            throw new Error('database parameter required for MongoDB backup');
-          }
-          const mongoOutputDir = backupFile.replace('.gz', '');
-          backupCommand = buildMongoDBDumpCommand({
-            database,
-            user: dbUser,
-            password: dbPassword,
-            host: dbHost,
-            port: dbPort,
-            outputDir: mongoOutputDir,
-            compress
-          });
-          break;
+      case BACKUP_TYPES.MONGODB: {
+        if (!database) {
+          throw new Error('database parameter required for MongoDB backup');
+        }
+        const mongoOutputDir = backupFile.replace('.gz', '');
+        backupCommand = buildMongoDBDumpCommand({
+          database,
+          user: dbUser,
+          password: dbPassword,
+          host: dbHost,
+          port: dbPort,
+          outputDir: mongoOutputDir,
+          compress
+        });
+        break;
+      }
 
-        case BACKUP_TYPES.FILES:
-          if (!paths || paths.length === 0) {
-            throw new Error('paths parameter required for files backup');
-          }
-          backupCommand = buildFilesBackupCommand({
-            paths,
-            outputFile: backupFile,
-            exclude: exclude || [],
-            compress
-          });
-          break;
+      case BACKUP_TYPES.FILES:
+        if (!paths || paths.length === 0) {
+          throw new Error('paths parameter required for files backup');
+        }
+        backupCommand = buildFilesBackupCommand({
+          paths,
+          outputFile: backupFile,
+          exclude: exclude || [],
+          compress
+        });
+        break;
 
-        case BACKUP_TYPES.FULL:
-          // Full backup combines database and files
-          throw new Error('Full backup not yet implemented. Use separate mysql/postgresql/files backups.');
+      case BACKUP_TYPES.FULL:
+        // Full backup combines database and files
+        throw new Error('Full backup not yet implemented. Use separate mysql/postgresql/files backups.');
 
-        default:
-          throw new Error(`Unknown backup type: ${type}`);
+      default:
+        throw new Error(`Unknown backup type: ${type}`);
       }
 
       // Execute backup command
@@ -3447,30 +3451,30 @@ registerToolConditional(
       scriptContent += `BACKUP_TYPE="${type}"\n`;
       scriptContent += `BACKUP_ID="${backupId}"\n`;
       scriptContent += `BACKUP_FILE="${backupFile}"\n\n`;
-      scriptContent += `mkdir -p "$BACKUP_DIR"\n\n`;
+      scriptContent += 'mkdir -p "$BACKUP_DIR"\n\n';
 
       // Add backup command based on type
       switch (type) {
-        case BACKUP_TYPES.MYSQL:
-          scriptContent += `mysqldump --single-transaction --routines --triggers ${database} | gzip > "$BACKUP_FILE"\n`;
-          break;
-        case BACKUP_TYPES.POSTGRESQL:
-          scriptContent += `pg_dump --format=custom --clean --if-exists ${database} | gzip > "$BACKUP_FILE"\n`;
-          break;
-        case BACKUP_TYPES.MONGODB:
-          scriptContent += `mongodump --db ${database} --out /tmp/mongo_\${RANDOM} && tar -czf "$BACKUP_FILE" -C /tmp mongo_*\n`;
-          break;
-        case BACKUP_TYPES.FILES:
-          scriptContent += `tar -czf "$BACKUP_FILE" ${paths.join(' ')}\n`;
-          break;
+      case BACKUP_TYPES.MYSQL:
+        scriptContent += `mysqldump --single-transaction --routines --triggers ${database} | gzip > "$BACKUP_FILE"\n`;
+        break;
+      case BACKUP_TYPES.POSTGRESQL:
+        scriptContent += `pg_dump --format=custom --clean --if-exists ${database} | gzip > "$BACKUP_FILE"\n`;
+        break;
+      case BACKUP_TYPES.MONGODB:
+        scriptContent += `mongodump --db ${database} --out /tmp/mongo_\${RANDOM} && tar -czf "$BACKUP_FILE" -C /tmp mongo_*\n`;
+        break;
+      case BACKUP_TYPES.FILES:
+        scriptContent += `tar -czf "$BACKUP_FILE" ${paths.join(' ')}\n`;
+        break;
       }
 
       // Add cleanup command
-      scriptContent += `\n# Cleanup old backups\n`;
+      scriptContent += '\n# Cleanup old backups\n';
       scriptContent += `find "$BACKUP_DIR" -name "*_${name}_*" -type f -mtime +${retention} -delete\n`;
 
       // Save script to remote server
-      const escapedScript = scriptContent.replace(/'/g, "'\\''");
+      const escapedScript = scriptContent.replace(/'/g, '\'\\\'\'');
       await ssh.execCommand(`echo '${escapedScript}' > "${scriptPath}" && chmod +x "${scriptPath}"`);
 
       // Add to crontab
@@ -3668,11 +3672,11 @@ registerToolConditional(
         stopped,
         services: serviceStatuses,
         overall_health: stopped === 0 ? HEALTH_STATUS.HEALTHY :
-                       running > stopped ? HEALTH_STATUS.WARNING :
-                       HEALTH_STATUS.CRITICAL
+          running > stopped ? HEALTH_STATUS.WARNING :
+            HEALTH_STATUS.CRITICAL
       };
 
-      logger.info(`Service check completed`, {
+      logger.info('Service check completed', {
         server: serverName,
         running,
         stopped
@@ -3738,92 +3742,92 @@ registerToolConditional(
       let response;
 
       switch (action) {
-        case 'list': {
-          const listCommand = buildProcessListCommand({ sortBy, limit, filter });
-          const result = await ssh.execCommand(listCommand);
+      case 'list': {
+        const listCommand = buildProcessListCommand({ sortBy, limit, filter });
+        const result = await ssh.execCommand(listCommand);
 
-          if (result.code !== 0) {
-            throw new Error(`Failed to list processes: ${result.stderr}`);
-          }
-
-          const processes = parseProcessList(result.stdout);
-
-          response = {
-            server: serverName,
-            action: 'list',
-            count: processes.length,
-            sorted_by: sortBy,
-            processes
-          };
-          break;
+        if (result.code !== 0) {
+          throw new Error(`Failed to list processes: ${result.stderr}`);
         }
 
-        case 'kill': {
-          if (!pid) {
-            throw new Error('pid parameter required for kill action');
-          }
+        const processes = parseProcessList(result.stdout);
 
-          // Get process info first
-          const infoCommand = buildProcessInfoCommand(pid);
-          const infoResult = await ssh.execCommand(infoCommand);
+        response = {
+          server: serverName,
+          action: 'list',
+          count: processes.length,
+          sorted_by: sortBy,
+          processes
+        };
+        break;
+      }
 
-          let processInfo = {};
-          if (infoResult.code === 0 && infoResult.stdout) {
-            try {
-              processInfo = JSON.parse(infoResult.stdout);
-            } catch (e) {
-              // Process might not exist
-            }
-          }
-
-          // Kill the process
-          const killCommand = buildKillProcessCommand(pid, signal);
-          const killResult = await ssh.execCommand(killCommand);
-
-          if (killResult.code !== 0) {
-            throw new Error(`Failed to kill process ${pid}: ${killResult.stderr}`);
-          }
-
-          response = {
-            server: serverName,
-            action: 'kill',
-            pid,
-            signal,
-            process: processInfo,
-            success: true
-          };
-
-          logger.info(`Process killed: ${pid}`, {
-            server: serverName,
-            signal
-          });
-          break;
+      case 'kill': {
+        if (!pid) {
+          throw new Error('pid parameter required for kill action');
         }
 
-        case 'info': {
-          if (!pid) {
-            throw new Error('pid parameter required for info action');
+        // Get process info first
+        const infoCommand = buildProcessInfoCommand(pid);
+        const infoResult = await ssh.execCommand(infoCommand);
+
+        let processInfo = {};
+        if (infoResult.code === 0 && infoResult.stdout) {
+          try {
+            processInfo = JSON.parse(infoResult.stdout);
+          } catch (e) {
+            // Process might not exist
           }
-
-          const infoCommand = buildProcessInfoCommand(pid);
-          const result = await ssh.execCommand(infoCommand);
-
-          if (result.code !== 0 || !result.stdout) {
-            throw new Error(`Process ${pid} not found`);
-          }
-
-          const processInfo = JSON.parse(result.stdout);
-
-          response = {
-            server: serverName,
-            action: 'info',
-            process: processInfo
-          };
-          break;
         }
 
-        default:
-          throw new Error(`Unknown action: ${action}`);
+        // Kill the process
+        const killCommand = buildKillProcessCommand(pid, signal);
+        const killResult = await ssh.execCommand(killCommand);
+
+        if (killResult.code !== 0) {
+          throw new Error(`Failed to kill process ${pid}: ${killResult.stderr}`);
+        }
+
+        response = {
+          server: serverName,
+          action: 'kill',
+          pid,
+          signal,
+          process: processInfo,
+          success: true
+        };
+
+        logger.info(`Process killed: ${pid}`, {
+          server: serverName,
+          signal
+        });
+        break;
+      }
+
+      case 'info': {
+        if (!pid) {
+          throw new Error('pid parameter required for info action');
+        }
+
+        const infoCommand = buildProcessInfoCommand(pid);
+        const result = await ssh.execCommand(infoCommand);
+
+        if (result.code !== 0 || !result.stdout) {
+          throw new Error(`Process ${pid} not found`);
+        }
+
+        const processInfo = JSON.parse(result.stdout);
+
+        response = {
+          server: serverName,
+          action: 'info',
+          process: processInfo
+        };
+        break;
+      }
+
+      default:
+        throw new Error(`Unknown action: ${action}`);
       }
 
       return {
@@ -3884,126 +3888,126 @@ registerToolConditional(
       let response;
 
       switch (action) {
-        case 'set': {
-          // Create alert configuration
-          const config = createAlertConfig({
-            cpu: cpuThreshold,
-            memory: memoryThreshold,
-            disk: diskThreshold,
-            enabled
-          });
+      case 'set': {
+        // Create alert configuration
+        const config = createAlertConfig({
+          cpu: cpuThreshold,
+          memory: memoryThreshold,
+          disk: diskThreshold,
+          enabled
+        });
 
-          // Save to server
-          const saveCommand = buildSaveAlertConfigCommand(config, configPath);
-          const saveResult = await ssh.execCommand(saveCommand);
+        // Save to server
+        const saveCommand = buildSaveAlertConfigCommand(config, configPath);
+        const saveResult = await ssh.execCommand(saveCommand);
 
-          if (saveResult.code !== 0) {
-            throw new Error(`Failed to save alert config: ${saveResult.stderr}`);
-          }
-
-          response = {
-            server: serverName,
-            action: 'set',
-            config,
-            config_path: configPath,
-            success: true
-          };
-
-          logger.info('Alert thresholds configured', {
-            server: serverName,
-            thresholds: config
-          });
-          break;
+        if (saveResult.code !== 0) {
+          throw new Error(`Failed to save alert config: ${saveResult.stderr}`);
         }
 
-        case 'get': {
-          // Load configuration
-          const loadCommand = buildLoadAlertConfigCommand(configPath);
-          const result = await ssh.execCommand(loadCommand);
+        response = {
+          server: serverName,
+          action: 'set',
+          config,
+          config_path: configPath,
+          success: true
+        };
 
-          let config = {};
-          if (result.stdout && result.stdout.trim()) {
-            try {
-              config = JSON.parse(result.stdout);
-            } catch (e) {
-              config = { error: 'Failed to parse config' };
-            }
+        logger.info('Alert thresholds configured', {
+          server: serverName,
+          thresholds: config
+        });
+        break;
+      }
+
+      case 'get': {
+        // Load configuration
+        const loadCommand = buildLoadAlertConfigCommand(configPath);
+        const result = await ssh.execCommand(loadCommand);
+
+        let config = {};
+        if (result.stdout && result.stdout.trim()) {
+          try {
+            config = JSON.parse(result.stdout);
+          } catch (e) {
+            config = { error: 'Failed to parse config' };
           }
-
-          response = {
-            server: serverName,
-            action: 'get',
-            config,
-            config_path: configPath
-          };
-          break;
         }
 
-        case 'check': {
-          // Load thresholds
-          const loadCommand = buildLoadAlertConfigCommand(configPath);
-          const loadResult = await ssh.execCommand(loadCommand);
+        response = {
+          server: serverName,
+          action: 'get',
+          config,
+          config_path: configPath
+        };
+        break;
+      }
 
-          let thresholds = {};
-          if (loadResult.stdout && loadResult.stdout.trim()) {
-            try {
-              thresholds = JSON.parse(loadResult.stdout);
-            } catch (e) {
-              throw new Error('No alert configuration found. Use action=set to configure.');
-            }
-          } else {
+      case 'check': {
+        // Load thresholds
+        const loadCommand = buildLoadAlertConfigCommand(configPath);
+        const loadResult = await ssh.execCommand(loadCommand);
+
+        let thresholds = {};
+        if (loadResult.stdout && loadResult.stdout.trim()) {
+          try {
+            thresholds = JSON.parse(loadResult.stdout);
+          } catch (e) {
             throw new Error('No alert configuration found. Use action=set to configure.');
           }
+        } else {
+          throw new Error('No alert configuration found. Use action=set to configure.');
+        }
 
-          if (!thresholds.enabled) {
-            response = {
-              server: serverName,
-              action: 'check',
-              message: 'Alerts are disabled',
-              thresholds
-            };
-            break;
-          }
-
-          // Get current metrics
-          const healthCommand = buildComprehensiveHealthCheckCommand();
-          const healthResult = await ssh.execCommand(healthCommand);
-
-          if (healthResult.code !== 0) {
-            throw new Error('Failed to get current metrics');
-          }
-
-          const metrics = parseComprehensiveHealthCheck(healthResult.stdout);
-
-          // Check thresholds
-          const alerts = checkAlertThresholds(metrics, thresholds);
-
+        if (!thresholds.enabled) {
           response = {
             server: serverName,
             action: 'check',
-            thresholds,
-            current_metrics: {
-              cpu: metrics.cpu,
-              memory: metrics.memory,
-              disks: metrics.disks
-            },
-            alerts,
-            alert_count: alerts.length,
-            status: alerts.length === 0 ? 'ok' : 'alerts_triggered'
+            message: 'Alerts are disabled',
+            thresholds
           };
-
-          if (alerts.length > 0) {
-            logger.warn('Health alerts triggered', {
-              server: serverName,
-              alert_count: alerts.length,
-              alerts
-            });
-          }
           break;
         }
 
-        default:
-          throw new Error(`Unknown action: ${action}`);
+        // Get current metrics
+        const healthCommand = buildComprehensiveHealthCheckCommand();
+        const healthResult = await ssh.execCommand(healthCommand);
+
+        if (healthResult.code !== 0) {
+          throw new Error('Failed to get current metrics');
+        }
+
+        const metrics = parseComprehensiveHealthCheck(healthResult.stdout);
+
+        // Check thresholds
+        const alerts = checkAlertThresholds(metrics, thresholds);
+
+        response = {
+          server: serverName,
+          action: 'check',
+          thresholds,
+          current_metrics: {
+            cpu: metrics.cpu,
+            memory: metrics.memory,
+            disks: metrics.disks
+          },
+          alerts,
+          alert_count: alerts.length,
+          status: alerts.length === 0 ? 'ok' : 'alerts_triggered'
+        };
+
+        if (alerts.length > 0) {
+          logger.warn('Health alerts triggered', {
+            server: serverName,
+            alert_count: alerts.length,
+            alerts
+          });
+        }
+        break;
+      }
+
+      default:
+        throw new Error(`Unknown action: ${action}`);
       }
 
       return {
@@ -4079,18 +4083,18 @@ registerToolConditional(
       };
 
       switch (type) {
-        case DB_TYPES.MYSQL:
-          dumpCommand = buildDBMySQLDumpCommand(options);
-          break;
-        case DB_TYPES.POSTGRESQL:
-          dumpCommand = buildDBPostgreSQLDumpCommand(options);
-          break;
-        case DB_TYPES.MONGODB:
-          options.outputDir = outputFile.replace(/\.(tar\.gz|gz)$/, '');
-          dumpCommand = buildDBMongoDBDumpCommand(options);
-          break;
-        default:
-          throw new Error(`Unsupported database type: ${type}`);
+      case DB_TYPES.MYSQL:
+        dumpCommand = buildDBMySQLDumpCommand(options);
+        break;
+      case DB_TYPES.POSTGRESQL:
+        dumpCommand = buildDBPostgreSQLDumpCommand(options);
+        break;
+      case DB_TYPES.MONGODB:
+        options.outputDir = outputFile.replace(/\.(tar\.gz|gz)$/, '');
+        dumpCommand = buildDBMongoDBDumpCommand(options);
+        break;
+      default:
+        throw new Error(`Unsupported database type: ${type}`);
       }
 
       // Execute dump
@@ -4189,18 +4193,18 @@ registerToolConditional(
       };
 
       switch (type) {
-        case DB_TYPES.MYSQL:
-          importCommand = buildMySQLImportCommand(options);
-          break;
-        case DB_TYPES.POSTGRESQL:
-          importCommand = buildPostgreSQLImportCommand(options);
-          break;
-        case DB_TYPES.MONGODB:
-          options.inputPath = inputFile;
-          importCommand = buildMongoDBRestoreCommand(options);
-          break;
-        default:
-          throw new Error(`Unsupported database type: ${type}`);
+      case DB_TYPES.MYSQL:
+        importCommand = buildMySQLImportCommand(options);
+        break;
+      case DB_TYPES.POSTGRESQL:
+        importCommand = buildPostgreSQLImportCommand(options);
+        break;
+      case DB_TYPES.MONGODB:
+        options.inputPath = inputFile;
+        importCommand = buildMongoDBRestoreCommand(options);
+        break;
+      default:
+        throw new Error(`Unsupported database type: ${type}`);
       }
 
       // Execute import
@@ -4210,7 +4214,7 @@ registerToolConditional(
         throw new Error(`Import failed: ${result.stderr || result.stdout}`);
       }
 
-      logger.info(`Database import completed`, {
+      logger.info('Database import completed', {
         server: serverName,
         database
       });
@@ -4291,28 +4295,28 @@ registerToolConditional(
       if (database) {
         // List tables/collections
         switch (type) {
-          case DB_TYPES.MYSQL:
-            listCommand = buildMySQLListTablesCommand(options);
-            break;
-          case DB_TYPES.POSTGRESQL:
-            listCommand = buildPostgreSQLListTablesCommand(options);
-            break;
-          case DB_TYPES.MONGODB:
-            listCommand = buildMongoDBListCollectionsCommand(options);
-            break;
+        case DB_TYPES.MYSQL:
+          listCommand = buildMySQLListTablesCommand(options);
+          break;
+        case DB_TYPES.POSTGRESQL:
+          listCommand = buildPostgreSQLListTablesCommand(options);
+          break;
+        case DB_TYPES.MONGODB:
+          listCommand = buildMongoDBListCollectionsCommand(options);
+          break;
         }
       } else {
         // List databases
         switch (type) {
-          case DB_TYPES.MYSQL:
-            listCommand = buildMySQLListDatabasesCommand(options);
-            break;
-          case DB_TYPES.POSTGRESQL:
-            listCommand = buildPostgreSQLListDatabasesCommand(options);
-            break;
-          case DB_TYPES.MONGODB:
-            listCommand = buildMongoDBListDatabasesCommand(options);
-            break;
+        case DB_TYPES.MYSQL:
+          listCommand = buildMySQLListDatabasesCommand(options);
+          break;
+        case DB_TYPES.POSTGRESQL:
+          listCommand = buildPostgreSQLListDatabasesCommand(options);
+          break;
+        case DB_TYPES.MONGODB:
+          listCommand = buildMongoDBListDatabasesCommand(options);
+          break;
         }
       }
 
@@ -4422,21 +4426,21 @@ registerToolConditional(
 
       // Build query command based on type
       switch (type) {
-        case DB_TYPES.MYSQL:
-          queryCommand = buildMySQLQueryCommand(options);
-          break;
-        case DB_TYPES.POSTGRESQL:
-          queryCommand = buildPostgreSQLQueryCommand(options);
-          break;
-        case DB_TYPES.MONGODB:
-          if (!collection) {
-            throw new Error('collection parameter required for MongoDB queries');
-          }
-          options.collection = collection;
-          queryCommand = buildMongoDBQueryCommand(options);
-          break;
-        default:
-          throw new Error(`Unsupported database type: ${type}`);
+      case DB_TYPES.MYSQL:
+        queryCommand = buildMySQLQueryCommand(options);
+        break;
+      case DB_TYPES.POSTGRESQL:
+        queryCommand = buildPostgreSQLQueryCommand(options);
+        break;
+      case DB_TYPES.MONGODB:
+        if (!collection) {
+          throw new Error('collection parameter required for MongoDB queries');
+        }
+        options.collection = collection;
+        queryCommand = buildMongoDBQueryCommand(options);
+        break;
+      default:
+        throw new Error(`Unsupported database type: ${type}`);
       }
 
       // Execute query
@@ -4450,7 +4454,7 @@ registerToolConditional(
       const output = result.stdout.trim();
       const lines = output.split('\n');
 
-      logger.info(`Query executed successfully`, {
+      logger.info('Query executed successfully', {
         server: serverName,
         database,
         rows: lines.length

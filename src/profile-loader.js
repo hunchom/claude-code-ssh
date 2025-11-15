@@ -21,7 +21,7 @@ export function getActiveProfileName() {
   if (process.env.SSH_MANAGER_PROFILE) {
     return process.env.SSH_MANAGER_PROFILE;
   }
-  
+
   // 2. Check configuration file
   if (fs.existsSync(PROFILE_CONFIG_FILE)) {
     try {
@@ -33,7 +33,7 @@ export function getActiveProfileName() {
       console.error(`Error reading profile config: ${error.message}`);
     }
   }
-  
+
   // 3. Default to 'default' profile
   return 'default';
 }
@@ -44,12 +44,12 @@ export function getActiveProfileName() {
 export function loadProfile(profileName = null) {
   const name = profileName || getActiveProfileName();
   const profilePath = path.join(PROFILES_DIR, `${name}.json`);
-  
+
   try {
     if (fs.existsSync(profilePath)) {
       const profileData = fs.readFileSync(profilePath, 'utf8');
       const profile = JSON.parse(profileData);
-      
+
       console.error(`📦 Loaded profile: ${profile.name} - ${profile.description}`);
       return profile;
     } else {
@@ -67,7 +67,7 @@ export function loadProfile(profileName = null) {
  */
 function loadDefaultProfile() {
   const defaultPath = path.join(PROFILES_DIR, 'default.json');
-  
+
   try {
     if (fs.existsSync(defaultPath)) {
       const profileData = fs.readFileSync(defaultPath, 'utf8');
@@ -76,7 +76,7 @@ function loadDefaultProfile() {
   } catch (error) {
     console.error(`Error loading default profile: ${error.message}`);
   }
-  
+
   // Return minimal profile if default doesn't exist
   return {
     name: 'minimal',
@@ -93,7 +93,7 @@ export function listProfiles() {
   try {
     const files = fs.readdirSync(PROFILES_DIR);
     const profiles = [];
-    
+
     for (const file of files) {
       if (file.endsWith('.json')) {
         const profilePath = path.join(PROFILES_DIR, file);
@@ -112,7 +112,7 @@ export function listProfiles() {
         }
       }
     }
-    
+
     return profiles;
   } catch (error) {
     console.error(`Error listing profiles: ${error.message}`);
@@ -130,7 +130,7 @@ export function setActiveProfile(profileName) {
     if (!fs.existsSync(profilePath)) {
       throw new Error(`Profile '${profileName}' does not exist`);
     }
-    
+
     // Write to config file
     fs.writeFileSync(PROFILE_CONFIG_FILE, profileName);
     return true;
@@ -146,19 +146,19 @@ export function setActiveProfile(profileName) {
 export function createProfile(name, config) {
   try {
     const profilePath = path.join(PROFILES_DIR, `${name}.json`);
-    
+
     // Check if profile already exists
     if (fs.existsSync(profilePath)) {
       throw new Error(`Profile '${name}' already exists`);
     }
-    
+
     const profile = {
       name: name,
       description: config.description || `Custom profile: ${name}`,
       commandAliases: config.commandAliases || {},
       hooks: config.hooks || {}
     };
-    
+
     fs.writeFileSync(profilePath, JSON.stringify(profile, null, 2));
     return true;
   } catch (error) {
@@ -172,7 +172,7 @@ export function createProfile(name, config) {
  */
 export function mergeProfiles(baseProfileName, extensions) {
   const baseProfile = loadProfile(baseProfileName);
-  
+
   return {
     ...baseProfile,
     commandAliases: {
