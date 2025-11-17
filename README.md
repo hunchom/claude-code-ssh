@@ -1,5 +1,3 @@
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/bvisible-mcp-ssh-manager-badge.png)](https://mseep.ai/app/bvisible-mcp-ssh-manager)
-
 # MCP SSH Manager - SSH Remote Server Management via Model Context Protocol 🚀
 
 > **Looking for MCP SSH tools?** This is the **MCP SSH Manager** - a complete Model Context Protocol (MCP) server for SSH remote server management compatible with Claude Code and OpenAI Codex.
@@ -22,6 +20,12 @@ A powerful Model Context Protocol (MCP) server that enables **Claude Code** and 
 
 <a href="https://glama.ai/mcp/servers/@bvisible/mcp-ssh-manager">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@bvisible/mcp-ssh-manager/badge" alt="SSH Manager MCP server" />
+</a>
+
+<br/>
+
+<a href="https://mseep.ai/app/bvisible-mcp-ssh-manager">
+  <img src="https://mseep.net/pr/bvisible-mcp-ssh-manager-badge.png" alt="MseeP.ai Security Assessment Badge" />
 </a>
 
 </div>
