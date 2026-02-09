@@ -5,6 +5,69 @@ All notable changes to MCP SSH Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.2] - 2026-02-09
+
+### Fixed
+
+- **Windows compatibility**: Replace `process.env.HOME` with `os.homedir()` for cross-platform support ([#8](https://github.com/bvisible/mcp-ssh-manager/issues/8))
+  - `process.env.HOME` is undefined on Windows, causing crash at startup
+  - Fixed in `src/ssh-key-manager.js`, `src/index.js`, `src/ssh-manager.js`
+
+## [3.1.1] - 2025-11-15
+
+### 🔧 Stability & Performance Release
+
+This release fixes critical issues causing Claude Code to crash or freeze during MCP tool execution, particularly with large command outputs.
+
+### Fixed
+
+- **Claude Code crashes**: Automatic output truncation prevents context overflow
+  - All stdout/stderr outputs now limited to 10,000 characters (configurable)
+  - Clear truncation indicator showing how many characters were cut
+  - Prevents "Interrupted: What should Claude do instead?" errors
+
+- **Timeout issues**: Default timeout increased from 30s to 2 minutes
+  - Maximum timeout raised to 5 minutes for long-running operations
+  - Prevents premature command termination
+
+- **Standardized error responses**: Consistent JSON error format
+  - Better error handling and logging
+  - Improved debugging information
+
+### Added
+
+- **Performance configuration** via environment variables:
+  - `MCP_SSH_MAX_OUTPUT_LENGTH`: Control output truncation (default: 10000)
+  - `MCP_SSH_DEFAULT_TIMEOUT`: Set default command timeout (default: 120000ms)
+  - `MCP_SSH_MAX_TIMEOUT`: Set maximum timeout limit (default: 300000ms)
+  - `MCP_SSH_COMPACT_JSON`: Enable compact JSON responses (default: false)
+  - `MCP_SSH_DEBUG`: Enable debug information (default: false)
+  - `MCP_SSH_CONNECTION_TIMEOUT`: Connection idle timeout (default: 1800000ms)
+  - `MCP_SSH_KEEPALIVE_INTERVAL`: Keepalive packet interval (default: 60000ms)
+
+- **New configuration module** (`src/config.js`):
+  - Centralized configuration management
+  - Helper functions: `truncateOutput()`, `formatJSONResponse()`
+  - Environment variable parsing with defaults
+
+- **Troubleshooting documentation**:
+  - Complete guide in `docs/TROUBLESHOOTING.md`
+  - Best practices for handling large outputs
+  - Performance optimization tips
+  - Debugging steps for common issues
+
+### Changed
+
+- Updated `.env.example` with new performance configuration options
+- Enhanced README with troubleshooting section for Claude Code crashes
+- Improved error logging with detailed context
+
+### Documentation
+
+- Added comprehensive troubleshooting guide
+- Updated README with performance tuning section
+- Added examples for handling large command outputs
+
 ## [3.0.0] - 2025-10-01
 
 ### 🎉 Major Release - Enterprise DevOps Features
