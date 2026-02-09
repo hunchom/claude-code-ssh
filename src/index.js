@@ -7,6 +7,7 @@ import SSHManager from './ssh-manager.js';
 import * as dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { fileURLToPath } from 'url';
 import { configLoader } from './config-loader.js';
 import {
@@ -27,6 +28,12 @@ import {
   listCommandAliases,
   suggestAliases
 } from './command-aliases.js';
+import {
+  OUTPUT_LIMITS,
+  TIMEOUTS,
+  truncateOutput,
+  formatJSONResponse
+} from './config.js';
 import {
   initializeHooks,
   executeHook,
@@ -445,10 +452,12 @@ registerToolConditional(
       server: z.string().describe('Server name from configuration'),
       command: z.string().describe('Command to execute'),
       cwd: z.string().optional().describe('Working directory (optional, uses default if configured)'),
-      timeout: z.number().optional().describe('Command timeout in milliseconds (default: 30000)')
+      timeout: z.number().optional().describe('Command timeout in milliseconds (default: 120000, max: 300000)')
     }
   },
-  async ({ server: serverName, command, cwd, timeout = 30000 }) => {
+  async ({ server: serverName, command, cwd, timeout = TIMEOUTS.DEFAULT_COMMAND_TIMEOUT }) => {
+    // Cap timeout at maximum allowed
+    const cappedTimeout = Math.min(timeout, TIMEOUTS.MAX_COMMAND_TIMEOUT);
     try {
       const ssh = await getConnection(serverName);
 
@@ -473,7 +482,7 @@ registerToolConditional(
       // Log command execution
       const startTime = logger.logCommand(serverName, fullCommand, workingDir);
 
-      const result = await execCommandWithTimeout(ssh, fullCommand, {}, timeout);
+      const result = await execCommandWithTimeout(ssh, fullCommand, {}, cappedTimeout);
 
       // Log command result
       logger.logCommandResult(serverName, fullCommand, startTime, result);
@@ -487,29 +496,44 @@ registerToolConditional(
         });
       }
 
+      // Truncate output if too large to prevent Claude Code crashes
+      const stdout = truncateOutput(result.stdout);
+      const stderr = truncateOutput(result.stderr);
+
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({
+            text: formatJSONResponse({
               server: serverName,
               command: fullCommand,
-              stdout: result.stdout,
-              stderr: result.stderr,
+              stdout: stdout,
+              stderr: stderr,
               code: result.code,
               success: result.code === 0,
-            }, null, 2),
+            }),
           },
         ],
       };
     } catch (error) {
+      logger.error('ssh_execute failed', {
+        server: serverName,
+        error: error.message
+      });
+
       return {
         content: [
           {
             type: 'text',
-            text: `❌ Error: ${error.message}`,
+            text: formatJSONResponse({
+              server: serverName,
+              success: false,
+              error: truncateOutput(error.message, 1000),
+              code: -1
+            }),
           },
         ],
+        isError: true
       };
     }
   }
@@ -730,7 +754,7 @@ registerToolConditional(
         sshOptions.push('-o StrictHostKeyChecking=accept-new'); // Accept new keys, reject changed ones
         sshOptions.push('-o ConnectTimeout=10');        // Connection timeout
 
-        const keyPath = serverConfig.keypath.replace('~', process.env.HOME);
+        const keyPath = serverConfig.keypath.replace('~', os.homedir());
         sshOptions.push(`-i ${keyPath}`);
       } else {
         // With sshpass, we don't use BatchMode

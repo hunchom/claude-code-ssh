@@ -1,12 +1,13 @@
 import { execSync, spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import crypto from 'crypto';
 import { logger } from './logger.js';
 
 // Path to known_hosts file
-const KNOWN_HOSTS_PATH = path.join(process.env.HOME, '.ssh', 'known_hosts');
-const KNOWN_HOSTS_BACKUP = path.join(process.env.HOME, '.ssh', 'known_hosts.mcp-backup');
+const KNOWN_HOSTS_PATH = path.join(os.homedir(), '.ssh', 'known_hosts');
+const KNOWN_HOSTS_BACKUP = path.join(os.homedir(), '.ssh', 'known_hosts.mcp-backup');
 
 /**
  * Parse a known_hosts entry

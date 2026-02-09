@@ -1,5 +1,6 @@
 import { Client } from 'ssh2';
 import fs from 'fs';
+import os from 'os';
 import { promisify } from 'util';
 import crypto from 'crypto';
 import { isHostKnown, getCurrentHostKey, addHostKey, updateHostKey } from './ssh-key-manager.js';
@@ -100,7 +101,7 @@ class SSHManager {
       // Add authentication (support both keyPath and keypath for compatibility)
       const keyPath = this.config.keyPath || this.config.keypath;
       if (keyPath) {
-        const resolvedKeyPath = keyPath.replace('~', process.env.HOME);
+        const resolvedKeyPath = keyPath.replace('~', os.homedir());
         connConfig.privateKey = fs.readFileSync(resolvedKeyPath);
       } else if (this.config.password) {
         connConfig.password = this.config.password;
