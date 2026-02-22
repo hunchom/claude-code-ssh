@@ -153,6 +153,7 @@ SSH_SERVER_[NAME]_KEYPATH=~/.ssh/key       # For SSH key auth
 SSH_SERVER_[NAME]_PORT=22                  # Optional
 SSH_SERVER_[NAME]_DEFAULT_DIR=/path        # Optional default working directory
 SSH_SERVER_[NAME]_SUDO_PASSWORD=pass       # Optional for automated sudo
+SSH_SERVER_[NAME]_PLATFORM=windows         # Optional: "linux" (default) or "windows"
 ```
 
 ### TOML Format
@@ -165,6 +166,7 @@ key_path = "~/.ssh/key"                    # For SSH key auth
 port = 22                                  # Optional
 default_dir = "/path"                      # Optional default working directory
 sudo_password = "pass"                     # Optional for automated sudo
+platform = "windows"                       # Optional: "linux" (default) or "windows"
 ```
 
 ## Key Implementation Details

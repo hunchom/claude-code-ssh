@@ -233,11 +233,13 @@ function loadServerConfig() {
 
 // Execute command with timeout - using child_process timeout for real kill
 async function execCommandWithTimeout(ssh, command, options = {}, timeoutMs = 30000) {
-  // Pass through rawCommand if specified
-  const { rawCommand, ...otherOptions } = options;
+  // Pass through rawCommand and platform if specified
+  const { rawCommand, platform, ...otherOptions } = options;
+  const isWindows = platform === 'windows';
 
   // For commands that might hang, use the system's timeout command if available
-  const useSystemTimeout = timeoutMs > 0 && timeoutMs < 300000 && !rawCommand; // Max 5 minutes, not for raw commands
+  // Skip for Windows hosts where the Linux timeout/sh commands don't exist
+  const useSystemTimeout = timeoutMs > 0 && timeoutMs < 300000 && !rawCommand && !isWindows; // Max 5 minutes, not for raw/Windows commands
 
   if (useSystemTimeout) {
     // Wrap command with timeout command (works on Linux/Mac)
@@ -482,7 +484,7 @@ registerToolConditional(
       // Log command execution
       const startTime = logger.logCommand(serverName, fullCommand, workingDir);
 
-      const result = await execCommandWithTimeout(ssh, fullCommand, {}, cappedTimeout);
+      const result = await execCommandWithTimeout(ssh, fullCommand, { platform: serverConfig?.platform }, cappedTimeout);
 
       // Log command result
       logger.logCommandResult(serverName, fullCommand, startTime, result);
@@ -1045,7 +1047,9 @@ registerToolConditional(
         };
       } else {
         // Non-follow mode - just get the output
-        const result = await execCommandWithTimeout(ssh, command, {}, 15000);
+        const tailServers = loadServerConfig();
+        const tailServerConfig = tailServers[serverName.toLowerCase()];
+        const result = await execCommandWithTimeout(ssh, command, { platform: tailServerConfig?.platform }, 15000);
 
         if (result.code !== 0) {
           throw new Error(result.stderr || 'Failed to tail file');
@@ -1152,10 +1156,12 @@ registerToolConditional(
 
       // Execute all monitoring commands
       const startTime = Date.now();
+      const monServers = loadServerConfig();
+      const monServerConfig = monServers[serverName.toLowerCase()];
 
       for (const [key, cmd] of Object.entries(commands)) {
         try {
-          const result = await execCommandWithTimeout(ssh, cmd, {}, 10000);
+          const result = await execCommandWithTimeout(ssh, cmd, { platform: monServerConfig?.platform }, 10000);
           if (result.code === 0) {
             output[key] = result.stdout.trim();
           } else {
@@ -1658,7 +1664,7 @@ registerToolConditional(
           const workingDir = cwd || serverConfig?.default_dir;
           const fullCommand = workingDir ? `cd ${workingDir} && ${command}` : command;
 
-          const execResult = await execCommandWithTimeout(ssh, fullCommand, {}, 30000);
+          const execResult = await execCommandWithTimeout(ssh, fullCommand, { platform: serverConfig?.platform }, 30000);
 
           return {
             stdout: execResult.stdout,
@@ -1950,10 +1956,12 @@ registerToolConditional(
         results.push(`✅ Uploaded ${path.basename(file.local)} to temp location`);
 
         // Execute deployment strategy
+        const deployServers = loadServerConfig();
+        const deployServerConfig = deployServers[server.toLowerCase()];
         for (const step of strategy.steps) {
           const command = step.command.replace('{{tempFile}}', tempFile);
 
-          const result = await execCommandWithTimeout(ssh, command, {}, 15000);
+          const result = await execCommandWithTimeout(ssh, command, { platform: deployServerConfig?.platform }, 15000);
 
           if (result.code !== 0 && step.type !== 'backup') {
             throw new Error(`${step.type} failed: ${result.stderr}`);
@@ -2042,7 +2050,7 @@ registerToolConditional(
         fullCommand = `cd ${serverConfig.default_dir} && ${fullCommand}`;
       }
 
-      const result = await execCommandWithTimeout(ssh, fullCommand, {}, timeout);
+      const result = await execCommandWithTimeout(ssh, fullCommand, { platform: serverConfig?.platform }, timeout);
 
       // Mask password in output for security
       const maskedCommand = fullCommand.replace(/echo "[^"]+" \| sudo -S/, 'sudo');
