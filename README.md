@@ -105,7 +105,7 @@ This release adds **12 new MCP tools** transforming SSH Manager into a comprehen
 
 ### Core Features
 - **🔗 Multiple SSH Connections** - Manage unlimited SSH servers from a single interface
-- **🔐 Secure Authentication** - Support for both password and SSH key authentication
+- **🔐 Secure Authentication** - Support for password, SSH key, and ssh-agent authentication (including passphrase-protected keys)
 - **📁 File Operations** - Upload and download files between local and remote systems
 - **⚡ Command Execution** - Run commands on remote servers with working directory support
 - **📂 Default Directories** - Set default working directories per server for convenience
@@ -339,6 +339,7 @@ host = "prod.example.com"
 user = "admin"
 password = "secure_password"  # or use key_path
 key_path = "~/.ssh/id_rsa"   # for SSH key auth (recommended)
+passphrase = "key_passphrase" # optional, for passphrase-protected keys
 port = 22
 default_dir = "/var/www"
 description = "Production server"
@@ -554,6 +555,7 @@ SSH_SERVER_[NAME]_HOST=hostname_or_ip
 SSH_SERVER_[NAME]_USER=username
 SSH_SERVER_[NAME]_PASSWORD=password  # For password auth
 SSH_SERVER_[NAME]_KEYPATH=~/.ssh/key  # For SSH key auth
+SSH_SERVER_[NAME]_PASSPHRASE=key_passphrase  # Optional, for passphrase-protected keys
 SSH_SERVER_[NAME]_PORT=22  # Optional, defaults to 22
 SSH_SERVER_[NAME]_DEFAULT_DIR=/path/to/dir  # Optional, default working directory
 SSH_SERVER_[NAME]_DESCRIPTION=Description  # Optional
@@ -634,6 +636,43 @@ claude mcp list
 2. **Use SSH keys when possible** - More secure than passwords
 3. **Limit server access** - Use minimal required permissions
 4. **Rotate credentials** - Update passwords and keys regularly
+
+### 🔑 Passphrase-Protected SSH Keys
+
+MCP SSH Manager supports passphrase-protected SSH keys in two ways:
+
+**Option 1: SSH Agent (recommended)**
+
+If your SSH key is loaded into `ssh-agent`, MCP SSH Manager will use it automatically — no configuration changes needed:
+
+```bash
+# Add your key to the agent (enter passphrase once)
+ssh-add ~/.ssh/your_key
+
+# Verify the key is loaded
+ssh-add -l
+```
+
+The server detects the `SSH_AUTH_SOCK` environment variable and connects to the running agent. This is the same mechanism that regular `ssh` uses for GUI passphrase prompts.
+
+**Option 2: Passphrase in configuration**
+
+You can store the passphrase directly in the server config:
+
+`.env` format:
+```env
+SSH_SERVER_MYSERVER_KEYPATH=~/.ssh/id_rsa
+SSH_SERVER_MYSERVER_PASSPHRASE="your_passphrase"
+```
+
+TOML format:
+```toml
+[ssh_servers.myserver]
+key_path = "~/.ssh/id_rsa"
+passphrase = "your_passphrase"
+```
+
+> **Note:** SSH Agent is preferred over storing passphrases in config files for better security.
 
 ## 📚 Advanced Usage
 

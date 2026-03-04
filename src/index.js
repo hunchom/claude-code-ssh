@@ -164,8 +164,14 @@ import { loadToolConfig, isToolEnabled } from './tool-config-manager.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Ensure .env file exists (create empty if missing)
+const envFilePath = path.join(__dirname, '..', '.env');
+if (!fs.existsSync(envFilePath)) {
+  fs.writeFileSync(envFilePath, '# MCP SSH Manager - Server Configuration\n# See .env.example for configuration reference\n', 'utf8');
+}
+
 // Load environment variables (for backward compatibility)
-dotenv.config({ path: path.join(__dirname, '..', '.env') });
+dotenv.config({ path: envFilePath });
 
 // Initialize logger
 logger.info('MCP SSH Manager starting', {
@@ -176,7 +182,7 @@ logger.info('MCP SSH Manager starting', {
 // Load SSH server configuration
 let servers = {};
 configLoader.load({
-  envPath: path.join(__dirname, '..', '.env'),
+  envPath: envFilePath,
   tomlPath: process.env.SSH_CONFIG_PATH,
   preferToml: process.env.PREFER_TOML_CONFIG === 'true'
 }).then(loadedServers => {

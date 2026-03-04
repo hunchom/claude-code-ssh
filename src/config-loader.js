@@ -87,6 +87,7 @@ export class ConfigLoader {
           user: serverConfig.user || serverConfig.username,
           password: serverConfig.password,
           keyPath: serverConfig.key_path || serverConfig.keypath || serverConfig.ssh_key,
+          passphrase: serverConfig.passphrase,
           port: serverConfig.port || 22,
           defaultDir: serverConfig.default_dir || serverConfig.default_directory || serverConfig.cwd,
           sudoPassword: serverConfig.sudo_password,
@@ -134,6 +135,7 @@ export class ConfigLoader {
           user: env[`SSH_SERVER_${match[1]}_USER`],
           password: env[`SSH_SERVER_${match[1]}_PASSWORD`],
           keyPath: env[`SSH_SERVER_${match[1]}_KEYPATH`],
+          passphrase: env[`SSH_SERVER_${match[1]}_PASSPHRASE`],
           port: parseInt(env[`SSH_SERVER_${match[1]}_PORT`] || '22'),
           defaultDir: env[`SSH_SERVER_${match[1]}_DEFAULT_DIR`],
           sudoPassword: env[`SSH_SERVER_${match[1]}_SUDO_PASSWORD`],
@@ -186,6 +188,7 @@ export class ConfigLoader {
 
       if (server.password) serverConfig.password = server.password;
       if (server.keyPath) serverConfig.key_path = server.keyPath;
+      if (server.passphrase) serverConfig.passphrase = server.passphrase;
       if (server.defaultDir) serverConfig.default_dir = server.defaultDir;
       if (server.sudoPassword) serverConfig.sudo_password = server.sudoPassword;
       if (server.description) serverConfig.description = server.description;
@@ -212,6 +215,7 @@ export class ConfigLoader {
       lines.push(`SSH_SERVER_${upperName}_USER=${server.user}`);
       if (server.password) lines.push(`SSH_SERVER_${upperName}_PASSWORD="${server.password}"`);
       if (server.keyPath) lines.push(`SSH_SERVER_${upperName}_KEYPATH=${server.keyPath}`);
+      if (server.passphrase) lines.push(`SSH_SERVER_${upperName}_PASSPHRASE="${server.passphrase}"`);
       lines.push(`SSH_SERVER_${upperName}_PORT=${server.port || 22}`);
       if (server.defaultDir) lines.push(`SSH_SERVER_${upperName}_DEFAULT_DIR=${server.defaultDir}`);
       if (server.sudoPassword) lines.push(`SSH_SERVER_${upperName}_SUDO_PASSWORD="${server.sudoPassword}"`);

@@ -98,11 +98,27 @@ class SSHManager {
         };
       }
 
+      // Use ssh-agent if available (handles passphrase-protected keys transparently)
+      if (process.env.SSH_AUTH_SOCK) {
+        connConfig.agent = process.env.SSH_AUTH_SOCK;
+      }
+
       // Add authentication (support both keyPath and keypath for compatibility)
       const keyPath = this.config.keyPath || this.config.keypath;
       if (keyPath) {
         const resolvedKeyPath = keyPath.replace('~', os.homedir());
-        connConfig.privateKey = fs.readFileSync(resolvedKeyPath);
+        const keyData = fs.readFileSync(resolvedKeyPath);
+        const passphrase = this.config.passphrase;
+
+        if (passphrase) {
+          // Passphrase provided — pass key directly with passphrase
+          connConfig.privateKey = keyData;
+          connConfig.passphrase = passphrase;
+        } else if (!connConfig.agent) {
+          // No passphrase, no agent — pass key and hope it's unencrypted
+          connConfig.privateKey = keyData;
+        }
+        // If agent is available and no passphrase — let agent handle the key
       } else if (this.config.password) {
         connConfig.password = this.config.password;
       }
