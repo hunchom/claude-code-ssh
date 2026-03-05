@@ -98,11 +98,19 @@ class SSHManager {
         };
       }
 
+      // Use ssh-agent if available (handles passphrase-protected keys transparently)
+      if (process.env.SSH_AUTH_SOCK) {
+        connConfig.agent = process.env.SSH_AUTH_SOCK;
+      }
+
       // Add authentication (support both keyPath and keypath for compatibility)
       const keyPath = this.config.keyPath || this.config.keypath;
       if (keyPath) {
         const resolvedKeyPath = keyPath.replace('~', os.homedir());
         connConfig.privateKey = fs.readFileSync(resolvedKeyPath);
+        if (this.config.passphrase) {
+          connConfig.passphrase = this.config.passphrase;
+        }
       } else if (this.config.password) {
         connConfig.password = this.config.password;
       }

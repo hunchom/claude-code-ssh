@@ -12,7 +12,7 @@ A powerful Model Context Protocol (MCP) server that enables **Claude Code** and 
 [![npm downloads](https://img.shields.io/npm/dt/mcp-ssh-manager.svg?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/mcp-ssh-manager)
 [![MCP SSH Server](https://img.shields.io/badge/MCP_SSH-Server-orange?style=for-the-badge)](https://github.com/bvisible/mcp-ssh-manager)
 [![SSH MCP](https://img.shields.io/badge/SSH_MCP-Compatible-blue?style=for-the-badge)](https://modelcontextprotocol.io)
-[![Version](https://img.shields.io/badge/Version-3.1.4-brightgreen?style=for-the-badge)](https://github.com/bvisible/mcp-ssh-manager/releases/tag/v3.1.4)
+[![Version](https://img.shields.io/badge/Version-3.1.5-brightgreen?style=for-the-badge)](https://github.com/bvisible/mcp-ssh-manager/releases/tag/v3.1.5)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Compatible-5A67D8?style=for-the-badge&logo=anthropic)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Compatible-00A67E?style=for-the-badge&logo=openai)](https://openai.com/codex)
 [![MCP](https://img.shields.io/badge/MCP-Server-orange?style=for-the-badge)](https://modelcontextprotocol.io)
@@ -32,18 +32,26 @@ A powerful Model Context Protocol (MCP) server that enables **Claude Code** and 
 
 ---
 
-## 🎉 What's New in v3.1.4
+## 🎉 What's New in v3.1.5
 
-**Windows SSH Host Support** (Released: February 22, 2026)
+**SSH Agent & Passphrase-Protected Keys Support** (Released: March 5, 2026)
+
+- **🔑 SSH Agent support**: Automatically uses `ssh-agent` when `SSH_AUTH_SOCK` is available — passphrase-protected keys work transparently
+- **🔐 Passphrase configuration**: New `passphrase` field for both `.env` (`SSH_SERVER_FOO_PASSPHRASE`) and TOML (`passphrase = "..."`) formats
+- **🔄 No regression**: Private keys are always passed to the connection alongside the agent — unencrypted keys continue to work even if not loaded in the agent
+
+Thanks to [@snjax](https://github.com/snjax) for the original contribution ([#12](https://github.com/bvisible/mcp-ssh-manager/pull/12)).
+
+---
+
+## Previous Releases
+
+### v3.1.4 - Windows SSH Host Support (February 22, 2026)
 
 - **🪟 Windows SSH host fix**: Commands no longer fail on Windows hosts running OpenSSH ([#10](https://github.com/bvisible/mcp-ssh-manager/issues/10))
 - New per-server `platform` config field (`SSH_SERVER_FOO_PLATFORM=windows` or `platform = "windows"` in TOML)
 - When `platform=windows`, the Linux `timeout`/`sh -c` command wrapper is skipped and the SSH library's native timeout is used instead
 - All tools (`ssh_execute`, `ssh_tail`, `ssh_monitor`, `ssh_deploy`, `ssh_execute_sudo`, `ssh_group_execute`) are platform-aware
-
----
-
-## Previous Releases
 
 ### v3.1.2 - Windows Compatibility Fix (February 9, 2026)
 
@@ -105,7 +113,7 @@ This release adds **12 new MCP tools** transforming SSH Manager into a comprehen
 
 ### Core Features
 - **🔗 Multiple SSH Connections** - Manage unlimited SSH servers from a single interface
-- **🔐 Secure Authentication** - Support for both password and SSH key authentication
+- **🔐 Secure Authentication** - Support for password, SSH key, and ssh-agent authentication (including passphrase-protected keys)
 - **📁 File Operations** - Upload and download files between local and remote systems
 - **⚡ Command Execution** - Run commands on remote servers with working directory support
 - **📂 Default Directories** - Set default working directories per server for convenience
@@ -339,6 +347,7 @@ host = "prod.example.com"
 user = "admin"
 password = "secure_password"  # or use key_path
 key_path = "~/.ssh/id_rsa"   # for SSH key auth (recommended)
+passphrase = "key_passphrase" # optional, for passphrase-protected keys
 port = 22
 default_dir = "/var/www"
 description = "Production server"
@@ -554,6 +563,7 @@ SSH_SERVER_[NAME]_HOST=hostname_or_ip
 SSH_SERVER_[NAME]_USER=username
 SSH_SERVER_[NAME]_PASSWORD=password  # For password auth
 SSH_SERVER_[NAME]_KEYPATH=~/.ssh/key  # For SSH key auth
+SSH_SERVER_[NAME]_PASSPHRASE=key_passphrase  # Optional, for passphrase-protected keys
 SSH_SERVER_[NAME]_PORT=22  # Optional, defaults to 22
 SSH_SERVER_[NAME]_DEFAULT_DIR=/path/to/dir  # Optional, default working directory
 SSH_SERVER_[NAME]_DESCRIPTION=Description  # Optional
@@ -634,6 +644,43 @@ claude mcp list
 2. **Use SSH keys when possible** - More secure than passwords
 3. **Limit server access** - Use minimal required permissions
 4. **Rotate credentials** - Update passwords and keys regularly
+
+### 🔑 Passphrase-Protected SSH Keys
+
+MCP SSH Manager supports passphrase-protected SSH keys in two ways:
+
+**Option 1: SSH Agent (recommended)**
+
+If your SSH key is loaded into `ssh-agent`, MCP SSH Manager will use it automatically — no configuration changes needed:
+
+```bash
+# Add your key to the agent (enter passphrase once)
+ssh-add ~/.ssh/your_key
+
+# Verify the key is loaded
+ssh-add -l
+```
+
+The server detects the `SSH_AUTH_SOCK` environment variable and connects to the running agent. This is the same mechanism that regular `ssh` uses for GUI passphrase prompts.
+
+**Option 2: Passphrase in configuration**
+
+You can store the passphrase directly in the server config:
+
+`.env` format:
+```env
+SSH_SERVER_MYSERVER_KEYPATH=~/.ssh/id_rsa
+SSH_SERVER_MYSERVER_PASSPHRASE="your_passphrase"
+```
+
+TOML format:
+```toml
+[ssh_servers.myserver]
+key_path = "~/.ssh/id_rsa"
+passphrase = "your_passphrase"
+```
+
+> **Note:** SSH Agent is preferred over storing passphrases in config files for better security.
 
 ## 📚 Advanced Usage
 
