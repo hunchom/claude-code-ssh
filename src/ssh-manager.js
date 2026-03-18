@@ -16,9 +16,10 @@ class SSHManager {
     this.cachedHomeDir = null;
     this.autoAcceptHostKey = config.autoAcceptHostKey || false;
     this.hostKeyVerification = config.hostKeyVerification !== false; // Default true
+    this.jumpConnection = null;
   }
 
-  async connect() {
+  async connect(options = {}) {
     return new Promise((resolve, reject) => {
       this.client.on('ready', () => {
         this.connected = true;
@@ -113,6 +114,11 @@ class SSHManager {
         }
       } else if (this.config.password) {
         connConfig.password = this.config.password;
+      }
+
+      // Use provided stream for proxy jump connections
+      if (options.sock) {
+        connConfig.sock = options.sock;
       }
 
       this.client.connect(connConfig);
@@ -450,6 +456,18 @@ class SSHManager {
       this.client.end();
       this.connected = false;
     }
+  }
+
+  async forwardOut(srcAddr, srcPort, dstAddr, dstPort) {
+    if (!this.connected) {
+      throw new Error('Not connected to SSH server');
+    }
+    return new Promise((resolve, reject) => {
+      this.client.forwardOut(srcAddr, srcPort, dstAddr, dstPort, (err, stream) => {
+        if (err) reject(err);
+        else resolve(stream);
+      });
+    });
   }
 
   async ping() {

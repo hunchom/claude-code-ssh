@@ -12,7 +12,7 @@ A powerful Model Context Protocol (MCP) server that enables **Claude Code** and 
 [![npm downloads](https://img.shields.io/npm/dt/mcp-ssh-manager.svg?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/mcp-ssh-manager)
 [![MCP SSH Server](https://img.shields.io/badge/MCP_SSH-Server-orange?style=for-the-badge)](https://github.com/bvisible/mcp-ssh-manager)
 [![SSH MCP](https://img.shields.io/badge/SSH_MCP-Compatible-blue?style=for-the-badge)](https://modelcontextprotocol.io)
-[![Version](https://img.shields.io/badge/Version-3.1.5-brightgreen?style=for-the-badge)](https://github.com/bvisible/mcp-ssh-manager/releases/tag/v3.1.5)
+[![Version](https://img.shields.io/badge/Version-3.2.0-brightgreen?style=for-the-badge)](https://github.com/bvisible/mcp-ssh-manager/releases/tag/v3.2.0)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Compatible-5A67D8?style=for-the-badge&logo=anthropic)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Compatible-00A67E?style=for-the-badge&logo=openai)](https://openai.com/codex)
 [![MCP](https://img.shields.io/badge/MCP-Server-orange?style=for-the-badge)](https://modelcontextprotocol.io)
@@ -32,19 +32,27 @@ A powerful Model Context Protocol (MCP) server that enables **Claude Code** and 
 
 ---
 
-## 🎉 What's New in v3.1.5
+## 🎉 What's New in v3.2.0
 
-**SSH Agent & Passphrase-Protected Keys Support** (Released: March 5, 2026)
+**SSH ProxyJump / Bastion Host Support & npx Fix** (Released: March 18, 2026)
 
-- **🔑 SSH Agent support**: Automatically uses `ssh-agent` when `SSH_AUTH_SOCK` is available — passphrase-protected keys work transparently
-- **🔐 Passphrase configuration**: New `passphrase` field for both `.env` (`SSH_SERVER_FOO_PASSPHRASE`) and TOML (`passphrase = "..."`) formats
-- **🔄 No regression**: Private keys are always passed to the connection alongside the agent — unencrypted keys continue to work even if not loaded in the agent
-
-Thanks to [@snjax](https://github.com/snjax) for the original contribution ([#12](https://github.com/bvisible/mcp-ssh-manager/pull/12)).
+- **🔀 ProxyJump support**: Connect to servers behind bastion/jump hosts with a simple `PROXYJUMP` config field ([#15](https://github.com/bvisible/mcp-ssh-manager/issues/15))
+  - Chain multiple jumps (A → B → C) via recursive connections
+  - Circular dependency detection prevents infinite loops
+  - All tools work transparently through jump hosts (execute, upload, download, sync...)
+  - Jump connections are pooled and reused like direct connections
+- **📦 npx support fixed**: Added `bin` field to `package.json` — `npx mcp-ssh-manager` now works correctly ([#14](https://github.com/bvisible/mcp-ssh-manager/issues/14))
 
 ---
 
 ## Previous Releases
+
+### v3.1.5 - SSH Agent & Passphrase Support (March 5, 2026)
+
+- **🔑 SSH Agent support**: Automatically uses `ssh-agent` when `SSH_AUTH_SOCK` is available — passphrase-protected keys work transparently
+- **🔐 Passphrase configuration**: New `passphrase` field for both `.env` and TOML formats
+
+Thanks to [@snjax](https://github.com/snjax) for the original contribution ([#12](https://github.com/bvisible/mcp-ssh-manager/pull/12)).
 
 ### v3.1.4 - Windows SSH Host Support (February 22, 2026)
 
@@ -114,6 +122,7 @@ This release adds **12 new MCP tools** transforming SSH Manager into a comprehen
 ### Core Features
 - **🔗 Multiple SSH Connections** - Manage unlimited SSH servers from a single interface
 - **🔐 Secure Authentication** - Support for password, SSH key, and ssh-agent authentication (including passphrase-protected keys)
+- **🔀 ProxyJump / Bastion Host** - Connect to servers behind jump hosts with chained multi-hop support
 - **📁 File Operations** - Upload and download files between local and remote systems
 - **⚡ Command Execution** - Run commands on remote servers with working directory support
 - **📂 Default Directories** - Set default working directories per server for convenience
@@ -366,6 +375,18 @@ key_path = "~/.ssh/winhost_key"
 port = 2222
 platform = "windows"
 description = "Windows host via OpenSSH"
+
+[ssh_servers.bastion]
+host = "bastion.example.com"
+user = "jumpuser"
+key_path = "~/.ssh/bastion_key"
+
+[ssh_servers.internal]
+host = "10.0.0.5"
+user = "admin"
+key_path = "~/.ssh/internal_key"
+proxy_jump = "bastion"
+description = "Private server behind bastion"
 ```
 
 💡 **See [examples/codex-ssh-config.example.toml](examples/codex-ssh-config.example.toml) for more complete examples!**
@@ -568,6 +589,7 @@ SSH_SERVER_[NAME]_PORT=22  # Optional, defaults to 22
 SSH_SERVER_[NAME]_DEFAULT_DIR=/path/to/dir  # Optional, default working directory
 SSH_SERVER_[NAME]_DESCRIPTION=Description  # Optional
 SSH_SERVER_[NAME]_PLATFORM=windows  # Optional: "linux" (default) or "windows"
+SSH_SERVER_[NAME]_PROXYJUMP=bastion  # Optional: name of another server to use as jump host
 
 # Example: Linux server
 SSH_SERVER_PRODUCTION_HOST=prod.example.com
@@ -585,6 +607,17 @@ SSH_SERVER_WINHOST_KEYPATH=~/.ssh/winhost_key
 SSH_SERVER_WINHOST_PORT=2222
 SSH_SERVER_WINHOST_PLATFORM=windows
 SSH_SERVER_WINHOST_DESCRIPTION=Windows host via OpenSSH
+
+# Example: Server behind a bastion/jump host
+SSH_SERVER_BASTION_HOST=bastion.example.com
+SSH_SERVER_BASTION_USER=jumpuser
+SSH_SERVER_BASTION_KEYPATH=~/.ssh/bastion_key
+
+SSH_SERVER_INTERNAL_HOST=10.0.0.5
+SSH_SERVER_INTERNAL_USER=admin
+SSH_SERVER_INTERNAL_KEYPATH=~/.ssh/internal_key
+SSH_SERVER_INTERNAL_PROXYJUMP=bastion
+SSH_SERVER_INTERNAL_DESCRIPTION=Private server behind bastion
 ```
 
 ### Server Management Tool
@@ -683,6 +716,37 @@ passphrase = "your_passphrase"
 > **Note:** SSH Agent is preferred over storing passphrases in config files for better security.
 
 ## 📚 Advanced Usage
+
+### ProxyJump / Bastion Host
+
+Connect to servers behind a bastion or jump host. The connection is tunneled through the jump server transparently — all tools (execute, upload, download, sync) work as usual.
+
+```env
+# Define the bastion server
+SSH_SERVER_BASTION_HOST=bastion.example.com
+SSH_SERVER_BASTION_USER=jumpuser
+SSH_SERVER_BASTION_KEYPATH=~/.ssh/bastion_key
+
+# Point the target server to the bastion
+SSH_SERVER_PRIVATE_HOST=10.0.0.5
+SSH_SERVER_PRIVATE_USER=admin
+SSH_SERVER_PRIVATE_PROXYJUMP=bastion
+```
+
+Or in TOML:
+```toml
+[ssh_servers.bastion]
+host = "bastion.example.com"
+user = "jumpuser"
+key_path = "~/.ssh/bastion_key"
+
+[ssh_servers.private]
+host = "10.0.0.5"
+user = "admin"
+proxy_jump = "bastion"
+```
+
+**Chained jumps** are supported: if `bastion` itself has a `proxy_jump`, the chain is followed recursively. Circular references are detected and rejected.
 
 ### Documentation
 - [DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md) - Deployment strategies and permission handling

@@ -225,6 +225,9 @@ const KEEPALIVE_INTERVAL = 5 * 60 * 1000;
 // Map to store keepalive intervals
 const keepaliveIntervals = new Map();
 
+// Map to track proxy jump dependencies (target -> jump server)
+const jumpDependencies = new Map();
+
 // Load server configuration (backward compatibility wrapper)
 function loadServerConfig() {
   // This function is kept for backward compatibility
@@ -339,6 +342,9 @@ function closeConnection(serverName) {
   // Remove timestamp
   connectionTimestamps.delete(normalizedName);
 
+  // Clean up jump dependency tracking
+  jumpDependencies.delete(normalizedName);
+
   logger.logConnection(serverName, 'closed');
 }
 
@@ -398,7 +404,45 @@ async function getConnection(serverName) {
   const ssh = new SSHManager(serverConfig);
 
   try {
-    await ssh.connect();
+    if (serverConfig.proxyJump) {
+      const jumpServerName = serverConfig.proxyJump.toLowerCase();
+
+      // Validate jump server exists
+      if (!servers[jumpServerName]) {
+        throw new Error(
+          `Proxy jump server "${serverConfig.proxyJump}" not found. ` +
+          `Available servers: ${Object.keys(servers).join(', ')}`
+        );
+      }
+
+      // Detect circular proxy jumps
+      const visited = new Set([normalizedName]);
+      let current = jumpServerName;
+      while (current) {
+        if (visited.has(current)) {
+          throw new Error(`Circular proxy jump detected: ${[...visited, current].join(' -> ')}`);
+        }
+        visited.add(current);
+        current = servers[current]?.proxyJump?.toLowerCase() || null;
+      }
+
+      // Connect to jump server (recursive — handles chained jumps)
+      const jumpSSH = await getConnection(serverConfig.proxyJump);
+
+      // Create forwarded stream through the jump server
+      const stream = await jumpSSH.forwardOut(
+        '127.0.0.1', 0,
+        serverConfig.host, serverConfig.port || 22
+      );
+
+      // Connect target through the forwarded stream
+      await ssh.connect({ sock: stream });
+      jumpDependencies.set(normalizedName, jumpServerName);
+      ssh.jumpConnection = jumpSSH;
+    } else {
+      await ssh.connect();
+    }
+
     connections.set(normalizedName, ssh);
     connectionTimestamps.set(normalizedName, Date.now());
 
@@ -408,7 +452,8 @@ async function getConnection(serverName) {
     logger.logConnection(serverName, 'established', {
       host: serverConfig.host,
       port: serverConfig.port,
-      method: serverConfig.password ? 'password' : 'key'
+      method: serverConfig.password ? 'password' : 'key',
+      proxyJump: serverConfig.proxyJump || null
     });
 
     // Execute post-connect hook

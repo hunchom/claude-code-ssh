@@ -93,6 +93,7 @@ export class ConfigLoader {
           sudoPassword: serverConfig.sudo_password,
           description: serverConfig.description,
           platform: serverConfig.platform ? serverConfig.platform.toLowerCase() : undefined,
+          proxyJump: serverConfig.proxy_jump,
           source: 'toml'
         });
       }
@@ -141,6 +142,7 @@ export class ConfigLoader {
           sudoPassword: env[`SSH_SERVER_${match[1]}_SUDO_PASSWORD`],
           description: env[`SSH_SERVER_${match[1]}_DESCRIPTION`],
           platform: (env[`SSH_SERVER_${match[1]}_PLATFORM`] || '').toLowerCase() || undefined,
+          proxyJump: env[`SSH_SERVER_${match[1]}_PROXYJUMP`],
           source: 'env'
         };
 
@@ -193,6 +195,7 @@ export class ConfigLoader {
       if (server.sudoPassword) serverConfig.sudo_password = server.sudoPassword;
       if (server.description) serverConfig.description = server.description;
       if (server.platform) serverConfig.platform = server.platform;
+      if (server.proxyJump) serverConfig.proxy_jump = server.proxyJump;
 
       config.ssh_servers[name] = serverConfig;
     }
@@ -221,6 +224,7 @@ export class ConfigLoader {
       if (server.sudoPassword) lines.push(`SSH_SERVER_${upperName}_SUDO_PASSWORD="${server.sudoPassword}"`);
       if (server.description) lines.push(`SSH_SERVER_${upperName}_DESCRIPTION="${server.description}"`);
       if (server.platform) lines.push(`SSH_SERVER_${upperName}_PLATFORM=${server.platform}`);
+      if (server.proxyJump) lines.push(`SSH_SERVER_${upperName}_PROXYJUMP=${server.proxyJump}`);
       lines.push('');
     }
 
