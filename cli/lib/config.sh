@@ -5,20 +5,39 @@
 export SSH_MANAGER_HOME="${SSH_MANAGER_HOME:-$HOME/.ssh-manager}"
 export SSH_MANAGER_CONFIG="$SSH_MANAGER_HOME/config.json"
 
-# Resolve .env path - handle both direct and symlinked execution
+# Resolve .env path with fallback chain (consistent with src/index.js):
+# 1. SSH_MANAGER_ENV env var (explicit override)
+# 2. ~/.ssh-manager/.env (user config directory — preferred for global installs)
+# 3. $PWD/.env (current working directory)
+# 4. ~/.env (home directory)
+# 5. <project-root>/.env (backward compat for local/dev installs)
 if [ -z "$SSH_MANAGER_ENV" ]; then
-    if [ -n "$SCRIPT_DIR" ]; then
-        # Called from main ssh-manager script
-        SSH_MANAGER_ENV="$(dirname "$SCRIPT_DIR")/.env"
+    if [ -f "$SSH_MANAGER_HOME/.env" ]; then
+        SSH_MANAGER_ENV="$SSH_MANAGER_HOME/.env"
+    elif [ -f "$PWD/.env" ]; then
+        SSH_MANAGER_ENV="$PWD/.env"
+    elif [ -f "$HOME/.env" ]; then
+        SSH_MANAGER_ENV="$HOME/.env"
     else
-        # Called directly - need to resolve path ourselves
-        if [ -L "$0" ]; then
-            REAL_PATH="$(readlink -f "$0" 2>/dev/null || readlink "$0")"
+        # Resolve project root from script location (works for local installs)
+        if [ -n "$SCRIPT_DIR" ]; then
+            _PROJECT_ENV="$(dirname "$SCRIPT_DIR")/.env"
         else
-            REAL_PATH="$0"
+            if [ -L "$0" ]; then
+                _REAL_PATH="$(readlink -f "$0" 2>/dev/null || readlink "$0")"
+            else
+                _REAL_PATH="$0"
+            fi
+            _REAL_DIR="$(cd "$(dirname "$_REAL_PATH")" && pwd)"
+            _PROJECT_ENV="$(dirname "$(dirname "$_REAL_DIR")")/.env"
         fi
-        REAL_DIR="$(cd "$(dirname "$REAL_PATH")" && pwd)"
-        SSH_MANAGER_ENV="$(dirname "$(dirname "$REAL_DIR")")/.env"
+        if [ -f "$_PROJECT_ENV" ]; then
+            SSH_MANAGER_ENV="$_PROJECT_ENV"
+        else
+            # Default to user config directory (will be created on first server add)
+            SSH_MANAGER_ENV="$SSH_MANAGER_HOME/.env"
+        fi
+        unset _PROJECT_ENV _REAL_PATH _REAL_DIR
     fi
     export SSH_MANAGER_ENV
 fi
@@ -154,9 +173,13 @@ add_server_to_env() {
         return 1
     fi
     
+    # Ensure parent directory and .env file exist
+    mkdir -p "$(dirname "$SSH_MANAGER_ENV")"
+    touch "$SSH_MANAGER_ENV"
+
     # Backup .env file
     cp "$SSH_MANAGER_ENV" "$SSH_MANAGER_ENV.bak"
-    
+
     # Add server configuration
     {
         echo ""

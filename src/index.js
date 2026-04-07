@@ -166,14 +166,17 @@ const __dirname = path.dirname(__filename);
 
 // Resolve .env file path with fallback chain:
 // 1. SSH_ENV_PATH env var (explicit override)
-// 2. process.cwd()/.env (standard working directory)
-// 3. ~/.env (home directory, where ssh-manager server add writes)
-// 4. __dirname/../.env (backward compat for local installs)
+// 2. ~/.ssh-manager/.env (user config dir — where ssh-manager CLI writes)
+// 3. process.cwd()/.env (standard working directory)
+// 4. ~/.env (home directory)
+// 5. __dirname/../.env (backward compat for local installs)
 function resolveEnvFilePath() {
   if (process.env.SSH_ENV_PATH) {
     return process.env.SSH_ENV_PATH;
   }
+  const sshManagerHome = process.env.SSH_MANAGER_HOME || path.join(os.homedir(), '.ssh-manager');
   const candidates = [
+    path.join(sshManagerHome, '.env'),
     path.join(process.cwd(), '.env'),
     path.join(os.homedir(), '.env'),
     path.join(__dirname, '..', '.env'),
@@ -183,7 +186,6 @@ function resolveEnvFilePath() {
       return candidate;
     }
   }
-  // Default to cwd (consistent with config-loader.js)
   return path.join(process.cwd(), '.env');
 }
 
