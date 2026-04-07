@@ -12,16 +12,6 @@ A Model Context Protocol (MCP) server that enables **Claude Code** and **OpenAI 
 [![MCP](https://img.shields.io/badge/MCP-Server-orange?style=for-the-badge)](https://modelcontextprotocol.io)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 
-<a href="https://glama.ai/mcp/servers/@bvisible/mcp-ssh-manager">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/@bvisible/mcp-ssh-manager/badge" alt="SSH Manager MCP server" />
-</a>
-
-<br/>
-
-<a href="https://mseep.ai/app/bvisible-mcp-ssh-manager">
-  <img src="https://mseep.net/pr/bvisible-mcp-ssh-manager-badge.png" alt="MseeP.ai Security Assessment Badge" />
-</a>
-
 </div>
 
 ---
