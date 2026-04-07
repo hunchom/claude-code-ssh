@@ -1,18 +1,12 @@
 # MCP SSH Manager - SSH Remote Server Management via Model Context Protocol 🚀
 
-> **Looking for MCP SSH tools?** This is the **MCP SSH Manager** - a complete Model Context Protocol (MCP) server for SSH remote server management compatible with Claude Code and OpenAI Codex.
-
-A powerful Model Context Protocol (MCP) server that enables **Claude Code** and **OpenAI Codex** to manage multiple SSH connections seamlessly. Control remote servers, execute commands, transfer files, manage databases, and automate DevOps tasks directly from your AI assistant.
-
-**Keywords:** MCP SSH, MCP SSH Manager, SSH MCP, Model Context Protocol SSH, Claude Code SSH, SSH MCP Server, Remote SSH Management, MCP Server SSH
+A Model Context Protocol (MCP) server that enables **Claude Code** and **OpenAI Codex** to manage multiple SSH connections. Execute commands, transfer files, manage databases, create backups, monitor health, and automate DevOps tasks across your servers — directly from your AI assistant.
 
 <div align="center">
 
 [![npm version](https://img.shields.io/npm/v/mcp-ssh-manager.svg?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/mcp-ssh-manager)
 [![npm downloads](https://img.shields.io/npm/dt/mcp-ssh-manager.svg?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/mcp-ssh-manager)
-[![MCP SSH Server](https://img.shields.io/badge/MCP_SSH-Server-orange?style=for-the-badge)](https://github.com/bvisible/mcp-ssh-manager)
-[![SSH MCP](https://img.shields.io/badge/SSH_MCP-Compatible-blue?style=for-the-badge)](https://modelcontextprotocol.io)
-[![Version](https://img.shields.io/badge/Version-3.2.0-brightgreen?style=for-the-badge)](https://github.com/bvisible/mcp-ssh-manager/releases/tag/v3.2.0)
+[![Version](https://img.shields.io/badge/Version-3.2.2-brightgreen?style=for-the-badge)](https://github.com/bvisible/mcp-ssh-manager/releases/tag/v3.2.2)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Compatible-5A67D8?style=for-the-badge&logo=anthropic)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Compatible-00A67E?style=for-the-badge&logo=openai)](https://openai.com/codex)
 [![MCP](https://img.shields.io/badge/MCP-Server-orange?style=for-the-badge)](https://modelcontextprotocol.io)
@@ -32,20 +26,27 @@ A powerful Model Context Protocol (MCP) server that enables **Claude Code** and 
 
 ---
 
-## 🎉 What's New in v3.2.0
+## 🎉 What's New in v3.2.2
 
-**SSH ProxyJump / Bastion Host Support & npx Fix** (Released: March 18, 2026)
+**Global Install Fix & CLI Binary** (Released: April 7, 2026)
 
-- **🔀 ProxyJump support**: Connect to servers behind bastion/jump hosts with a simple `PROXYJUMP` config field ([#15](https://github.com/bvisible/mcp-ssh-manager/issues/15))
-  - Chain multiple jumps (A → B → C) via recursive connections
-  - Circular dependency detection prevents infinite loops
-  - All tools work transparently through jump hosts (execute, upload, download, sync...)
-  - Jump connections are pooled and reused like direct connections
-- **📦 npx support fixed**: Added `bin` field to `package.json` — `npx mcp-ssh-manager` now works correctly ([#14](https://github.com/bvisible/mcp-ssh-manager/issues/14))
+- **🔧 Global install fixed**: `.env` path resolution now uses a fallback chain instead of hardcoded `__dirname` — works correctly with `npm install -g` ([#16](https://github.com/bvisible/mcp-ssh-manager/issues/16), [#19](https://github.com/bvisible/mcp-ssh-manager/issues/19))
+  - Fallback chain: `~/.ssh-manager/.env` → `cwd/.env` → `~/.env` → project `.env`
+  - Auto-creates `~/.ssh-manager/.env` on first `ssh-manager server add`
+- **📦 `ssh-manager` CLI registered as binary**: `npm install -g` now creates both `mcp-ssh-manager` and `ssh-manager` commands ([#18](https://github.com/bvisible/mcp-ssh-manager/issues/18))
+- **⚡ Race condition fix**: Server config is now fully loaded before the MCP server accepts requests
 
 ---
 
 ## Previous Releases
+
+### v3.2.0 - ProxyJump / Bastion Host Support (March 18, 2026)
+
+- **🔀 ProxyJump support**: Connect to servers behind bastion/jump hosts with a simple `PROXYJUMP` config field ([#15](https://github.com/bvisible/mcp-ssh-manager/issues/15))
+  - Chain multiple jumps (A → B → C) via recursive connections
+  - Circular dependency detection prevents infinite loops
+  - All tools work transparently through jump hosts
+- **📦 npx support fixed**: `npx mcp-ssh-manager` now works correctly ([#14](https://github.com/bvisible/mcp-ssh-manager/issues/14))
 
 ### v3.1.5 - SSH Agent & Passphrase Support (March 5, 2026)
 
@@ -105,13 +106,16 @@ This release adds **12 new MCP tools** transforming SSH Manager into a comprehen
 ## 📑 Table of Contents
 
 - [Features](#-features)
+- [Tool Management](#-tool-management--context-optimization)
+- [Prerequisites](#-prerequisites)
 - [Quick Start - Claude Code](#-quick-start---claude-code)
 - [Quick Start - OpenAI Codex](#-quick-start---openai-codex)
-- [Prerequisites](#-prerequisites)
 - [Available MCP Tools](#-available-mcp-tools)
 - [Configuration](#-configuration)
 - [Usage Examples](#-usage-examples)
+- [Security](#-security-best-practices)
 - [Troubleshooting](#-troubleshooting)
+- [Known Limitations](#known-limitations)
 - [Contributing](#-contributing)
 - [License](#-license)
 
@@ -195,22 +199,6 @@ ssh-manager tools disable backup
 - **Auto-approval configuration** export for Claude Code
 
 📖 [**Complete Tool Management Guide →**](docs/TOOL_MANAGEMENT.md)
-
----
-
-## 🔍 Alternative Search Terms
-
-Looking for:
-- **MCP SSH** server? ✅ You're in the right place
-- **SSH MCP** integration? ✅ This is it
-- **Claude Code SSH** tools? ✅ Fully compatible
-- **Model Context Protocol SSH** manager? ✅ Complete solution
-- **OpenAI Codex SSH** server? ✅ Full support
-- **Remote SSH MCP** server? ✅ Works seamlessly
-- **MCP Server for SSH**? ✅ Production ready
-- **SSH automation with AI**? ✅ Perfect tool
-
-This is **the** MCP SSH Manager you've been searching for! 🎯
 
 ---
 
@@ -636,19 +624,24 @@ The Python management tool (`tools/server_manager.py`) provides:
 ```
 mcp-ssh-manager/
 ├── src/
-│   └── index.js           # Main MCP server implementation
-├── tools/
-│   ├── server_manager.py  # Interactive server management
-│   ├── test-connection.py # Connection testing utility
-│   └── requirements.txt   # Python dependencies
-├── examples/
-│   ├── .env.example       # Example configuration
-│   ├── claude-code-config.example.json
-│   ├── backup-workflow.js # Backup and restore examples
-│   └── codex-ssh-config.example.toml
-├── package.json           # Node.js dependencies
-├── .env                   # Your server configurations (create from .env.example)
-└── README.md             # This file
+│   ├── index.js              # Main MCP server (37 tools)
+│   ├── ssh-manager.js        # SSH connection handling
+│   ├── config-loader.js      # .env & TOML config loading
+│   ├── session-manager.js    # Persistent SSH sessions
+│   ├── backup-manager.js     # Backup & restore
+│   ├── health-monitor.js     # Health checks & alerts
+│   ├── database-manager.js   # Database operations
+│   ├── tunnel-manager.js     # SSH tunnel management
+│   ├── server-groups.js      # Group operations
+│   └── ...
+├── cli/
+│   ├── ssh-manager           # Bash CLI entrypoint
+│   ├── commands/              # CLI command modules
+│   └── lib/                   # CLI libraries
+├── profiles/                  # Configuration profiles (frappe, docker, nodejs...)
+├── examples/                  # Example configs
+├── docs/                      # Documentation
+└── package.json
 ```
 
 ## 🧪 Testing
@@ -807,42 +800,6 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for complete guide.
 2. Check SSH key permissions: `chmod 600 ~/.ssh/your_key`
 3. Ensure user has necessary permissions on remote server
 
-## 🛠️ Available MCP Tools
-
-Once installed in Claude Code, you'll have access to these powerful tools:
-
-### Core Tools
-- `ssh_execute` - Execute commands on remote servers
-- `ssh_upload` - Upload files to remote servers
-- `ssh_download` - Download files from remote servers
-- `ssh_list_servers` - List all configured SSH servers
-
-### Advanced Tools (v2.0)
-- `ssh_sync` - Bidirectional file synchronization with rsync
-- `ssh_tail` - Real-time log monitoring with follow mode
-- `ssh_monitor` - System metrics monitoring (CPU, RAM, disk, network)
-- `ssh_history` - View command execution history
-
-### Session Management
-- `ssh_session_start` - Start persistent SSH session
-- `ssh_session_send` - Send commands to active session
-- `ssh_session_list` - List active sessions
-- `ssh_session_close` - Close specific session
-
-### Server Groups
-- `ssh_execute_group` - Execute commands on server groups
-- `ssh_group_manage` - Manage server groups (create, update, delete)
-
-### SSH Tunnels
-- `ssh_tunnel_create` - Create SSH tunnels (local, remote, SOCKS)
-- `ssh_tunnel_list` - List active tunnels with statistics
-- `ssh_tunnel_close` - Close specific or all tunnels
-
-### Deployment & Security
-- `ssh_deploy` - Smart deployment with permission handling
-- `ssh_execute_sudo` - Execute commands with sudo privileges
-- `ssh_alias` - Manage server aliases
-
 ## 📚 Usage Examples
 
 ### Backup & Restore
@@ -939,15 +896,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - SSH handling via [node-ssh](https://www.npmjs.com/package/node-ssh)
 - Server management with [Paramiko](https://www.paramiko.org)
 
-## 📧 Support
-
-For issues, questions, or suggestions:
-- Open an issue on [GitHub Issues](https://github.com/yourusername/mcp-ssh-manager/issues)
-- Check existing issues before creating new ones
-
 ---
-
-Made with ❤️ for the Claude Code community
 
 ## Known Limitations
 
@@ -967,7 +916,28 @@ Made with ❤️ for the Claude Code community
 - If a connection becomes stale, it will be automatically reconnected on next use
 - Force reconnection by using the `ssh_connection_status` tool with `reconnect` action
 
-## Support
+## 📧 Support
 
-For issues, feature requests, or contributions, please visit:
-https://github.com/bvisible/mcp-ssh-manager
+For issues, questions, or suggestions:
+- Open an issue on [GitHub Issues](https://github.com/bvisible/mcp-ssh-manager/issues)
+- Check existing issues before creating new ones
+
+---
+
+<div align="center">
+
+Made with ❤️ for the Claude Code community
+
+<br/><br/>
+
+<a href="https://glama.ai/mcp/servers/@bvisible/mcp-ssh-manager">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@bvisible/mcp-ssh-manager/badge" alt="SSH Manager MCP server" />
+</a>
+
+<br/>
+
+<a href="https://mseep.ai/app/bvisible-mcp-ssh-manager">
+  <img src="https://mseep.net/pr/bvisible-mcp-ssh-manager-badge.png" alt="MseeP.ai Security Assessment Badge" />
+</a>
+
+</div>
