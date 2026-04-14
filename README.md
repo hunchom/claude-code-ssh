@@ -1,12 +1,20 @@
-# claude-code-ssh
+<p align="center">
+  <img src="assets/repo-image.png" alt="claude-code-ssh" width="600" />
+</p>
 
+<h1 align="center">claude-code-ssh</h1>
+
+<p align="center">
 MCP server for SSH. Gives Claude Code 51 tools to run commands, move files, manage databases, and deploy across your servers.
+</p>
 
-![tools](https://img.shields.io/badge/tools-51-brightgreen?style=flat-square)
-![tests](https://img.shields.io/badge/tests-551%20passing-brightgreen?style=flat-square)
-![mcp](https://img.shields.io/badge/mcp-server-orange?style=flat-square)
-![node](https://img.shields.io/badge/node-%E2%89%A518-339933?style=flat-square)
-![license](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
+<p align="center">
+  <img src="https://img.shields.io/badge/tools-51-brightgreen?style=flat-square" alt="51 tools" />
+  <img src="https://img.shields.io/badge/tests-551%20passing-brightgreen?style=flat-square" alt="551 tests" />
+  <img src="https://img.shields.io/badge/mcp-server-orange?style=flat-square" alt="MCP server" />
+  <img src="https://img.shields.io/badge/node-%E2%89%A518-339933?style=flat-square" alt="node 18+" />
+  <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT" />
+</p>
 
 ## What it does
 
