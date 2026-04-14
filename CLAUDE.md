@@ -125,7 +125,7 @@ The server exposes these tools to Claude Code and OpenAI Codex:
 
 ### Configuration Formats
 
-MCP SSH Manager supports two configuration formats:
+claude-code-ssh supports two configuration formats:
 
 1. **Environment Variables (.env)** - Traditional format for Claude Code
 2. **TOML** - Modern format for OpenAI Codex
@@ -199,7 +199,7 @@ Run `./scripts/validate.sh` before commits to check:
 
 To install in Claude Code:
 ```bash
-claude mcp add ssh-manager node /absolute/path/to/mcp-ssh-manager/src/index.js
+claude mcp add ssh-manager node /absolute/path/to/claude-code-ssh/src/index.js
 ```
 
 Configuration is stored in `~/.config/claude-code/claude_code_config.json`
@@ -207,7 +207,7 @@ Configuration is stored in `~/.config/claude-code/claude_code_config.json`
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **mcp-ssh-manager** (1225 symbols, 1919 relationships, 45 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **claude-code-ssh** (1225 symbols, 1919 relationships, 45 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -223,7 +223,7 @@ This project is indexed by GitNexus as **mcp-ssh-manager** (1225 symbols, 1919 r
 
 1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
 2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
-3. `READ gitnexus://repo/mcp-ssh-manager/process/{processName}` — trace the full execution flow step by step
+3. `READ gitnexus://repo/claude-code-ssh/process/{processName}` — trace the full execution flow step by step
 4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
 
 ## When Refactoring
@@ -262,10 +262,10 @@ This project is indexed by GitNexus as **mcp-ssh-manager** (1225 symbols, 1919 r
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/mcp-ssh-manager/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/mcp-ssh-manager/clusters` | All functional areas |
-| `gitnexus://repo/mcp-ssh-manager/processes` | All execution flows |
-| `gitnexus://repo/mcp-ssh-manager/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/claude-code-ssh/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/claude-code-ssh/clusters` | All functional areas |
+| `gitnexus://repo/claude-code-ssh/processes` | All execution flows |
+| `gitnexus://repo/claude-code-ssh/process/{name}` | Step-by-step execution trace |
 
 ## Self-Check Before Finishing
 

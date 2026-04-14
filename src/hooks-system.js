@@ -1,5 +1,5 @@
 /**
- * Hooks System for MCP SSH Manager
+ * Hooks System for claude-code-ssh
  * Provides automation through pre/post execution hooks
  */
 

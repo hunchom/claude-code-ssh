@@ -350,7 +350,7 @@ cmd_tools_configure() {
     print_header "Tool Configuration Wizard"
 
     echo ""
-    echo "MCP SSH Manager has ${BOLD}37 tools${NC} organized into ${BOLD}6 groups${NC}:"
+    echo "claude-code-ssh has ${BOLD}37 tools${NC} organized into ${BOLD}6 groups${NC}:"
     echo ""
 
     for group in core sessions monitoring backup database advanced; do

@@ -33,7 +33,7 @@ server.stdout.on('data', (data) => {
 
 server.stderr.on('data', (data) => {
   const msg = data.toString();
-  if (!msg.includes('MCP SSH Manager Server started') && !msg.includes('Available servers')) {
+  if (!msg.includes('claude-code-ssh starting') && !msg.includes('Available servers')) {
     console.log('ℹ️', msg.trim());
   }
 });

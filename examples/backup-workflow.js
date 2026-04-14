@@ -1,5 +1,5 @@
 /**
- * Backup Workflow Examples for MCP SSH Manager
+ * Backup Workflow Examples for claude-code-ssh
  *
  * This file demonstrates various backup and restore workflows
  * that can be executed through Claude Code or OpenAI Codex.

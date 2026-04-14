@@ -1,4 +1,4 @@
-// Configuration constants for MCP SSH Manager
+// Configuration constants for claude-code-ssh
 
 // Output limits to prevent Claude Code crashes
 export const OUTPUT_LIMITS = {

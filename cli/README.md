@@ -8,7 +8,7 @@ A simple, powerful, and fast Bash-based CLI for managing SSH servers.
 - 🎨 **Beautiful**: Colored output with emojis
 - 📦 **Simple**: Single command for all operations
 - 🔧 **Powerful**: Tunnels, sync, monitoring, and more
-- 🔌 **Integrated**: Works with MCP SSH Manager server
+- 🔌 **Integrated**: Works with claude-code-ssh server
 
 ## Installation
 
@@ -185,7 +185,7 @@ ssh-manager sync pull prod1 /var/log/app/ ./backups/$(date +%Y%m%d)/
 
 ### Using with MCP Server
 
-The CLI works seamlessly with the MCP SSH Manager server:
+The CLI works seamlessly with the claude-code-ssh server:
 
 ```bash
 # Use CLI for configuration
@@ -273,7 +273,7 @@ sudo yum install jq sshpass
 
 ## Contributing
 
-The CLI is part of the MCP SSH Manager project. Contributions welcome!
+The CLI is part of the claude-code-ssh project. Contributions welcome!
 
 1. Fork the repository
 2. Create your feature branch

@@ -664,7 +664,7 @@ export async function handleSshBackupSchedule({ getConnection, args }) {
   }
 
   const fullCmd = cmdBundle.envPrefix + cmdBundle.command;
-  const marker = `# mcp-ssh-manager-backup:${backup_type}:${targetName}`;
+  const marker = `# claude-code-ssh-backup:${backup_type}:${targetName}`;
   const cronLine = `${cron.trim()} ${fullCmd} ${marker}`;
 
   if (isPreview) {

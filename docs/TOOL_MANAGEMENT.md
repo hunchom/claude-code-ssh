@@ -336,7 +336,7 @@ Example complete config:
   "mcpServers": {
     "ssh-manager": {
       "command": "node",
-      "args": ["/absolute/path/to/mcp-ssh-manager/src/index.js"]
+      "args": ["/absolute/path/to/claude-code-ssh/src/index.js"]
     }
   },
   "autoApprove": {

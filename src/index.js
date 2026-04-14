@@ -218,7 +218,7 @@ const envFilePath = resolveEnvFilePath();
 dotenv.config({ path: envFilePath });
 
 // Initialize logger
-logger.info('MCP SSH Manager starting', {
+logger.info('claude-code-ssh starting', {
   logLevel: process.env.SSH_LOG_LEVEL || 'INFO',
   verbose: process.env.SSH_VERBOSE === 'true',
   envFilePath
@@ -518,11 +518,11 @@ async function getConnection(serverName) {
 
 // Create MCP server
 const server = new McpServer({
-  name: 'mcp-ssh-manager',
-  version: '1.2.0',
+  name: 'claude-code-ssh',
+  version: '3.2.2',
 });
 
-logger.info('MCP Server initialized', { version: '1.2.0' });
+logger.info('MCP Server initialized', { version: '3.2.2' });
 
 /**
  * Helper function to conditionally register tools based on configuration
@@ -2520,7 +2520,7 @@ async function main() {
   })() : '37 of 37 enabled';
 
   console.error('');
-  console.error('  mcp-ssh-manager 1.2.0');
+  console.error('  claude-code-ssh 3.2.2');
   console.error('  -----------------------------------------------');
   console.error(`  profile   ${activeProfile}`);
   console.error(`  servers   ${servers_str}`);

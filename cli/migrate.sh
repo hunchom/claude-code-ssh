@@ -17,8 +17,8 @@ echo
 # Find .env file
 ENV_LOCATIONS=(
     "../.env"
-    "../../mcp-ssh-manager/.env"
-    "$HOME/mcp/mcp-ssh-manager/.env"
+    "../../claude-code-ssh/.env"
+    "$HOME/mcp/claude-code-ssh/.env"
     ".env"
 )
 

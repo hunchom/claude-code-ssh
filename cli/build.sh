@@ -108,7 +108,7 @@ echo
 
 # Step 7: Validate configuration
 echo -e "${YELLOW}Step 7: Validating configuration...${NC}"
-if [ ! -f "$HOME/mcp/mcp-ssh-manager/.env" ] && [ ! -f "$HOME/.ssh-manager/.env" ]; then
+if [ ! -f "$HOME/mcp/claude-code-ssh/.env" ] && [ ! -f "$HOME/.ssh-manager/.env" ]; then
     print_info "No .env file found. You'll need to configure servers after installation."
 else
     print_status "Configuration file found"

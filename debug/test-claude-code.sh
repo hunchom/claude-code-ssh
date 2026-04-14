@@ -1,63 +1,59 @@
 #!/bin/bash
+# Quick health check: verify the repo is ready to serve as a Claude Code MCP.
 
-echo "🔧 Testing MCP SSH Manager for Claude Code"
-echo "==========================================="
+set -e
+
+cd "$(dirname "$0")/.."
+ROOT="$(pwd)"
+
+echo "claude-code-ssh - Claude Code integration check"
+echo "-----------------------------------------------"
 echo ""
 
-# Check dependencies
-echo "📦 Checking dependencies..."
-if [ -f "package.json" ]; then
-    echo "✅ package.json found"
+fail=0
+
+step() { printf "  [%s] %s\n" "$1" "$2"; }
+
+# package.json
+if [ -f package.json ]; then
+  step ok "package.json present"
 else
-    echo "❌ package.json not found"
-    exit 1
+  step err "package.json missing"; fail=1
 fi
 
-if [ -d "node_modules" ]; then
-    echo "✅ node_modules found"
+# deps
+if [ -d node_modules ]; then
+  step ok "node_modules installed"
 else
-    echo "❌ node_modules not found. Run: npm install"
-    exit 1
+  step warn "node_modules missing — run: npm install"
 fi
 
-# Check .env
-echo ""
-echo "🔐 Checking server configuration..."
-if [ -f ".env" ]; then
-    echo "✅ .env file found"
-    server_count=$(grep -c "SSH_SERVER_.*_HOST=" .env)
-    echo "✅ $server_count servers configured"
+# .env
+if [ -f .env ]; then
+  count=$(grep -c "^SSH_SERVER_[A-Z0-9_]*_HOST=" .env 2>/dev/null || echo 0)
+  step ok ".env present, $count server(s) configured"
 else
-    echo "❌ .env file not found"
-    exit 1
+  step warn ".env missing — copy .env.example to .env and add servers"
 fi
 
-# Check Claude Code config
-echo ""
-echo "⚙️  Checking Claude Code configuration..."
-config_file="$HOME/.config/claude-code/claude_code_config.json"
-if [ -f "$config_file" ]; then
-    echo "✅ Claude Code config found"
-    if grep -q "ssh-manager" "$config_file"; then
-        echo "✅ SSH Manager is configured in Claude Code"
-    else
-        echo "❌ SSH Manager not found in Claude Code config"
-        echo "   Run: python tools/server_manager.py"
-        echo "   Then choose option 5"
-    fi
+# Claude Code registration
+cfg="$HOME/.config/claude-code/claude_code_config.json"
+if [ -f "$cfg" ]; then
+  if grep -q "ssh-manager" "$cfg" 2>/dev/null; then
+    step ok "registered in Claude Code config"
+  else
+    step warn "not yet registered — run: claude mcp add ssh-manager node $ROOT/src/index.js"
+  fi
 else
-    echo "❌ Claude Code config not found at $config_file"
+  step warn "Claude Code config not found at $cfg"
 fi
 
 echo ""
-echo "🎯 Configuration Summary:"
-echo "========================"
-echo "MCP Server Path: /Users/jeremy/mcp/mcp-ssh-manager/src/index.js"
-echo "Servers configured: $(grep -c "SSH_SERVER_.*_HOST=" .env 2>/dev/null || echo 0)"
+echo "server entry point: $ROOT/src/index.js"
 echo ""
-echo "✅ Ready to use in Claude Code!"
+echo "try in Claude Code:"
+echo "  ssh_list_servers"
+echo "  ssh_execute on <server> to run hostname"
 echo ""
-echo "Try these commands in Claude Code:"
-echo "  - 'Use the ssh_list_servers tool'"
-echo "  - 'Use ssh_execute on production to run ls'"
-echo "  - 'Use ssh_execute on staging to run hostname'"
+
+exit $fail

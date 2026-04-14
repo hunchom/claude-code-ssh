@@ -1,5 +1,5 @@
 /**
- * Health Monitor for MCP SSH Manager
+ * Health Monitor for claude-code-ssh
  * Provides system health checks, service monitoring, and process management
  */
 

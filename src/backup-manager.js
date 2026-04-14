@@ -1,5 +1,5 @@
 /**
- * Backup Manager for MCP SSH Manager
+ * Backup Manager for claude-code-ssh
  * Handles creation, listing, restoration, and scheduling of backups
  * Supports databases (MySQL, PostgreSQL, MongoDB) and file backups
  */

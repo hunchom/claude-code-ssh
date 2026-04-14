@@ -1,5 +1,5 @@
 /**
- * Logger module for MCP SSH Manager
+ * Logger module for claude-code-ssh
  * Provides structured logging with levels and optional verbose mode
  */
 

@@ -1,6 +1,6 @@
 # Backup & Restore Guide
 
-Complete guide for using the MCP SSH Manager backup and restore system.
+Complete guide for using the claude-code-ssh backup and restore system.
 
 ## 🎯 Overview
 
@@ -497,4 +497,4 @@ sudo /usr/local/bin/ssh-manager-backup-production.sh
 
 ---
 
-**Need help?** Open an issue on [GitHub](https://github.com/bvisible/mcp-ssh-manager/issues)
+**Need help?** Open an issue on [GitHub](https://github.com/hunchom/claude-code-ssh/issues)

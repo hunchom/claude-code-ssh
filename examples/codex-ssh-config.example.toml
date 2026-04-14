@@ -1,7 +1,7 @@
 # OpenAI Codex SSH Configuration Example
 # Place this file at: ~/.codex/ssh-config.toml
 #
-# This file contains SSH server configurations for MCP SSH Manager
+# This file contains SSH server configurations for claude-code-ssh
 # when used with OpenAI Codex.
 #
 # For Claude Code users: Use .env format instead (see .env.example)

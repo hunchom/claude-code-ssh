@@ -30,7 +30,6 @@ coverage/
 
 # Documentation (keep only essential)
 todo.md
-mcp-ssh-manager-setup.md
 
 # Build and logs
 logs/
@@ -43,6 +42,8 @@ npm-debug.log*
 .eslintrc*
 .prettierrc*
 .husky/
+scripts/
+.gitnexus/
 
 # CLI development (not needed for npm)
 cli/test/
@@ -57,16 +58,3 @@ archived/
 .server-aliases.json
 .ssh-command-history.json
 .server-groups.json
-
-# Python (only Node.js needed for npm)
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-.venv
-requirements.txt
-tools/*.pyc

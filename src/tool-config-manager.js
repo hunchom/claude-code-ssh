@@ -76,7 +76,7 @@ export class ToolConfigManager {
         advanced: { enabled: true }
       },
       tools: {},
-      _comment: 'Tool configuration for MCP SSH Manager. Run "ssh-manager tools configure" to customize.'
+      _comment: 'Tool configuration for claude-code-ssh. Run "ssh-manager tools configure" to customize.'
     };
   }
 

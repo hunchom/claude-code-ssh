@@ -1,5 +1,5 @@
 /**
- * Command Aliases System for MCP SSH Manager
+ * Command Aliases System for claude-code-ssh
  * Provides shortcuts for frequently used commands
  */
 

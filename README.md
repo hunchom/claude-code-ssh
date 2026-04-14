@@ -18,21 +18,15 @@ Stop being the middleman between Claude and your servers.
 
 ## Why
 
-Right now, working with Claude on a production problem looks like this:
+Claude can already run SSH. It has a bash tool. Hand it `ssh user@host "tail /var/log/app.log"` and it'll do the thing.
 
-1. You describe the bug
-2. Claude asks what the logs say
-3. You SSH in, tail the log, copy the output
-4. Paste it back to Claude
-5. Claude asks what the config looks like
-6. You `cat` it, paste it back
-7. Claude suggests a fix
-8. You SSH in again, apply it, restart the service
-9. You tell Claude whether it worked
+The problem is that every session you have to re-explain which hosts exist, which key unlocks which box, which user has sudo where, which port isn't the default, which bastion fronts the internal VLAN. Claude forgets all of it between conversations. Anything beyond a one-shot command turns into a fragile bash one-liner Claude rebuilds from scratch every time — a database dump here, a tunnel there, a deploy with rollback. Outputs aren't truncated, so one `journalctl --no-pager` can blow your whole context window. Connections don't pool, so every command is a fresh handshake.
 
-You're the keyboard. You're doing the typing-and-pasting shuttle for an AI that could just do it itself.
+It's technically possible. It's practically miserable.
 
-**claude-code-ssh gets you out of the loop.** Claude reaches into your servers directly, sees what it needs, changes what it needs, and reports back. You describe the outcome you want. Claude does the work.
+**claude-code-ssh formalizes the setup once and lets Claude operate against it naturally.** You declare your fleet — hosts, users, keys, bastions, default directories — in a config file Claude remembers across every session. You get 51 typed tools for the operations that were previously fragile bash: database dumps, SSH tunnels, atomic deploys, health checks, real-time log tails. Output is truncated head+tail so logs don't eat context. Connections pool. Sudo passwords go in via stdin, never argv. The query tool rejects anything but read-only SELECTs.
+
+You describe outcomes. Claude picks tools. The servers respond.
 
 ## What changes
 
@@ -40,7 +34,7 @@ You're the keyboard. You're doing the typing-and-pasting shuttle for an AI that 
 
 **Fleet operations collapse into one sentence.** "Roll out this config to every web server, one at a time, pause if any fail healthcheck." Done. No Ansible playbook, no tmux panes, no for-loop bash one-liners.
 
-**Claude has context the whole time.** It sees the actual log output, not your summary of it. It reads the real config, not what you remember it looking like. When it proposes a fix, it's grounded in what's actually running.
+**Claude has standing fleet context.** It already knows prod01 lives at 10.0.0.10, reaches it through the bastion, deploys to `/var/www/app`, uses the ed25519 key. You don't re-brief it every session.
 
 **You stop context-switching between terminal tabs and chat.** One surface. One conversation. The work gets done in the same thread you're thinking in.
 
