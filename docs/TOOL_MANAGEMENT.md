@@ -2,7 +2,7 @@
 
 ## Overview
 
-MCP SSH Manager provides **37 tools** organized into **6 functional groups**. You can enable or disable tool groups to customize your experience and reduce context usage in Claude Code.
+claude-code-ssh provides **37 tools** organized into **6 functional groups**. You can enable or disable tool groups to customize your experience and reduce context usage in Claude Code.
 
 ### Why Manage Tools?
 
@@ -225,7 +225,7 @@ Advanced features for power users:
   "tools": {
     "ssh_session_start": true  // Individual tool override
   },
-  "_comment": "Tool configuration for MCP SSH Manager"
+  "_comment": "Tool configuration for claude-code-ssh"
 }
 ```
 
@@ -402,7 +402,7 @@ ssh-manager tools list
 
 ### 3. Different Configs for Different Projects
 
-While MCP SSH Manager uses a single user-global config, you can:
+While claude-code-ssh uses a single user-global config, you can:
 - Create shell aliases for different profiles
 - Manually switch configs for different projects
 - Use the CLI to quickly enable/disable groups

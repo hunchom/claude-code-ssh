@@ -1,114 +1,54 @@
-# Contributing to MCP SSH Manager
+# Contributing
 
-First off, thank you for considering contributing to MCP SSH Manager! It's people like you that make this tool better for everyone.
+Contributions welcome. Keep PRs focused, tests passing, and the README honest.
 
-## Code of Conduct
+## Quick start
 
-This project and everyone participating in it is governed by our Code of Conduct. By participating, you are expected to uphold this code.
+```bash
+git clone https://github.com/hunchom/claude-code-ssh
+cd claude-code-ssh
+npm install
+npm test
+```
 
-## How Can I Contribute?
+All 551 tests should pass before you start.
 
-### Reporting Bugs
+## Workflow
 
-Before creating bug reports, please check existing issues as you might find out that you don't need to create one. When you are creating a bug report, please include as many details as possible:
+1. Fork, branch off `main`
+2. Make the change
+3. Add or update tests — we don't merge untested changes
+4. Run `npm test` and `./scripts/validate.sh`
+5. Commit with a short imperative subject (e.g. `fix: handle empty SSH config`)
+6. Open a PR describing what changed and why
 
-- **Use a clear and descriptive title**
-- **Describe the exact steps to reproduce the problem**
-- **Provide specific examples**
-- **Describe the behavior you observed and expected**
-- **Include logs and error messages**
-- **Include your environment details** (OS, Node.js version, Python version)
+## What we're looking for
 
-### Suggesting Enhancements
+**Yes:**
+- Bug fixes with a reproducing test
+- New tools that belong in an existing group
+- Docs improvements (especially clearer examples)
+- Performance wins backed by numbers
+- Support for more auth methods / SSH edge cases
 
-Enhancement suggestions are tracked as GitHub issues. When creating an enhancement suggestion, please include:
+**Probably not:**
+- Large refactors without a specific problem they solve
+- New tool groups that overlap existing ones
+- Dependencies without a clear justification
+- Breaking changes to `.env` / TOML format (we'll discuss)
 
-- **Use a clear and descriptive title**
-- **Provide a detailed description of the suggested enhancement**
-- **Provide specific examples to demonstrate the enhancement**
-- **Describe the current behavior and expected behavior**
-- **Explain why this enhancement would be useful**
+## Code style
 
-### Pull Requests
+- Node 18+, ES modules
+- Prefer small, pure functions over class hierarchies
+- Handler files live in `src/tools/` — one file per tool group
+- Every new tool needs an entry in `src/tool-registry.js` and a test file in `tests/`
+- No emojis in log output, no Unicode where ASCII works
 
-1. Fork the repo and create your branch from `main`
-2. If you've added code that should be tested, add tests
-3. Ensure the test suite passes
-4. Make sure your code follows the existing code style
-5. Write a clear commit message
+## Security
 
-## Development Process
+If you find a vulnerability, don't open a public issue. Email the maintainer or use GitHub's private security reporting. SSH tools touch production infra — we treat security reports seriously.
 
-1. Clone your fork:
-   ```bash
-   git clone https://github.com/your-username/mcp-ssh-manager.git
-   cd mcp-ssh-manager
-   ```
+## Questions
 
-2. Install dependencies:
-   ```bash
-   npm install
-   pip install -r tools/requirements.txt
-   ```
-
-3. Create a branch:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-4. Make your changes and test them
-
-5. Commit your changes:
-   ```bash
-   git add .
-   git commit -m "Add your descriptive commit message"
-   ```
-
-6. Push to your fork:
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-
-7. Open a Pull Request
-
-## Style Guidelines
-
-### JavaScript Style
-- Use ES6+ features
-- Use async/await for asynchronous code
-- Add JSDoc comments for functions
-- Use meaningful variable names
-
-### Python Style
-- Follow PEP 8
-- Use type hints where appropriate
-- Add docstrings to functions and classes
-- Use meaningful variable names
-
-### Commit Messages
-- Use the present tense ("Add feature" not "Added feature")
-- Use the imperative mood ("Move cursor to..." not "Moves cursor to...")
-- Limit the first line to 72 characters or less
-- Reference issues and pull requests liberally after the first line
-
-## Testing
-
-Before submitting a pull request:
-
-1. Test your changes manually
-2. Ensure existing functionality still works
-3. Test with different server configurations
-4. Verify Claude Code integration works
-
-## Documentation
-
-- Update README.md if you change functionality
-- Add JSDoc/docstrings for new functions
-- Update examples if needed
-- Keep documentation clear and concise
-
-## Questions?
-
-Feel free to open an issue with your question or reach out to the maintainers.
-
-Thank you for contributing! 🎉
+Open a discussion or issue. Short and specific beats long and vague.

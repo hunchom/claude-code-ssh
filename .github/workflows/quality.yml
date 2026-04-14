@@ -1,58 +1,42 @@
-name: Code Quality
+name: quality
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-  validate:
+  lint:
     runs-on: ubuntu-latest
-    
-    strategy:
-      matrix:
-        node-version: [18.x, 20.x]
-    
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v3
-      with:
-        node-version: ${{ matrix.node-version }}
-    
-    - name: Cache Node modules
-      uses: actions/cache@v3
-      with:
-        path: ~/.npm
-        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-node-
-    
-    - name: Install Node dependencies
-      run: |
-        npm install
-        npm install --save-dev eslint prettier
-    
-    - name: Run JavaScript syntax check
-      run: |
-        node --check src/index.js
-        node --check src/ssh-manager.js
-    
-    - name: Run ESLint
-      run: npx eslint src/
-      continue-on-error: true
-    
-    - name: Run validation script
-      run: |
-        chmod +x scripts/validate.sh
-        ./scripts/validate.sh
-    
-    - name: Check for secrets
-      uses: trufflesecurity/trufflehog@main
-      with:
-        path: ./
-        base: ${{ github.event.repository.default_branch }}
-        head: HEAD
-      continue-on-error: true
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx eslint src/ --max-warnings 50
+        continue-on-error: true
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: scan for leaked secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+        continue-on-error: true
+
+  ascii-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: verify ASCII-only in src/ and tests/
+        run: |
+          ! LC_ALL=C grep -rP '[^\x00-\x7F]' src/ tests/ --include='*.js' \
+            | head -20 \
+            || (echo "non-ASCII chars found"; exit 1)

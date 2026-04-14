@@ -1,36 +1,31 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working on this repository.
 
 ## Project Overview
 
-MCP SSH Manager is a Model Context Protocol server that enables Claude Code to manage multiple SSH connections. It provides tools for executing commands, transferring files, and managing deployments across remote servers.
+**claude-code-ssh** is an MCP server that gives Claude Code direct SSH access to a configured fleet of servers. The goal: Claude stops being a read-only assistant and becomes a hands-on operator — reading logs, editing configs, running backups, deploying, debugging — without a human typing commands between them.
+
+51 tools, 6 groups, opt-in per user. Connection pooling, streaming exec, head+tail output truncation, ASCII-only rendering.
 
 ## Architecture
 
-The system consists of three main components:
-
-1. **MCP Server** (`src/index.js`): Node.js-based MCP server using the Model Context Protocol SDK
-   - Handles SSH connections via node-ssh library
-   - Manages connection pooling to avoid reconnecting
-   - Provides MCP tools for Claude Code integration
-
-2. **Server Management** (`tools/server_manager.py`): Python CLI for configuration
-   - Manages `.env` file with server configurations
-   - Tests connections using Paramiko
-   - Configures Claude Code integration
-
-3. **Deployment Helpers** (`src/deploy-helper.js`, `src/server-aliases.js`): Advanced features
-   - Automated deployment strategies with permission handling
-   - Server alias management for simplified access
-   - Batch deployment scripts generation
+- **`src/index.js`** — MCP server entry, registers all 51 tools via `registerToolConditional()`
+- **`src/tools/*.js`** — 17 modular handler files, one per logical tool area (exec, files, backup, db, etc.)
+- **`src/tool-registry.js`** — tool metadata + group membership (core, sessions, monitoring, backup, database, advanced)
+- **`src/tool-config-manager.js`** — per-user enablement via `~/.ssh-manager/tools-config.json`
+- **`src/stream-exec.js`** — streaming SSH exec with backpressure and UTF-8 boundary-safe chunking
+- **`src/output-formatter.js`** — ASCII markdown tables with head+tail truncation
+- **`src/logger.js`** — `[info]/[warn]/[err]/[dbg]` tagged stderr + file log
+- **`src/profile-loader.js`** — project-type profiles (default, devops, database, security, deployment)
+- **`cli/ssh-manager`** — bash CLI for server/tool/codex management
 
 ## Commands
 
-### Setup and Installation
+### Setup
 ```bash
-npm install                                    # Install Node.js dependencies
-./scripts/setup-hooks.sh                      # Setup pre-commit hooks for development
+npm install
+./scripts/setup-hooks.sh         # optional: pre-commit hooks
 ```
 
 ### Server Management (Bash CLI)
@@ -69,19 +64,17 @@ See [docs/TOOL_MANAGEMENT.md](docs/TOOL_MANAGEMENT.md) for complete guide.
 
 ### Development and Testing
 ```bash
-npm start                                     # Start MCP server (requires stdin)
-./scripts/validate.sh                        # Run all validation checks
-node --check src/index.js                   # Check JavaScript syntax
-python -m py_compile tools/*.py             # Check Python syntax
+npm start                    # Start MCP server (requires stdin)
+npm test                     # Run 551 tests across 26 suites
+./scripts/validate.sh        # Syntax + startup check
+node --check src/index.js    # JavaScript syntax only
 ```
 
-### Debug Tools (in `debug/` directory)
+### Debug Tools
 ```bash
-./debug/test-claude-code.sh                 # Test Claude Code integration
-node debug/test-mcp.js                      # Test MCP connection
-node debug/test-ssh-command.js              # Test SSH command execution
-python debug/test_basic.py                  # Basic Python tests
-python debug/test_fastmcp.py                # FastMCP integration test
+./debug/test-claude-code.sh  # Test Claude Code integration
+node debug/test-mcp.js       # Test MCP connection
+node debug/test-ssh-command.js  # Test SSH command execution
 ```
 
 ## MCP Tools Available
