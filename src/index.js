@@ -1560,473 +1560,81 @@ registerToolConditional(
 registerToolConditional(
   'ssh_tunnel_create',
   {
-    description: 'Create SSH tunnel (port forwarding or SOCKS proxy)',
+    description: 'Create SSH tunnel (DNS+TCP reachability preview, typed state)',
     inputSchema: {
       server: z.string().describe('Server name or alias'),
       type: z.enum(['local', 'remote', 'dynamic']).describe('Tunnel type'),
-      localHost: z.string().optional().describe('Local host (default: 127.0.0.1)'),
-      localPort: z.number().describe('Local port'),
-      remoteHost: z.string().optional().describe('Remote host (not needed for dynamic)'),
-      remotePort: z.number().optional().describe('Remote port (not needed for dynamic)')
+      localHost: z.string().optional().describe('Local host (alias for local_host)'),
+      local_host: z.string().optional().describe('Local host'),
+      localPort: z.number().optional().describe('Local port (alias for local_port)'),
+      local_port: z.number().optional().describe('Local port'),
+      remoteHost: z.string().optional().describe('Remote host (alias for remote_host)'),
+      remote_host: z.string().optional().describe('Remote host'),
+      remotePort: z.number().optional().describe('Remote port (alias for remote_port)'),
+      remote_port: z.number().optional().describe('Remote port'),
+      preview: z.boolean().optional().describe('Probe reachability without opening tunnel'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ server, type, localHost, localPort, remoteHost, remotePort }) => {
-    try {
-      const servers = loadServerConfig();
-      const resolvedName = resolveServerName(server, servers);
-
-      if (!resolvedName) {
-        throw new Error(`Server "${server}" not found`);
-      }
-
-      const serverConfig = servers[resolvedName];
-      const ssh = new SSHManager(serverConfig);
-      await ssh.connect();
-
-      const config = {
-        type,
-        localHost: localHost || '127.0.0.1',
-        localPort,
-        remoteHost,
-        remotePort
-      };
-
-      const tunnel = await createTunnel(resolvedName, ssh, config);
-
-      let output = '✅ SSH tunnel created\n';
-      output += `ID: ${tunnel.id}\n`;
-      output += `Type: ${type}\n`;
-      output += `Local: ${config.localHost}:${localPort}\n`;
-
-      if (type === 'local') {
-        output += `Remote: ${remoteHost}:${remotePort}\n`;
-        output += `\n📌 Access remote ${remoteHost}:${remotePort} via local ${config.localHost}:${localPort}`;
-      } else if (type === 'remote') {
-        output += `Remote: ${remoteHost}:${remotePort}\n`;
-        output += `\n📌 Remote ${remoteHost}:${remotePort} will forward to local ${config.localHost}:${localPort}`;
-      } else if (type === 'dynamic') {
-        output += `SOCKS proxy: ${config.localHost}:${localPort}\n`;
-        output += `\n📌 SOCKS5 proxy available at ${config.localHost}:${localPort}`;
-        output += `\n💡 Configure browser/app: SOCKS5 proxy ${config.localHost}:${localPort}`;
-      }
-
-      logger.info('SSH tunnel created', {
-        id: tunnel.id,
-        server: resolvedName,
-        type,
-        local: `${config.localHost}:${localPort}`
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: output
-          }
-        ]
-      };
-    } catch (error) {
-      logger.error('Failed to create tunnel', { error: error.message });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Tunnel creation failed: ${error.message}`
-          }
-        ]
-      };
+  async (args) => handleSshTunnelCreate({
+    getConnection,
+    args: {
+      ...args,
+      local_host: args.local_host ?? args.localHost,
+      local_port: args.local_port ?? args.localPort,
+      remote_host: args.remote_host ?? args.remoteHost,
+      remote_port: args.remote_port ?? args.remotePort,
     }
-  }
+  })
 );
 
-// List active tunnels
 registerToolConditional(
   'ssh_tunnel_list',
   {
-    description: 'List active SSH tunnels',
+    description: 'List active SSH tunnels (typed state)',
     inputSchema: {
-      server: z.string().optional().describe('Filter by server name')
+      server: z.string().optional().describe('Filter by server name'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ server }) => {
-    try {
-      const servers = loadServerConfig();
-      let resolvedName = null;
-
-      if (server) {
-        resolvedName = resolveServerName(server, servers);
-        if (!resolvedName) {
-          throw new Error(`Server "${server}" not found`);
-        }
-      }
-
-      const tunnels = listTunnels(resolvedName);
-
-      if (tunnels.length === 0) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: '📋 No active tunnels'
-            }
-          ]
-        };
-      }
-
-      let output = '📋 Active SSH Tunnels\n';
-      output += '━'.repeat(60) + '\n\n';
-
-      tunnels.forEach(tunnel => {
-        output += `🔧 ${tunnel.id}\n`;
-        output += `   Server: ${tunnel.server}\n`;
-        output += `   Type: ${tunnel.type}\n`;
-        output += `   State: ${tunnel.state}\n`;
-        output += `   Local: ${tunnel.config.localHost}:${tunnel.config.localPort}\n`;
-
-        if (tunnel.type !== 'dynamic') {
-          output += `   Remote: ${tunnel.config.remoteHost}:${tunnel.config.remotePort}\n`;
-        }
-
-        output += `   Active connections: ${tunnel.activeConnections}\n`;
-        output += `   Total connections: ${tunnel.stats.connectionsTotal}\n`;
-        output += `   Bytes transferred: ${(tunnel.stats.bytesTransferred / 1024).toFixed(2)} KB\n`;
-        output += `   Errors: ${tunnel.stats.errors}\n`;
-        output += `   Created: ${new Date(tunnel.created).toLocaleString()}\n`;
-        output += `   Last activity: ${new Date(tunnel.lastActivity).toLocaleString()}\n`;
-        output += '\n';
-      });
-
-      output += '━'.repeat(60) + '\n';
-      output += `Total tunnels: ${tunnels.length}`;
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: output
-          }
-        ]
-      };
-    } catch (error) {
-      logger.error('Failed to list tunnels', { error: error.message });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Failed to list tunnels: ${error.message}`
-          }
-        ]
-      };
-    }
-  }
+  async (args) => handleSshTunnelList({ args })
 );
 
-// Close a tunnel
 registerToolConditional(
   'ssh_tunnel_close',
   {
-    description: 'Close an SSH tunnel',
+    description: 'Close an SSH tunnel (idempotent)',
     inputSchema: {
-      tunnelId: z.string().optional().describe('Tunnel ID to close'),
-      server: z.string().optional().describe('Close all tunnels for this server')
+      tunnelId: z.string().optional().describe('Tunnel ID (alias for tunnel_id)'),
+      tunnel_id: z.string().optional().describe('Tunnel ID'),
+      server: z.string().optional().describe('Close all tunnels for this server'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ tunnelId, server }) => {
-    try {
-      if (!tunnelId && !server) {
-        throw new Error('Either tunnelId or server must be specified');
-      }
-
-      let output = '';
-
-      if (tunnelId) {
-        // Close specific tunnel
-        closeTunnel(tunnelId);
-        output = `✅ Tunnel ${tunnelId} closed`;
-
-        logger.info('SSH tunnel closed', { id: tunnelId });
-      } else if (server) {
-        // Close all tunnels for server
-        const servers = loadServerConfig();
-        const resolvedName = resolveServerName(server, servers);
-
-        if (!resolvedName) {
-          throw new Error(`Server "${server}" not found`);
-        }
-
-        const count = closeServerTunnels(resolvedName);
-        output = `✅ Closed ${count} tunnel(s) for server ${resolvedName}`;
-
-        logger.info('Server tunnels closed', {
-          server: resolvedName,
-          count
-        });
-      }
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: output
-          }
-        ]
-      };
-    } catch (error) {
-      logger.error('Failed to close tunnel', { error: error.message });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Failed to close tunnel: ${error.message}`
-          }
-        ]
-      };
-    }
-  }
+  async (args) => handleSshTunnelClose({
+    args: { ...args, tunnel_id: args.tunnel_id || args.tunnelId }
+  })
 );
 
-// Manage SSH host keys
+// Manage SSH host keys — real SHA256 fingerprint comparison, no regex guessing
 registerToolConditional(
   'ssh_key_manage',
   {
-    description: 'Manage SSH host keys for security verification',
+    description: 'Manage SSH host keys (real SHA256:base64-nopad fingerprints, no TOFU)',
     inputSchema: {
-      action: z.enum(['verify', 'accept', 'remove', 'list', 'check']).describe('Action to perform'),
-      server: z.string().optional().describe('Server name (required for most actions)'),
-      autoAccept: z.boolean().optional().describe('Automatically accept new keys (use with caution)')
+      action: z.enum(['verify', 'accept', 'remove', 'list', 'check', 'show']).describe('Action to perform'),
+      server: z.string().optional().describe('Server name (or raw host for show/verify)'),
+      host: z.string().optional().describe('Hostname (alternative to server)'),
+      port: z.number().optional().describe('Port (default: 22)'),
+      autoAccept: z.boolean().optional().describe('Automatically accept new keys'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ action, server, autoAccept = false }) => {
-    try {
-      const servers = loadServerConfig();
-      let resolvedName, serverConfig, host, port;
-
-      // Resolve server details for actions that need them
-      if (server && action !== 'list') {
-        resolvedName = resolveServerName(server, servers);
-        if (!resolvedName) {
-          throw new Error(`Server "${server}" not found`);
-        }
-        serverConfig = servers[resolvedName];
-        host = serverConfig.host;
-        port = parseInt(serverConfig.port || '22');
-      }
-
-      switch (action) {
-      case 'verify': {
-        // Check if host key has changed
-        const verification = await hasHostKeyChanged(host, port);
-
-        if (verification.changed) {
-          // Execute pre-connect-key-change hook
-          await executeHook('pre-connect-key-change', {
-            server: resolvedName,
-            host,
-            port,
-            currentFingerprints: verification.currentFingerprints,
-            newFingerprints: verification.newFingerprints
-          });
-
-          let output = `⚠️  SSH host key has changed for ${server} (${host}:${port})\n\n`;
-          output += 'Current fingerprints:\n';
-          verification.currentFingerprints.forEach(fp => {
-            output += `  ${fp}\n`;
-          });
-          output += '\nNew fingerprints:\n';
-          verification.newFingerprints.forEach(fp => {
-            output += `  ${fp}\n`;
-          });
-          output += '\n⚠️  This could indicate a security issue or server reinstallation.\n';
-          output += 'Use \'ssh_key_manage\' with action \'accept\' to update the key if you trust this change.';
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: output
-              }
-            ]
-          };
-        } else {
-          let output = `✅ SSH host key verified for ${server} (${host}:${port})\n`;
-          output += `Reason: ${verification.reason}\n`;
-
-          if (verification.reason === 'not_in_known_hosts') {
-            output += '\nℹ️  Host not in known_hosts. Use \'accept\' action to add it.';
-          }
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: output
-              }
-            ]
-          };
-        }
-      }
-
-      case 'accept': {
-        // Check if key exists
-        const isKnown = isHostKnown(host, port);
-
-        if (isKnown) {
-          // Update existing key
-          await updateHostKey(host, port);
-
-          // Execute post-key-update hook
-          await executeHook('post-key-update', {
-            server: resolvedName,
-            host,
-            port,
-            action: 'updated'
-          });
-
-          logger.info('SSH host key updated', { server: resolvedName, host, port });
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `✅ SSH host key updated for ${server} (${host}:${port})\nThe new key has been accepted and saved.`
-              }
-            ]
-          };
-        } else {
-          // Add new key
-          await addHostKey(host, port);
-
-          // Execute post-key-update hook
-          await executeHook('post-key-update', {
-            server: resolvedName,
-            host,
-            port,
-            action: 'added'
-          });
-
-          logger.info('SSH host key added', { server: resolvedName, host, port });
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `✅ SSH host key added for ${server} (${host}:${port})\nThe key has been saved to known_hosts.`
-              }
-            ]
-          };
-        }
-      }
-
-      case 'remove': {
-        removeHostKey(host, port);
-
-        logger.info('SSH host key removed', { server: resolvedName, host, port });
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `✅ SSH host key removed for ${server} (${host}:${port})`
-            }
-          ]
-        };
-      }
-
-      case 'check': {
-        // Get current fingerprints
-        const currentKeys = getCurrentHostKey(host, port);
-        const newKeys = await getHostKeyFingerprint(host, port);
-
-        let output = `🔑 SSH Host Keys for ${server} (${host}:${port})\n`;
-        output += '━'.repeat(60) + '\n\n';
-
-        if (currentKeys && currentKeys.length > 0) {
-          output += '📋 Keys in known_hosts:\n';
-          currentKeys.forEach(key => {
-            output += `  ${key.type}: ${key.fingerprint}\n`;
-          });
-        } else {
-          output += '⚠️  No keys found in known_hosts\n';
-        }
-
-        output += '\n🌐 Keys from server:\n';
-        if (newKeys && newKeys.length > 0) {
-          newKeys.forEach(key => {
-            output += `  ${key.type}: ${key.fingerprint}\n`;
-          });
-        } else {
-          output += '  ❌ Could not fetch keys from server\n';
-        }
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: output
-            }
-          ]
-        };
-      }
-
-      case 'list': {
-        const knownHosts = listKnownHosts();
-
-        let output = '🔑 Known SSH Hosts\n';
-        output += '━'.repeat(60) + '\n\n';
-
-        if (knownHosts.length === 0) {
-          output += 'No hosts in known_hosts file\n';
-        } else {
-          // Map server names to known hosts
-          const serverMap = new Map();
-          for (const [name, config] of Object.entries(servers)) {
-            const key = `${config.host}:${config.port || 22}`;
-            serverMap.set(key, name);
-          }
-
-          knownHosts.forEach(entry => {
-            const serverName = serverMap.get(`${entry.host}:${entry.port}`);
-            output += `📍 ${entry.host}:${entry.port}`;
-            if (serverName) {
-              output += ` (${serverName})`;
-            }
-            output += '\n';
-
-            entry.keys.forEach(key => {
-              output += `   ${key.type}: ${key.fingerprint}\n`;
-            });
-            output += '\n';
-          });
-        }
-
-        output += '━'.repeat(60) + '\n';
-        output += `Total: ${knownHosts.length} hosts`;
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: output
-            }
-          ]
-        };
-      }
-
-      default:
-        throw new Error(`Unknown action: ${action}`);
-      }
-    } catch (error) {
-      logger.error('SSH key management failed', { action, server, error: error.message });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ SSH key management error: ${error.message}`
-          }
-        ]
-      };
-    }
+  async (args) => {
+    const cfg = args.server ? getServerConfigByName(args.server) : null;
+    const host = args.host || (cfg && cfg.host);
+    const port = args.port || (cfg && parseInt(cfg.port || '22'));
+    return handleSshKeyManage({ args: { ...args, host, port } });
   }
 );
 
