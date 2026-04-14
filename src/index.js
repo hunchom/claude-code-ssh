@@ -651,275 +651,32 @@ registerToolConditional(
 registerToolConditional(
   'ssh_tail',
   {
-    description: 'Tail remote log files in real-time',
+    description: 'Tail remote log files (sessionized follow mode, grep filter, format-aware)',
     inputSchema: {
       server: z.string().describe('Server name from configuration'),
       file: z.string().describe('Path to the log file to tail'),
-      lines: z.number().optional().describe('Number of lines to show initially (default: 10)'),
-      follow: z.boolean().optional().describe('Follow file for new content (default: true)'),
-      grep: z.string().optional().describe('Filter lines with grep pattern')
+      lines: z.number().optional().describe('Number of lines to show initially (default: 100)'),
+      follow: z.boolean().optional().describe('Follow file for new content (default: false)'),
+      grep: z.string().optional().describe('Filter lines with grep pattern'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ server: serverName, file, lines = 10, follow = true, grep }) => {
-    try {
-      const ssh = await getConnection(serverName);
-
-      // Build tail command
-      let command = `tail -n ${lines}`;
-      if (follow) {
-        command += ' -f';
-      }
-      command += ` "${file}"`;
-
-      // Add grep filter if specified
-      if (grep) {
-        command += ` | grep "${grep}"`;
-      }
-
-      logger.info(`Starting tail on ${serverName}`, {
-        file,
-        lines,
-        follow,
-        grep
-      });
-
-      // For follow mode, we need to handle streaming
-      if (follow) {
-        // Create a unique session ID for this tail
-        const sessionId = `tail_${Date.now()}`;
-
-        // Store the SSH stream for later cleanup
-        const stream = await ssh.execCommandStream(command, {
-          onStdout: (chunk) => {
-            // In a real implementation, this would stream to the client
-            console.error(`[${serverName}:${file}] ${chunk}`);
-          },
-          onStderr: (chunk) => {
-            console.error(`[ERROR] ${chunk}`);
-          }
-        });
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `📜 Tailing ${file} on ${serverName}\nSession ID: ${sessionId}\nShowing last ${lines} lines${grep ? ` (filtered: ${grep})` : ''}\n\n⚠️ Note: In follow mode, output is streamed to stderr.\nTo stop tailing, you'll need to kill the session.`
-            }
-          ]
-        };
-      } else {
-        // Non-follow mode - just get the output
-        const tailServers = loadServerConfig();
-        const tailServerConfig = tailServers[serverName.toLowerCase()];
-        const result = await execCommandWithTimeout(ssh, command, { platform: tailServerConfig?.platform }, 15000);
-
-        if (result.code !== 0) {
-          throw new Error(result.stderr || 'Failed to tail file');
-        }
-
-        logger.info(`Tail completed on ${serverName}`, {
-          file,
-          lines: result.stdout.split('\n').length
-        });
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `📜 Last ${lines} lines of ${file} on ${serverName}${grep ? ` (filtered: ${grep})` : ''}:\n\n${result.stdout}`
-            }
-          ]
-        };
-      }
-    } catch (error) {
-      logger.error(`Tail failed on ${serverName}`, {
-        file,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Tail error: ${error.message}`
-          }
-        ]
-      };
-    }
-  }
+  async (args) => handleSshTail({ getConnection, args })
 );
 
 registerToolConditional(
   'ssh_monitor',
   {
-    description: 'Monitor system resources (CPU, RAM, disk) on remote server',
+    description: 'Monitor system resources (CPU, RAM, disk, network) — typed output',
     inputSchema: {
       server: z.string().describe('Server name from configuration'),
-      type: z.enum(['overview', 'cpu', 'memory', 'disk', 'network', 'process']).optional().describe('Type of monitoring (default: overview)'),
-      interval: z.number().optional().describe('Update interval in seconds for continuous monitoring'),
-      duration: z.number().optional().describe('Duration in seconds for continuous monitoring')
+      type: z.enum(['overview', 'cpu', 'memory', 'disk', 'network', 'process']).optional().describe('Monitor type'),
+      interval: z.number().optional().describe('Update interval in seconds'),
+      duration: z.number().optional().describe('Duration in seconds'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ server: serverName, type = 'overview', interval, duration }) => {
-    try {
-      const ssh = await getConnection(serverName);
-
-      logger.info(`Starting system monitoring on ${serverName}`, {
-        type,
-        interval,
-        duration
-      });
-
-      let commands = {};
-      let output = {};
-
-      // Define monitoring commands based on type
-      switch (type) {
-      case 'cpu':
-        commands.cpu = 'top -bn1 | head -20';
-        commands.load = 'uptime';
-        commands.cores = 'nproc';
-        break;
-
-      case 'memory':
-        commands.memory = 'free -h';
-        commands.swap = 'swapon --show';
-        commands.top_mem = 'ps aux --sort=-%mem | head -10';
-        break;
-
-      case 'disk':
-        commands.disk = 'df -h';
-        commands.inodes = 'df -i';
-        commands.io = 'iostat -x 1 2 | tail -n +4';
-        break;
-
-      case 'network':
-        commands.interfaces = 'ip -s link show';
-        commands.connections = 'ss -tunap | head -20';
-        commands.netstat = 'netstat -i';
-        break;
-
-      case 'process':
-        commands.process = 'ps aux --sort=-%cpu | head -20';
-        commands.count = 'ps aux | wc -l';
-        commands.zombies = 'ps aux | grep -c defunct || echo 0';
-        break;
-
-      case 'overview':
-      default:
-        commands.uptime = 'uptime';
-        commands.cpu = 'mpstat 1 1 2>/dev/null || top -bn1 | grep \'Cpu\'';
-        commands.memory = 'free -h';
-        commands.disk = 'df -h | grep -E \'^/dev/\' | head -5';
-        commands.load = 'cat /proc/loadavg';
-        commands.processes = 'ps aux | wc -l';
-        break;
-      }
-
-      // Execute all monitoring commands
-      const startTime = Date.now();
-      const monServers = loadServerConfig();
-      const monServerConfig = monServers[serverName.toLowerCase()];
-
-      for (const [key, cmd] of Object.entries(commands)) {
-        try {
-          const result = await execCommandWithTimeout(ssh, cmd, { platform: monServerConfig?.platform }, 10000);
-          if (result.code === 0) {
-            output[key] = result.stdout.trim();
-          } else {
-            output[key] = `Error: ${result.stderr || 'Command failed'}`;
-          }
-        } catch (err) {
-          output[key] = `Error: ${err.message}`;
-        }
-      }
-
-      const monitoringDuration = Date.now() - startTime;
-
-      // Format the output based on type
-      let formattedOutput = `📊 System Monitor - ${serverName}\n`;
-      formattedOutput += `Type: ${type} | Time: ${new Date().toISOString()}\n`;
-      formattedOutput += `Collection time: ${monitoringDuration}ms\n`;
-      formattedOutput += '━'.repeat(50) + '\n\n';
-
-      switch (type) {
-      case 'overview':
-        formattedOutput += `⏱️ UPTIME\n${output.uptime || 'N/A'}\n\n`;
-        formattedOutput += `💻 CPU\n${output.cpu || 'N/A'}\n\n`;
-        formattedOutput += `📈 LOAD AVERAGE\n${output.load || 'N/A'}\n\n`;
-        formattedOutput += `💾 MEMORY\n${output.memory || 'N/A'}\n\n`;
-        formattedOutput += `💿 DISK USAGE\n${output.disk || 'N/A'}\n\n`;
-        formattedOutput += `📝 PROCESSES: ${output.processes || 'N/A'}\n`;
-        break;
-
-      case 'cpu':
-        formattedOutput += `🖥️ CPU CORES: ${output.cores || 'N/A'}\n\n`;
-        formattedOutput += `📊 LOAD\n${output.load || 'N/A'}\n\n`;
-        formattedOutput += `📈 TOP PROCESSES\n${output.cpu || 'N/A'}\n`;
-        break;
-
-      case 'memory':
-        formattedOutput += `💾 MEMORY USAGE\n${output.memory || 'N/A'}\n\n`;
-        formattedOutput += `🔄 SWAP\n${output.swap || 'No swap configured'}\n\n`;
-        formattedOutput += `📊 TOP MEMORY CONSUMERS\n${output.top_mem || 'N/A'}\n`;
-        break;
-
-      case 'disk':
-        formattedOutput += `💿 DISK SPACE\n${output.disk || 'N/A'}\n\n`;
-        formattedOutput += `📁 INODE USAGE\n${output.inodes || 'N/A'}\n\n`;
-        formattedOutput += `⚡ I/O STATS\n${output.io || 'N/A'}\n`;
-        break;
-
-      case 'network':
-        formattedOutput += `🌐 NETWORK INTERFACES\n${output.interfaces || 'N/A'}\n\n`;
-        formattedOutput += `🔌 CONNECTIONS\n${output.connections || 'N/A'}\n\n`;
-        formattedOutput += `📊 INTERFACE STATS\n${output.netstat || 'N/A'}\n`;
-        break;
-
-      case 'process':
-        formattedOutput += `📝 PROCESS COUNT: ${output.count || 'N/A'}\n`;
-        formattedOutput += `⚠️ ZOMBIE PROCESSES: ${output.zombies || '0'}\n\n`;
-        formattedOutput += `📊 TOP PROCESSES BY CPU\n${output.process || 'N/A'}\n`;
-        break;
-      }
-
-      // Log monitoring results
-      logger.info(`System monitoring completed on ${serverName}`, {
-        type,
-        duration: `${monitoringDuration}ms`,
-        metrics: Object.keys(output).length
-      });
-
-      // If continuous monitoring requested
-      if (interval && duration) {
-        formattedOutput += `\n\n⏰ Continuous monitoring: Every ${interval}s for ${duration}s\n`;
-        formattedOutput += '(Not implemented in this version - would require streaming support)';
-      }
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: formattedOutput
-          }
-        ]
-      };
-    } catch (error) {
-      logger.error(`Monitoring failed on ${serverName}`, {
-        type,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Monitor error: ${error.message}`
-          }
-        ]
-      };
-    }
-  }
+  async (args) => handleSshMonitor({ getConnection, args })
 );
 
 registerToolConditional(
@@ -1029,261 +786,58 @@ registerToolConditional(
 registerToolConditional(
   'ssh_session_start',
   {
-    description: 'Start a persistent SSH session that maintains state and context',
+    description: 'Start a persistent SSH session (marker-prompt protocol, typed state)',
     inputSchema: {
       server: z.string().describe('Server name from configuration'),
-      name: z.string().optional().describe('Optional session name for identification')
+      name: z.string().optional().describe('Optional session name'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ server: serverName, name }) => {
-    try {
-      const ssh = await getConnection(serverName);
-      const session = await createSession(serverName, ssh);
-
-      const sessionName = name || `Session on ${serverName}`;
-
-      logger.info('SSH session started', {
-        id: session.id,
-        server: serverName,
-        name: sessionName
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `🚀 SSH Session Started\n\nSession ID: ${session.id}\nServer: ${serverName}\nName: ${sessionName}\nState: ${session.state}\nWorking Directory: ${session.context.cwd}\n\nUse ssh_session_send to execute commands in this session.\nUse ssh_session_close to terminate the session.`
-          }
-        ]
-      };
-    } catch (error) {
-      logger.error('Failed to start SSH session', {
-        server: serverName,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Failed to start session: ${error.message}`
-          }
-        ]
-      };
-    }
-  }
+  async (args) => handleSshSessionStartNew({ getConnection, args })
 );
 
 registerToolConditional(
   'ssh_session_send',
   {
-    description: 'Send a command to an existing SSH session',
+    description: 'Send a command to an existing SSH session (marker-aware, UTF-8 safe)',
     inputSchema: {
-      session: z.string().describe('Session ID from ssh_session_start'),
-      command: z.string().describe('Command to execute in the session'),
-      timeout: z.number().optional().describe('Command timeout in milliseconds (default: 30000)')
+      session: z.string().optional().describe('Session ID (alias for session_id)'),
+      session_id: z.string().optional().describe('Session ID'),
+      command: z.string().describe('Command to execute'),
+      timeout: z.number().optional().describe('Command timeout in ms'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ session: sessionId, command, timeout = 30000 }) => {
-    try {
-      const session = getSession(sessionId);
-
-      const startTime = Date.now();
-      const result = await session.execute(command, { timeout });
-      const duration = Date.now() - startTime;
-
-      logger.info('Session command executed', {
-        session: sessionId,
-        command: command.substring(0, 50),
-        success: result.success,
-        duration: `${duration}ms`
-      });
-
-      let output = `📟 Session: ${sessionId}\n`;
-      output += `Server: ${session.serverName}\n`;
-      output += `Working Directory: ${session.context.cwd}\n`;
-      output += `Command: ${command}\n`;
-      output += `Duration: ${duration}ms\n`;
-      output += '━'.repeat(60) + '\n\n';
-
-      if (result.success) {
-        output += '✅ Output:\n' + result.output;
-      } else {
-        output += '❌ Error:\n' + (result.error || result.output);
-      }
-
-      // Add session state info
-      output += '\n\n' + '━'.repeat(60) + '\n';
-      output += `Session State: ${session.state}\n`;
-      output += `Commands Executed: ${session.context.history.length}\n`;
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: output
-          }
-        ]
-      };
-    } catch (error) {
-      logger.error('Failed to send command to session', {
-        session: sessionId,
-        command,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Session error: ${error.message}`
-          }
-        ]
-      };
-    }
-  }
+  async (args) => handleSshSessionSendNew({
+    args: { ...args, session_id: args.session_id || args.session, timeoutMs: args.timeout }
+  })
 );
 
 registerToolConditional(
   'ssh_session_list',
   {
-    description: 'List all active SSH sessions',
+    description: 'List all active SSH sessions (typed state info)',
     inputSchema: {
-      server: z.string().optional().describe('Filter by server name')
+      server: z.string().optional().describe('Filter by server name'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ server }) => {
-    try {
-      let sessions = listSessions();
-
-      // Filter by server if specified
-      if (server) {
-        sessions = sessions.filter(s =>
-          s.server.toLowerCase().includes(server.toLowerCase())
-        );
-      }
-
-      let output = '📋 Active SSH Sessions\n';
-      output += '━'.repeat(60) + '\n\n';
-
-      if (sessions.length === 0) {
-        output += 'No active sessions';
-        if (server) {
-          output += ` for server "${server}"`;
-        }
-        output += '.\n';
-      } else {
-        sessions.forEach((session, index) => {
-          const age = Math.floor((Date.now() - new Date(session.created).getTime()) / 1000);
-          const idle = Math.floor((Date.now() - new Date(session.lastActivity).getTime()) / 1000);
-
-          output += `${index + 1}. Session: ${session.id}\n`;
-          output += `   Server: ${session.server}\n`;
-          output += `   State: ${session.state}\n`;
-          output += `   Working Dir: ${session.cwd || 'unknown'}\n`;
-          output += `   Commands Run: ${session.historyCount}\n`;
-          output += `   Age: ${formatDuration(age)}\n`;
-          output += `   Idle: ${formatDuration(idle)}\n`;
-
-          if (session.variables.length > 0) {
-            output += `   Variables: ${session.variables.join(', ')}\n`;
-          }
-
-          output += '\n';
-        });
-      }
-
-      output += '━'.repeat(60) + '\n';
-      output += `Total Active Sessions: ${sessions.length}\n`;
-
-      logger.info('Listed SSH sessions', {
-        total: sessions.length,
-        filter: server
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: output
-          }
-        ]
-      };
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Error listing sessions: ${error.message}`
-          }
-        ]
-      };
-    }
-  }
+  async (args) => handleSshSessionListNew({ args })
 );
 
 registerToolConditional(
   'ssh_session_close',
   {
-    description: 'Close an SSH session',
+    description: 'Close an SSH session (idempotent)',
     inputSchema: {
-      session: z.string().describe('Session ID to close (or "all" to close all sessions)')
+      session: z.string().optional().describe('Session ID or "all" (alias for session_id)'),
+      session_id: z.string().optional().describe('Session ID or "all"'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ session: sessionId }) => {
-    try {
-      if (sessionId === 'all') {
-        const sessions = listSessions();
-        const count = sessions.length;
-
-        sessions.forEach(s => {
-          try {
-            closeSession(s.id);
-          } catch (err) {
-            // Ignore individual close errors
-          }
-        });
-
-        logger.info('Closed all SSH sessions', { count });
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `🔚 Closed ${count} SSH sessions`
-            }
-          ]
-        };
-      } else {
-        closeSession(sessionId);
-
-        logger.info('SSH session closed', { session: sessionId });
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `🔚 Session closed: ${sessionId}`
-            }
-          ]
-        };
-      }
-    } catch (error) {
-      logger.error('Failed to close session', {
-        session: sessionId,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Failed to close session: ${error.message}`
-          }
-        ]
-      };
-    }
-  }
+  async (args) => handleSshSessionCloseNew({
+    args: { ...args, session_id: args.session_id || args.session }
+  })
 );
 
 // Helper function to format duration
@@ -1302,105 +856,27 @@ function formatDuration(seconds) {
 registerToolConditional(
   'ssh_execute_group',
   {
-    description: 'Execute command on a group of servers',
+    description: 'Execute command on a group of servers (bounded concurrency, typed per-server results)',
     inputSchema: {
-      group: z.string().describe('Group name (e.g., "production", "staging", "all")'),
+      group: z.string().describe('Group name'),
       command: z.string().describe('Command to execute'),
       strategy: z.enum(['parallel', 'sequential', 'rolling']).optional().describe('Execution strategy'),
-      delay: z.number().optional().describe('Delay between servers in ms (for rolling)'),
-      stopOnError: z.boolean().optional().describe('Stop execution on first error'),
-      cwd: z.string().optional().describe('Working directory')
+      concurrency: z.number().optional().describe('Max parallel connections'),
+      delay: z.number().optional().describe('Delay between servers in ms'),
+      stopOnError: z.boolean().optional().describe('Stop on first error'),
+      cwd: z.string().optional().describe('Working directory'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ group: groupName, command, strategy, delay, stopOnError, cwd }) => {
-    try {
-      // Execute command on each server in the group
-      const result = await executeOnGroup(
-        groupName,
-        async (serverName) => {
-          const ssh = await getConnection(serverName);
-
-          // Build full command with cwd if provided
-          const servers = loadServerConfig();
-          const serverConfig = servers[serverName.toLowerCase()];
-          const workingDir = cwd || serverConfig?.default_dir;
-          const fullCommand = workingDir ? `cd ${workingDir} && ${command}` : command;
-
-          const execResult = await execCommandWithTimeout(ssh, fullCommand, { platform: serverConfig?.platform }, 30000);
-
-          return {
-            stdout: execResult.stdout,
-            stderr: execResult.stderr,
-            code: execResult.code,
-            success: execResult.code === 0
-          };
-        },
-        { strategy, delay, stopOnError }
-      );
-
-      // Format output
-      let output = `🚀 Group Execution: ${groupName}\n`;
-      output += `Command: ${command}\n`;
-      output += `Strategy: ${result.strategy}\n`;
-      output += '━'.repeat(60) + '\n\n';
-
-      // Show results for each server
-      result.results.forEach(({ server, success, result: execResult, error }) => {
-        output += `📍 ${server}: ${success ? '✅ SUCCESS' : '❌ FAILED'}\n`;
-
-        if (success && execResult) {
-          if (execResult.stdout) {
-            output += `   Output: ${execResult.stdout.substring(0, 200)}`;
-            if (execResult.stdout.length > 200) output += '...';
-            output += '\n';
-          }
-          if (execResult.stderr) {
-            output += `   Stderr: ${execResult.stderr.substring(0, 100)}\n`;
-          }
-        } else if (error) {
-          output += `   Error: ${error}\n`;
-        }
-        output += '\n';
-      });
-
-      // Summary
-      output += '━'.repeat(60) + '\n';
-      output += `Summary: ${result.summary.successful}/${result.summary.total} successful`;
-      if (result.summary.failed > 0) {
-        output += ` (${result.summary.failed} failed)`;
-      }
-      output += '\n';
-
-      logger.info('Group command executed', {
-        group: groupName,
-        command: command.substring(0, 50),
-        ...result.summary
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: output
-          }
-        ]
-      };
-    } catch (error) {
-      logger.error('Group execution failed', {
-        group: groupName,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Group execution error: ${error.message}`
-          }
-        ]
-      };
-    }
-  }
+  async (args) => handleSshExecuteGroup({
+    getConnection,
+    resolveGroup: (groupName) => {
+      const g = getGroup(groupName);
+      if (!g) return null;
+      return { name: g.name, servers: g.servers };
+    },
+    args: { ...args, stop_on_error: args.stop_on_error ?? args.stopOnError },
+  })
 );
 
 registerToolConditional(
@@ -1669,73 +1145,25 @@ registerToolConditional(
   }
 );
 
-// Execute command with sudo support
+// Execute command with sudo support (password via stdin, never argv)
 registerToolConditional(
   'ssh_execute_sudo',
   {
-    description: 'Execute command with sudo on remote server',
+    description: 'Execute command with sudo (password via stdin, never argv-leaked)',
     inputSchema: {
       server: z.string().describe('Server name or alias'),
       command: z.string().describe('Command to execute with sudo'),
-      password: z.string().optional().describe('Sudo password (will be masked in output)'),
+      password: z.string().optional().describe('Sudo password (streamed via stdin)'),
       cwd: z.string().optional().describe('Working directory'),
-      timeout: z.number().optional().describe('Command timeout in milliseconds (default: 30000)')
+      timeout: z.number().optional().describe('Command timeout in ms'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ server, command, password, cwd, timeout = 30000 }) => {
-    try {
-      const ssh = await getConnection(server);
-      const servers = loadServerConfig();
-      const resolvedName = resolveServerName(server, servers);
-      const serverConfig = servers[resolvedName];
-
-      // Build the full command
-      let fullCommand = command;
-
-      // Add sudo if not already present
-      if (!fullCommand.startsWith('sudo ')) {
-        fullCommand = `sudo ${fullCommand}`;
-      }
-
-      // Add password if provided
-      if (password) {
-        fullCommand = `echo "${password}" | sudo -S ${command.replace(/^sudo /, '')}`;
-      } else if (serverConfig?.sudo_password) {
-        // Use configured sudo password if available
-        fullCommand = `echo "${serverConfig.sudo_password}" | sudo -S ${command.replace(/^sudo /, '')}`;
-      }
-
-      // Add working directory if specified
-      if (cwd) {
-        fullCommand = `cd ${cwd} && ${fullCommand}`;
-      } else if (serverConfig?.default_dir) {
-        fullCommand = `cd ${serverConfig.default_dir} && ${fullCommand}`;
-      }
-
-      const result = await execCommandWithTimeout(ssh, fullCommand, { platform: serverConfig?.platform }, timeout);
-
-      // Mask password in output for security
-      const maskedCommand = fullCommand.replace(/echo "[^"]+" \| sudo -S/, 'sudo');
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `🔐 Sudo command executed\nServer: ${server}\nCommand: ${maskedCommand}\nExit code: ${result.code}\n\nOutput:\n${result.stdout || result.stderr}`,
-          },
-        ],
-      };
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Sudo execution failed: ${error.message}`,
-          },
-        ],
-      };
-    }
-  }
+  async (args) => handleSshExecuteSudo({
+    getConnection,
+    getServerConfig: getServerConfigByName,
+    args: { ...args, timeoutMs: args.timeout }
+  })
 );
 
 // Manage command aliases
