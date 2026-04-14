@@ -2248,6 +2248,255 @@ registerToolConditional(
   })
 );
 
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW "gamechanger" tools — modular handlers not present in v1
+// ═══════════════════════════════════════════════════════════════════════════
+
+registerToolConditional(
+  'ssh_cat',
+  {
+    description: 'Read remote file slices (line-range, head/tail, grep, offset+limit) — UTF-8 safe',
+    inputSchema: {
+      server: z.string().describe('Server name'),
+      path: z.string().describe('Remote file path'),
+      mode: z.enum(['full', 'head', 'tail', 'range', 'offset', 'grep']).optional().describe('Slice mode'),
+      lines: z.number().optional().describe('Number of lines (head/tail)'),
+      start: z.number().optional().describe('Start line (range mode)'),
+      end: z.number().optional().describe('End line (range mode)'),
+      offset: z.number().optional().describe('Byte offset'),
+      limit: z.number().optional().describe('Byte limit'),
+      pattern: z.string().optional().describe('grep pattern'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
+    }
+  },
+  async (args) => handleSshCat({ getConnection, args })
+);
+
+registerToolConditional(
+  'ssh_systemctl',
+  {
+    description: 'systemctl wrapper (whitelisted actions, unit-name validated)',
+    inputSchema: {
+      server: z.string().describe('Server name'),
+      action: z.enum(['status', 'start', 'stop', 'restart', 'reload', 'enable', 'disable', 'is-active', 'is-enabled', 'list-units', 'daemon-reload']).describe('Action'),
+      unit: z.string().optional().describe('Unit name (e.g., nginx.service)'),
+      preview: z.boolean().optional().describe('Preview for mutating actions'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
+    }
+  },
+  async (args) => handleSshSystemctl({ getConnection, args })
+);
+
+registerToolConditional(
+  'ssh_journalctl',
+  {
+    description: 'Read systemd journal (typed JSONL, priority normalization)',
+    inputSchema: {
+      server: z.string().describe('Server name'),
+      unit: z.string().optional().describe('Unit to filter by'),
+      since: z.string().optional().describe('Time filter (e.g., "1 hour ago")'),
+      until: z.string().optional().describe('Upper bound'),
+      lines: z.number().optional().describe('Max lines'),
+      priority: z.string().optional().describe('Priority filter'),
+      grep: z.string().optional().describe('Regex filter'),
+      output: z.enum(['json', 'text']).optional().describe('Journal output mode'),
+      format: z.enum(['markdown', 'json']).optional().describe('Tool output format')
+    }
+  },
+  async (args) => handleSshJournalctl({ getConnection, args })
+);
+
+registerToolConditional(
+  'ssh_docker',
+  {
+    description: 'Docker CLI wrapper (container/image regex validation, irreversibility flags)',
+    inputSchema: {
+      server: z.string().describe('Server name'),
+      action: z.enum(['ps', 'images', 'inspect', 'logs', 'start', 'stop', 'restart', 'rm', 'rmi', 'pull', 'exec']).describe('Docker action'),
+      container: z.string().optional().describe('Container name/ID'),
+      image: z.string().optional().describe('Image reference'),
+      command: z.string().optional().describe('exec command'),
+      lines: z.number().optional().describe('logs tail lines'),
+      all: z.boolean().optional().describe('ps -a / images -a'),
+      force: z.boolean().optional().describe('rm -f / rmi -f'),
+      preview: z.boolean().optional().describe('Preview mutating actions'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
+    }
+  },
+  async (args) => handleSshDocker({ getConnection, args })
+);
+
+registerToolConditional(
+  'ssh_port_test',
+  {
+    description: 'Port reachability probe (DNS → TCP → TLS → HTTP chain)',
+    inputSchema: {
+      server: z.string().optional().describe('Server for outbound probe from'),
+      host: z.string().describe('Target host'),
+      port: z.number().describe('Target port'),
+      protocol: z.enum(['tcp', 'tls', 'http', 'https']).optional().describe('Probe depth'),
+      timeout: z.number().optional().describe('Probe timeout (ms)'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
+    }
+  },
+  async (args) => handleSshPortTest({ getConnection, args })
+);
+
+registerToolConditional(
+  'ssh_diff',
+  {
+    description: 'Diff remote file vs local/remote (sha256-first fast path)',
+    inputSchema: {
+      server: z.string().describe('Server name'),
+      remote_path: z.string().describe('Remote file'),
+      local_path: z.string().optional().describe('Local file to diff against'),
+      against: z.string().optional().describe('Another remote path to diff against'),
+      context: z.number().optional().describe('Context lines'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
+    }
+  },
+  async (args) => handleSshDiff({ getConnection, args })
+);
+
+registerToolConditional(
+  'ssh_edit',
+  {
+    description: 'Atomic safe-edit (tmp → syntax-check → backup → mv swap, preview-capable)',
+    inputSchema: {
+      server: z.string().describe('Server name'),
+      path: z.string().describe('Remote file path'),
+      content: z.string().optional().describe('New content'),
+      encoding: z.enum(['utf8', 'base64']).optional().describe('Content encoding'),
+      syntax_check: z.string().optional().describe('Syntax check command (e.g., "nginx -t")'),
+      preview: z.boolean().optional().describe('Show plan without editing'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
+    }
+  },
+  async (args) => handleSshEdit({ getConnection, args })
+);
+
+registerToolConditional(
+  'ssh_tail_start',
+  {
+    description: 'Start a sessionized tail follow (ring-buffered, readable later)',
+    inputSchema: {
+      server: z.string().describe('Server name'),
+      file: z.string().describe('Path to log file'),
+      lines: z.number().optional().describe('Initial tail lines'),
+      grep: z.string().optional().describe('Grep filter'),
+      buffer_size: z.number().optional().describe('Ring buffer size'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
+    }
+  },
+  async (args) => handleSshTailStart({ getConnection, args })
+);
+
+registerToolConditional(
+  'ssh_tail_read',
+  {
+    description: 'Read buffered output from a tail session',
+    inputSchema: {
+      session_id: z.string().describe('Tail session ID'),
+      max_lines: z.number().optional().describe('Max lines to return'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
+    }
+  },
+  async (args) => handleSshTailRead({ args })
+);
+
+registerToolConditional(
+  'ssh_tail_stop',
+  {
+    description: 'Stop a tail session (idempotent)',
+    inputSchema: {
+      session_id: z.string().describe('Tail session ID'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
+    }
+  },
+  async (args) => handleSshTailStop({ args })
+);
+
+registerToolConditional(
+  'ssh_session_replay',
+  {
+    description: 'Replay command history from a session',
+    inputSchema: {
+      session_id: z.string().describe('Session ID'),
+      limit: z.number().optional().describe('Max commands to replay'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
+    }
+  },
+  async (args) => handleSshSessionReplay({ args })
+);
+
+registerToolConditional(
+  'ssh_session_memory',
+  {
+    description: 'Read/write session-scoped memory KV store',
+    inputSchema: {
+      session_id: z.string().describe('Session ID'),
+      action: z.enum(['get', 'set', 'delete', 'list']).describe('Action'),
+      key: z.string().optional().describe('Memory key'),
+      value: z.string().optional().describe('Value to set'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
+    }
+  },
+  async (args) => handleSshSessionMemory({ args })
+);
+
+registerToolConditional(
+  'ssh_deploy_artifact',
+  {
+    description: 'Declarative artifact deploy (snapshot → upload → post_hooks → health_check → rollback)',
+    inputSchema: {
+      server: z.string().describe('Server name'),
+      artifact_local_path: z.string().describe('Local artifact to deploy'),
+      target_path: z.string().describe('Remote target path'),
+      post_hooks: z.array(z.string()).optional().describe('Post-deploy commands'),
+      health_check: z.string().optional().describe('Health check command'),
+      rollback_on_fail: z.boolean().optional().describe('Auto-rollback on failure (default: true)'),
+      preview: z.boolean().optional().describe('Show plan without deploying'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
+    }
+  },
+  async (args) => handleSshDeploy({ getConnection, args })
+);
+
+registerToolConditional(
+  'ssh_plan',
+  {
+    description: 'Declarative multi-step plan executor with approve_token gate for high-risk steps',
+    inputSchema: {
+      steps: z.array(z.any()).describe('Ordered list of tool invocations'),
+      mode: z.enum(['preview', 'dry_run', 'run']).optional().describe('Execution mode'),
+      approve_token: z.string().optional().describe('Token required for high-risk steps'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
+    }
+  },
+  async (args) => {
+    const dispatch = {
+      ssh_execute: (a) => handleSshExecute({ getConnection, args: a }),
+      ssh_execute_sudo: (a) => handleSshExecuteSudo({ getConnection, getServerConfig: getServerConfigByName, args: a }),
+      ssh_upload: (a) => handleSshUpload({ getConnection, args: a }),
+      ssh_download: (a) => handleSshDownload({ getConnection, args: a }),
+      ssh_cat: (a) => handleSshCat({ getConnection, args: a }),
+      ssh_edit: (a) => handleSshEdit({ getConnection, args: a }),
+      ssh_docker: (a) => handleSshDocker({ getConnection, args: a }),
+      ssh_systemctl: (a) => handleSshSystemctl({ getConnection, args: a }),
+      ssh_journalctl: (a) => handleSshJournalctl({ getConnection, args: a }),
+      ssh_health_check: (a) => handleSshHealthCheck({ getConnection, args: a }),
+      ssh_service_status: (a) => handleSshServiceStatus({ getConnection, args: a }),
+      ssh_backup_create: (a) => handleSshBackupCreate({ getConnection, args: a }),
+      ssh_backup_restore: (a) => handleSshBackupRestore({ getConnection, args: a }),
+      ssh_deploy_artifact: (a) => handleSshDeploy({ getConnection, args: a }),
+      ssh_db_query: (a) => handleSshDbQuery({ getConnection, args: a }),
+      ssh_port_test: (a) => handleSshPortTest({ getConnection, args: a }),
+      ssh_tunnel_create: (a) => handleSshTunnelCreate({ getConnection, args: a }),
+    };
+    return handleSshPlan({ dispatch, args });
+  }
+);
+
 // Clean up connections on shutdown
 process.on('SIGINT', async () => {
   console.error('\n🔌 Closing SSH connections...');
