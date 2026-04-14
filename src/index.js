@@ -1732,533 +1732,137 @@ registerToolConditional(
 registerToolConditional(
   'ssh_backup_create',
   {
-    description: 'Create backup of database or files on remote server',
+    description: 'Create content-addressed backup with sha256 verification + preview',
     inputSchema: {
       server: z.string().describe('Server name'),
-      type: z.enum(['mysql', 'postgresql', 'mongodb', 'files', 'full'])
-        .describe('Backup type: mysql, postgresql, mongodb, files, or full'),
-      name: z.string().describe('Backup name (e.g., production, app-data)'),
-      database: z.string().optional()
-        .describe('Database name (required for db types)'),
-      dbUser: z.string().optional()
-        .describe('Database user'),
-      dbPassword: z.string().optional()
-        .describe('Database password'),
-      dbHost: z.string().optional()
-        .describe('Database host (default: localhost)'),
-      dbPort: z.number().optional()
-        .describe('Database port'),
-      paths: z.array(z.string()).optional()
-        .describe('Paths to backup (for files type)'),
-      exclude: z.array(z.string()).optional()
-        .describe('Patterns to exclude from backup'),
-      backupDir: z.string().optional()
-        .describe(`Backup directory (default: ${DEFAULT_BACKUP_DIR})`),
-      retention: z.number().optional()
-        .describe('Retention period in days (default: 7)'),
-      compress: z.boolean().optional()
-        .describe('Compress backup (default: true)')
+      backup_type: z.enum(['mysql', 'postgresql', 'mongodb', 'files']).optional().describe('Backup type'),
+      type: z.enum(['mysql', 'postgresql', 'mongodb', 'files']).optional().describe('Alias for backup_type'),
+      name: z.string().optional().describe('Backup name'),
+      database: z.string().optional().describe('Database name'),
+      user: z.string().optional().describe('DB user'),
+      dbUser: z.string().optional().describe('DB user (alias)'),
+      password: z.string().optional().describe('DB password'),
+      dbPassword: z.string().optional().describe('DB password (alias)'),
+      host: z.string().optional().describe('DB host'),
+      dbHost: z.string().optional().describe('DB host (alias)'),
+      port: z.number().optional().describe('DB port'),
+      dbPort: z.number().optional().describe('DB port (alias)'),
+      paths: z.array(z.string()).optional().describe('Paths to backup'),
+      exclude: z.array(z.string()).optional().describe('Exclude patterns'),
+      backup_dir: z.string().optional().describe('Backup directory'),
+      backupDir: z.string().optional().describe('Backup directory (alias)'),
+      gzip: z.boolean().optional().describe('Gzip the backup'),
+      compress: z.boolean().optional().describe('Alias for gzip'),
+      verify: z.boolean().optional().describe('Compute sha256 after backup'),
+      preview: z.boolean().optional().describe('Show plan without backing up'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ server: serverName, type, name, database, dbUser, dbPassword, dbHost, dbPort, paths, exclude, backupDir, retention = 7, compress = true }) => {
-    try {
-      const ssh = await getConnection(serverName);
-
-      // Execute pre-backup hook
-      await executeHook('pre-backup', {
-        server: serverName,
-        type,
-        database,
-        paths
-      });
-
-      const backupDirectory = backupDir || DEFAULT_BACKUP_DIR;
-      const backupId = generateBackupId(type, name);
-      const backupFile = getBackupFilePath(backupId, backupDirectory);
-      const metadataPath = getBackupMetadataPath(backupId, backupDirectory);
-
-      // Ensure backup directory exists with proper error handling
-      const mkdirResult = await ssh.execCommand(`mkdir -p "${backupDirectory}"`);
-      if (mkdirResult.code !== 0) {
-        throw new Error(`Failed to create backup directory: ${mkdirResult.stderr || mkdirResult.stdout}`);
-      }
-
-      logger.info(`Creating backup: ${backupId}`, {
-        server: serverName,
-        type,
-        name,
-        database
-      });
-
-      // Build backup command based on type
-      let backupCommand;
-
-      switch (type) {
-      case BACKUP_TYPES.MYSQL:
-        if (!database) {
-          throw new Error('database parameter required for MySQL backup');
-        }
-        backupCommand = buildMySQLDumpCommand({
-          database,
-          user: dbUser,
-          password: dbPassword,
-          host: dbHost,
-          port: dbPort,
-          outputFile: backupFile,
-          compress
-        });
-        break;
-
-      case BACKUP_TYPES.POSTGRESQL:
-        if (!database) {
-          throw new Error('database parameter required for PostgreSQL backup');
-        }
-        backupCommand = buildPostgreSQLDumpCommand({
-          database,
-          user: dbUser,
-          password: dbPassword,
-          host: dbHost,
-          port: dbPort,
-          outputFile: backupFile,
-          compress
-        });
-        break;
-
-      case BACKUP_TYPES.MONGODB: {
-        if (!database) {
-          throw new Error('database parameter required for MongoDB backup');
-        }
-        const mongoOutputDir = backupFile.replace('.gz', '');
-        backupCommand = buildMongoDBDumpCommand({
-          database,
-          user: dbUser,
-          password: dbPassword,
-          host: dbHost,
-          port: dbPort,
-          outputDir: mongoOutputDir,
-          compress
-        });
-        break;
-      }
-
-      case BACKUP_TYPES.FILES:
-        if (!paths || paths.length === 0) {
-          throw new Error('paths parameter required for files backup');
-        }
-        backupCommand = buildFilesBackupCommand({
-          paths,
-          outputFile: backupFile,
-          exclude: exclude || [],
-          compress
-        });
-        break;
-
-      case BACKUP_TYPES.FULL:
-        // Full backup combines database and files
-        throw new Error('Full backup not yet implemented. Use separate mysql/postgresql/files backups.');
-
-      default:
-        throw new Error(`Unknown backup type: ${type}`);
-      }
-
-      // Execute backup command
-      const result = await ssh.execCommand(backupCommand);
-
-      if (result.code !== 0) {
-        throw new Error(`Backup failed: ${result.stderr || result.stdout}`);
-      }
-
-      // Get backup file size
-      const sizeResult = await ssh.execCommand(`stat -f%z "${backupFile}" 2>/dev/null || stat -c%s "${backupFile}" 2>/dev/null`);
-      const size = parseInt(sizeResult.stdout.trim()) || 0;
-
-      // Create and save metadata
-      const metadata = createBackupMetadata(backupId, type, {
-        server: serverName,
-        database,
-        paths,
-        compress,
-        retention
-      });
-      metadata.size = size;
-      metadata.status = 'completed';
-
-      const saveMetadataCmd = buildSaveMetadataCommand(metadata, metadataPath);
-      await ssh.execCommand(saveMetadataCmd);
-
-      // Cleanup old backups based on retention
-      const cleanupCmd = buildCleanupCommand(backupDirectory, retention);
-      await ssh.execCommand(cleanupCmd);
-
-      // Execute post-backup hook
-      await executeHook('post-backup', {
-        server: serverName,
-        backupId,
-        type,
-        size,
-        success: true
-      });
-
-      logger.info(`Backup created successfully: ${backupId}`, {
-        size,
-        location: backupFile
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: true,
-              backup_id: backupId,
-              type,
-              size,
-              size_human: `${(size / 1024 / 1024).toFixed(2)} MB`,
-              location: backupFile,
-              metadata_path: metadataPath,
-              created_at: metadata.created_at,
-              retention_days: retention
-            }, null, 2)
-          }
-        ]
-      };
-
-    } catch (error) {
-      logger.error('Backup creation failed', {
-        server: serverName,
-        type,
-        error: error.message
-      });
-
-      await executeHook('post-backup', {
-        server: serverName,
-        type,
-        success: false,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Backup failed: ${error.message}`
-          }
-        ]
-      };
-    }
-  }
+  async (args) => handleSshBackupCreate({
+    getConnection,
+    args: {
+      ...args,
+      backup_type: args.backup_type || args.type,
+      user: args.user || args.dbUser,
+      password: args.password || args.dbPassword,
+      host: args.host || args.dbHost,
+      port: args.port || args.dbPort,
+      backup_dir: args.backup_dir || args.backupDir,
+      gzip: args.gzip ?? args.compress,
+    },
+  })
 );
 
 registerToolConditional(
   'ssh_backup_list',
   {
-    description: 'List available backups on remote server',
+    description: 'List backups (typed list with sha256, newest-first, meta sidecar parsing)',
     inputSchema: {
       server: z.string().describe('Server name'),
-      type: z.enum(['mysql', 'postgresql', 'mongodb', 'files', 'full']).optional()
-        .describe('Filter by backup type'),
-      backupDir: z.string().optional()
-        .describe(`Backup directory (default: ${DEFAULT_BACKUP_DIR})`)
+      backup_type: z.enum(['mysql', 'postgresql', 'mongodb', 'files']).optional().describe('Filter'),
+      type: z.enum(['mysql', 'postgresql', 'mongodb', 'files']).optional().describe('Alias'),
+      backup_dir: z.string().optional().describe('Backup directory'),
+      backupDir: z.string().optional().describe('Backup directory (alias)'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ server: serverName, type, backupDir }) => {
-    try {
-      const ssh = await getConnection(serverName);
-      const backupDirectory = backupDir || DEFAULT_BACKUP_DIR;
-
-      logger.info(`Listing backups on ${serverName}`, { type, backupDir: backupDirectory });
-
-      // Build and execute list command
-      const listCommand = buildListBackupsCommand(backupDirectory, type);
-      const result = await ssh.execCommand(listCommand);
-
-      if (result.code !== 0 && result.stderr) {
-        throw new Error(`Failed to list backups: ${result.stderr}`);
-      }
-
-      // Parse backups list
-      const backups = parseBackupsList(result.stdout);
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: true,
-              count: backups.length,
-              backups: backups.map(b => ({
-                id: b.id,
-                type: b.type,
-                created_at: b.created_at,
-                database: b.database,
-                paths: b.paths,
-                size: b.size,
-                size_human: b.size ? `${(b.size / 1024 / 1024).toFixed(2)} MB` : 'unknown',
-                compressed: b.compressed,
-                retention_days: b.retention,
-                status: b.status
-              }))
-            }, null, 2)
-          }
-        ]
-      };
-
-    } catch (error) {
-      logger.error('Failed to list backups', {
-        server: serverName,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Failed to list backups: ${error.message}`
-          }
-        ]
-      };
+  async (args) => handleSshBackupList({
+    getConnection,
+    args: {
+      ...args,
+      backup_type: args.backup_type || args.type,
+      backup_dir: args.backup_dir || args.backupDir,
     }
-  }
+  })
 );
 
 registerToolConditional(
   'ssh_backup_restore',
   {
-    description: 'Restore from a backup on remote server',
+    description: 'Restore backup (sha256-verified, high-risk preview)',
     inputSchema: {
       server: z.string().describe('Server name'),
-      backupId: z.string().describe('Backup ID to restore'),
-      database: z.string().optional()
-        .describe('Target database name (for db restores)'),
-      dbUser: z.string().optional()
-        .describe('Database user'),
-      dbPassword: z.string().optional()
-        .describe('Database password'),
-      dbHost: z.string().optional()
-        .describe('Database host (default: localhost)'),
-      dbPort: z.number().optional()
-        .describe('Database port'),
-      targetPath: z.string().optional()
-        .describe('Target path for files restore (default: /)'),
-      backupDir: z.string().optional()
-        .describe(`Backup directory (default: ${DEFAULT_BACKUP_DIR})`)
+      backup_id: z.string().optional().describe('Backup ID'),
+      backupId: z.string().optional().describe('Backup ID (alias)'),
+      database: z.string().optional().describe('Target database'),
+      user: z.string().optional().describe('DB user'),
+      dbUser: z.string().optional().describe('DB user (alias)'),
+      password: z.string().optional().describe('DB password'),
+      dbPassword: z.string().optional().describe('DB password (alias)'),
+      host: z.string().optional().describe('DB host'),
+      dbHost: z.string().optional().describe('DB host (alias)'),
+      port: z.number().optional().describe('DB port'),
+      dbPort: z.number().optional().describe('DB port (alias)'),
+      target_path: z.string().optional().describe('Target path for files'),
+      targetPath: z.string().optional().describe('Target path (alias)'),
+      backup_dir: z.string().optional().describe('Backup directory'),
+      backupDir: z.string().optional().describe('Backup directory (alias)'),
+      verify: z.boolean().optional().describe('Verify sha256 before restore'),
+      preview: z.boolean().optional().describe('Show plan without restoring'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ server: serverName, backupId, database, dbUser, dbPassword, dbHost, dbPort, targetPath, backupDir }) => {
-    try {
-      const ssh = await getConnection(serverName);
-      const backupDirectory = backupDir || DEFAULT_BACKUP_DIR;
-      const metadataPath = getBackupMetadataPath(backupId, backupDirectory);
-
-      // Read backup metadata
-      const metadataResult = await ssh.execCommand(`cat "${metadataPath}"`);
-      if (metadataResult.code !== 0) {
-        throw new Error(`Backup not found: ${backupId}`);
-      }
-
-      const metadata = JSON.parse(metadataResult.stdout);
-      const backupFile = getBackupFilePath(backupId, backupDirectory);
-
-      // Execute pre-restore hook
-      await executeHook('pre-restore', {
-        server: serverName,
-        backupId,
-        type: metadata.type,
-        database
-      });
-
-      logger.info(`Restoring backup: ${backupId}`, {
-        server: serverName,
-        type: metadata.type
-      });
-
-      // Build restore command
-      const restoreCommand = buildRestoreCommand(metadata.type, backupFile, {
-        database: database || metadata.database,
-        user: dbUser,
-        password: dbPassword,
-        host: dbHost,
-        port: dbPort,
-        targetPath
-      });
-
-      // Execute restore
-      const result = await ssh.execCommand(restoreCommand);
-
-      if (result.code !== 0) {
-        throw new Error(`Restore failed: ${result.stderr || result.stdout}`);
-      }
-
-      // Execute post-restore hook
-      await executeHook('post-restore', {
-        server: serverName,
-        backupId,
-        type: metadata.type,
-        success: true
-      });
-
-      logger.info(`Backup restored successfully: ${backupId}`);
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: true,
-              backup_id: backupId,
-              type: metadata.type,
-              restored_at: new Date().toISOString(),
-              original_created: metadata.created_at,
-              database: database || metadata.database,
-              paths: metadata.paths
-            }, null, 2)
-          }
-        ]
-      };
-
-    } catch (error) {
-      logger.error('Restore failed', {
-        server: serverName,
-        backupId,
-        error: error.message
-      });
-
-      await executeHook('post-restore', {
-        server: serverName,
-        backupId,
-        success: false,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Restore failed: ${error.message}`
-          }
-        ]
-      };
+  async (args) => handleSshBackupRestore({
+    getConnection,
+    args: {
+      ...args,
+      backup_id: args.backup_id || args.backupId,
+      user: args.user || args.dbUser,
+      password: args.password || args.dbPassword,
+      host: args.host || args.dbHost,
+      port: args.port || args.dbPort,
+      target_path: args.target_path || args.targetPath,
+      backup_dir: args.backup_dir || args.backupDir,
     }
-  }
+  })
 );
 
 registerToolConditional(
   'ssh_backup_schedule',
   {
-    description: 'Schedule automatic backups using cron',
+    description: 'Schedule automatic backups via cron (preview-capable)',
     inputSchema: {
       server: z.string().describe('Server name'),
-      schedule: z.string().describe('Cron schedule (e.g., "0 2 * * *" for daily at 2 AM)'),
-      type: z.enum(['mysql', 'postgresql', 'mongodb', 'files'])
-        .describe('Backup type'),
-      name: z.string().describe('Backup name'),
-      database: z.string().optional()
-        .describe('Database name (for db types)'),
-      paths: z.array(z.string()).optional()
-        .describe('Paths to backup (for files type)'),
-      retention: z.number().optional()
-        .describe('Retention period in days (default: 7)')
+      cron: z.string().optional().describe('Cron schedule'),
+      schedule: z.string().optional().describe('Cron schedule (alias)'),
+      backup_type: z.enum(['mysql', 'postgresql', 'mongodb', 'files']).optional().describe('Backup type'),
+      type: z.enum(['mysql', 'postgresql', 'mongodb', 'files']).optional().describe('Alias'),
+      name: z.string().optional().describe('Backup name'),
+      database: z.string().optional().describe('Database name'),
+      paths: z.array(z.string()).optional().describe('Paths to backup'),
+      retention: z.number().optional().describe('Retention days'),
+      preview: z.boolean().optional().describe('Show cron plan without installing'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ server: serverName, schedule, type, name, database, paths, retention = 7 }) => {
-    try {
-      const ssh = await getConnection(serverName);
-
-      // Build backup script path
-      const scriptPath = `/usr/local/bin/ssh-manager-backup-${name}.sh`;
-      const backupDirectory = DEFAULT_BACKUP_DIR;
-
-      // Create backup script
-      let scriptContent = '#!/bin/bash\n\n';
-      scriptContent += `# SSH Manager automated backup: ${name}\n`;
-      scriptContent += `# Type: ${type}\n`;
-      scriptContent += `# Created: ${new Date().toISOString()}\n\n`;
-
-      const backupId = `\${BACKUP_TYPE}_${name}_$(date +%Y%m%d_%H%M%S)_\${RANDOM}`;
-      const backupFile = `${backupDirectory}/${backupId}.gz`;
-
-      scriptContent += `BACKUP_DIR="${backupDirectory}"\n`;
-      scriptContent += `BACKUP_TYPE="${type}"\n`;
-      scriptContent += `BACKUP_ID="${backupId}"\n`;
-      scriptContent += `BACKUP_FILE="${backupFile}"\n\n`;
-      scriptContent += 'mkdir -p "$BACKUP_DIR"\n\n';
-
-      // Add backup command based on type
-      switch (type) {
-      case BACKUP_TYPES.MYSQL:
-        scriptContent += `mysqldump --single-transaction --routines --triggers ${database} | gzip > "$BACKUP_FILE"\n`;
-        break;
-      case BACKUP_TYPES.POSTGRESQL:
-        scriptContent += `pg_dump --format=custom --clean --if-exists ${database} | gzip > "$BACKUP_FILE"\n`;
-        break;
-      case BACKUP_TYPES.MONGODB:
-        scriptContent += `mongodump --db ${database} --out /tmp/mongo_\${RANDOM} && tar -czf "$BACKUP_FILE" -C /tmp mongo_*\n`;
-        break;
-      case BACKUP_TYPES.FILES:
-        scriptContent += `tar -czf "$BACKUP_FILE" ${paths.join(' ')}\n`;
-        break;
-      }
-
-      // Add cleanup command
-      scriptContent += '\n# Cleanup old backups\n';
-      scriptContent += `find "$BACKUP_DIR" -name "*_${name}_*" -type f -mtime +${retention} -delete\n`;
-
-      // Save script to remote server
-      const escapedScript = scriptContent.replace(/'/g, '\'\\\'\'');
-      await ssh.execCommand(`echo '${escapedScript}' > "${scriptPath}" && chmod +x "${scriptPath}"`);
-
-      // Add to crontab
-      const cronComment = `ssh-manager-backup-${name}`;
-      const cronCommand = buildCronScheduleCommand(schedule, scriptPath, cronComment);
-      const cronResult = await ssh.execCommand(cronCommand);
-
-      if (cronResult.code !== 0) {
-        throw new Error(`Failed to schedule backup: ${cronResult.stderr}`);
-      }
-
-      logger.info(`Backup scheduled: ${name}`, {
-        server: serverName,
-        schedule,
-        type,
-        retention
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: true,
-              name,
-              schedule,
-              type,
-              database,
-              paths,
-              retention_days: retention,
-              script_path: scriptPath,
-              next_run: 'Use crontab -l to see next run time'
-            }, null, 2)
-          }
-        ]
-      };
-
-    } catch (error) {
-      logger.error('Failed to schedule backup', {
-        server: serverName,
-        name,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Failed to schedule backup: ${error.message}`
-          }
-        ]
-      };
+  async (args) => handleSshBackupSchedule({
+    getConnection,
+    args: {
+      ...args,
+      cron: args.cron || args.schedule,
+      backup_type: args.backup_type || args.type,
     }
-  }
+  })
 );
 
 // ============================================================================
@@ -2268,324 +1872,50 @@ registerToolConditional(
 registerToolConditional(
   'ssh_health_check',
   {
-    description: 'Perform comprehensive health check on remote server',
+    description: 'Comprehensive health check (single-shot bash -c with marker-delimited sections)',
     inputSchema: {
       server: z.string().describe('Server name'),
-      detailed: z.boolean().optional()
-        .describe('Include detailed metrics (network, load average)')
+      detailed: z.boolean().optional().describe('Include network, load average'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ server: serverName, detailed = false }) => {
-    try {
-      const ssh = await getConnection(serverName);
-
-      logger.info(`Running health check on ${serverName}`, { detailed });
-
-      // Build and execute comprehensive health check
-      const healthCommand = buildComprehensiveHealthCheckCommand();
-      const result = await ssh.execCommand(healthCommand);
-
-      if (result.code !== 0) {
-        throw new Error(`Health check failed: ${result.stderr}`);
-      }
-
-      // Parse results
-      const health = parseComprehensiveHealthCheck(result.stdout);
-
-      // Build response
-      const response = {
-        server: serverName,
-        timestamp: new Date().toISOString(),
-        overall_status: health.overall_status || HEALTH_STATUS.UNKNOWN,
-        cpu: health.cpu,
-        memory: health.memory,
-        disks: health.disks,
-        uptime: health.uptime
-      };
-
-      if (detailed) {
-        response.load_average = health.load_average;
-        response.network = health.network;
-      }
-
-      // Check if there are any critical issues
-      const criticalIssues = [];
-      if (health.cpu && health.cpu.status === HEALTH_STATUS.CRITICAL) {
-        criticalIssues.push(`CPU usage critical: ${health.cpu.percent}%`);
-      }
-      if (health.memory && health.memory.status === HEALTH_STATUS.CRITICAL) {
-        criticalIssues.push(`Memory usage critical: ${health.memory.percent}%`);
-      }
-      if (health.disks) {
-        for (const disk of health.disks) {
-          if (disk.status === HEALTH_STATUS.CRITICAL) {
-            criticalIssues.push(`Disk ${disk.mount} critical: ${disk.percent}%`);
-          }
-        }
-      }
-
-      if (criticalIssues.length > 0) {
-        response.critical_issues = criticalIssues;
-      }
-
-      logger.info(`Health check completed: ${health.overall_status}`, {
-        server: serverName,
-        status: health.overall_status
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(response, null, 2)
-          }
-        ]
-      };
-
-    } catch (error) {
-      logger.error('Health check failed', {
-        server: serverName,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Health check failed: ${error.message}`
-          }
-        ]
-      };
-    }
-  }
+  async (args) => handleSshHealthCheck({ getConnection, args })
 );
 
 registerToolConditional(
   'ssh_service_status',
   {
-    description: 'Check status of services on remote server',
+    description: 'Check service status (batch-safe parsing, typed health rollup)',
     inputSchema: {
       server: z.string().describe('Server name'),
-      services: z.array(z.string())
-        .describe('Service names to check (e.g., nginx, mysql, docker)')
+      services: z.array(z.string()).describe('Service names'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ server: serverName, services }) => {
-    try {
-      const ssh = await getConnection(serverName);
-
-      logger.info(`Checking service status on ${serverName}`, {
-        services: services.join(', ')
-      });
-
-      const serviceStatuses = [];
-
-      // Check each service
-      for (const serviceName of services) {
-        const resolvedName = resolveServiceName(serviceName);
-        const statusCommand = buildServiceStatusCommand(resolvedName);
-        const result = await ssh.execCommand(statusCommand);
-
-        const status = parseServiceStatus(result.stdout, serviceName);
-        serviceStatuses.push(status);
-      }
-
-      // Count running vs stopped
-      const running = serviceStatuses.filter(s => s.status === 'running').length;
-      const stopped = serviceStatuses.filter(s => s.status === 'stopped').length;
-
-      const response = {
-        server: serverName,
-        timestamp: new Date().toISOString(),
-        total: serviceStatuses.length,
-        running,
-        stopped,
-        services: serviceStatuses,
-        overall_health: stopped === 0 ? HEALTH_STATUS.HEALTHY :
-          running > stopped ? HEALTH_STATUS.WARNING :
-            HEALTH_STATUS.CRITICAL
-      };
-
-      logger.info('Service check completed', {
-        server: serverName,
-        running,
-        stopped
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(response, null, 2)
-          }
-        ]
-      };
-
-    } catch (error) {
-      logger.error('Service status check failed', {
-        server: serverName,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Service status check failed: ${error.message}`
-          }
-        ]
-      };
-    }
-  }
+  async (args) => handleSshServiceStatus({ getConnection, args })
 );
 
 registerToolConditional(
   'ssh_process_manager',
   {
-    description: 'List, monitor, or kill processes on remote server',
+    description: 'List/kill/info processes (typed, preview-capable for kills)',
     inputSchema: {
       server: z.string().describe('Server name'),
-      action: z.enum(['list', 'kill', 'info'])
-        .describe('Action: list processes, kill process, or get process info'),
-      pid: z.number().optional()
-        .describe('Process ID (required for kill and info actions)'),
-      signal: z.enum(['TERM', 'KILL', 'HUP', 'INT', 'QUIT']).optional()
-        .describe('Signal to send when killing (default: TERM)'),
-      sortBy: z.enum(['cpu', 'memory']).optional()
-        .describe('Sort processes by CPU or memory (default: cpu)'),
-      limit: z.number().optional()
-        .describe('Number of processes to return (default: 20)'),
-      filter: z.string().optional()
-        .describe('Filter processes by name/command')
+      action: z.enum(['list', 'kill', 'info']).describe('Action'),
+      pid: z.number().optional().describe('Process ID'),
+      signal: z.enum(['TERM', 'KILL', 'HUP', 'INT', 'QUIT']).optional().describe('Signal'),
+      sortBy: z.enum(['cpu', 'memory']).optional().describe('Sort key'),
+      sort_by: z.enum(['cpu', 'memory']).optional().describe('Sort key (alias)'),
+      limit: z.number().optional().describe('Row cap'),
+      filter: z.string().optional().describe('Name/command filter'),
+      preview: z.boolean().optional().describe('Preview the kill'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ server: serverName, action, pid, signal = 'TERM', sortBy = 'cpu', limit = 20, filter }) => {
-    try {
-      const ssh = await getConnection(serverName);
-
-      logger.info(`Process manager action: ${action}`, {
-        server: serverName,
-        pid,
-        filter
-      });
-
-      let response;
-
-      switch (action) {
-      case 'list': {
-        const listCommand = buildProcessListCommand({ sortBy, limit, filter });
-        const result = await ssh.execCommand(listCommand);
-
-        if (result.code !== 0) {
-          throw new Error(`Failed to list processes: ${result.stderr}`);
-        }
-
-        const processes = parseProcessList(result.stdout);
-
-        response = {
-          server: serverName,
-          action: 'list',
-          count: processes.length,
-          sorted_by: sortBy,
-          processes
-        };
-        break;
-      }
-
-      case 'kill': {
-        if (!pid) {
-          throw new Error('pid parameter required for kill action');
-        }
-
-        // Get process info first
-        const infoCommand = buildProcessInfoCommand(pid);
-        const infoResult = await ssh.execCommand(infoCommand);
-
-        let processInfo = {};
-        if (infoResult.code === 0 && infoResult.stdout) {
-          try {
-            processInfo = JSON.parse(infoResult.stdout);
-          } catch (e) {
-            // Process might not exist
-          }
-        }
-
-        // Kill the process
-        const killCommand = buildKillProcessCommand(pid, signal);
-        const killResult = await ssh.execCommand(killCommand);
-
-        if (killResult.code !== 0) {
-          throw new Error(`Failed to kill process ${pid}: ${killResult.stderr}`);
-        }
-
-        response = {
-          server: serverName,
-          action: 'kill',
-          pid,
-          signal,
-          process: processInfo,
-          success: true
-        };
-
-        logger.info(`Process killed: ${pid}`, {
-          server: serverName,
-          signal
-        });
-        break;
-      }
-
-      case 'info': {
-        if (!pid) {
-          throw new Error('pid parameter required for info action');
-        }
-
-        const infoCommand = buildProcessInfoCommand(pid);
-        const result = await ssh.execCommand(infoCommand);
-
-        if (result.code !== 0 || !result.stdout) {
-          throw new Error(`Process ${pid} not found`);
-        }
-
-        const processInfo = JSON.parse(result.stdout);
-
-        response = {
-          server: serverName,
-          action: 'info',
-          process: processInfo
-        };
-        break;
-      }
-
-      default:
-        throw new Error(`Unknown action: ${action}`);
-      }
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(response, null, 2)
-          }
-        ]
-      };
-
-    } catch (error) {
-      logger.error('Process manager failed', {
-        server: serverName,
-        action,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Process manager failed: ${error.message}`
-          }
-        ]
-      };
-    }
-  }
+  async (args) => handleSshProcessManager({
+    getConnection,
+    args: { ...args, sort_by: args.sort_by || args.sortBy }
+  })
 );
 
 registerToolConditional(
@@ -2775,458 +2105,147 @@ registerToolConditional(
 registerToolConditional(
   'ssh_db_dump',
   {
-    description: 'Dump database to file (MySQL, PostgreSQL, MongoDB)',
+    description: 'Dump database (password via env, never argv)',
     inputSchema: {
       server: z.string().describe('Server name'),
-      type: z.enum(['mysql', 'postgresql', 'mongodb'])
-        .describe('Database type'),
+      db_type: z.enum(['mysql', 'postgresql', 'mongodb']).optional().describe('DB type'),
+      type: z.enum(['mysql', 'postgresql', 'mongodb']).optional().describe('Alias'),
       database: z.string().describe('Database name'),
-      outputFile: z.string().describe('Output file path (will be created on remote server)'),
-      dbUser: z.string().optional().describe('Database user'),
-      dbPassword: z.string().optional().describe('Database password'),
-      dbHost: z.string().optional().describe('Database host (default: localhost)'),
-      dbPort: z.number().optional().describe('Database port'),
-      compress: z.boolean().optional().describe('Compress output with gzip (default: true)'),
-      tables: z.array(z.string()).optional().describe('Specific tables to dump (MySQL/PostgreSQL only)')
+      output_file: z.string().optional().describe('Output path'),
+      outputFile: z.string().optional().describe('Output path (alias)'),
+      user: z.string().optional().describe('DB user'),
+      dbUser: z.string().optional().describe('DB user (alias)'),
+      password: z.string().optional().describe('DB password'),
+      dbPassword: z.string().optional().describe('DB password (alias)'),
+      host: z.string().optional().describe('DB host'),
+      dbHost: z.string().optional().describe('DB host (alias)'),
+      port: z.number().optional().describe('DB port'),
+      dbPort: z.number().optional().describe('DB port (alias)'),
+      gzip: z.boolean().optional().describe('Gzip output'),
+      compress: z.boolean().optional().describe('Alias for gzip'),
+      tables: z.array(z.string()).optional().describe('Specific tables'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ server: serverName, type, database, outputFile, dbUser, dbPassword, dbHost, dbPort, compress = true, tables }) => {
-    try {
-      const ssh = await getConnection(serverName);
-
-      logger.info(`Dumping ${type} database: ${database}`, {
-        server: serverName,
-        compress
-      });
-
-      // Build dump command based on type
-      let dumpCommand;
-      const options = {
-        database,
-        user: dbUser,
-        password: dbPassword,
-        host: dbHost,
-        port: dbPort,
-        outputFile,
-        compress,
-        tables
-      };
-
-      switch (type) {
-      case DB_TYPES.MYSQL:
-        dumpCommand = buildDBMySQLDumpCommand(options);
-        break;
-      case DB_TYPES.POSTGRESQL:
-        dumpCommand = buildDBPostgreSQLDumpCommand(options);
-        break;
-      case DB_TYPES.MONGODB:
-        options.outputDir = outputFile.replace(/\.(tar\.gz|gz)$/, '');
-        dumpCommand = buildDBMongoDBDumpCommand(options);
-        break;
-      default:
-        throw new Error(`Unsupported database type: ${type}`);
-      }
-
-      // Execute dump
-      const result = await ssh.execCommand(dumpCommand);
-
-      if (result.code !== 0) {
-        throw new Error(`Dump failed: ${result.stderr || result.stdout}`);
-      }
-
-      // Get file size
-      const sizeCommand = `stat -f%z "${outputFile}" 2>/dev/null || stat -c%s "${outputFile}" 2>/dev/null`;
-      const sizeResult = await ssh.execCommand(sizeCommand);
-      const size = parseSize(sizeResult.stdout);
-
-      logger.info(`Database dump completed: ${formatBytes(size)}`, {
-        server: serverName,
-        database,
-        size
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: true,
-              server: serverName,
-              type,
-              database,
-              output_file: outputFile,
-              size_bytes: size,
-              size_human: formatBytes(size),
-              compressed: compress,
-              timestamp: new Date().toISOString()
-            }, null, 2)
-          }
-        ]
-      };
-
-    } catch (error) {
-      logger.error('Database dump failed', {
-        server: serverName,
-        type,
-        database,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Database dump failed: ${error.message}`
-          }
-        ]
-      };
+  async (args) => handleSshDbDump({
+    getConnection,
+    args: {
+      ...args,
+      db_type: args.db_type || args.type,
+      output_file: args.output_file || args.outputFile,
+      user: args.user || args.dbUser,
+      password: args.password || args.dbPassword,
+      host: args.host || args.dbHost,
+      port: args.port || args.dbPort,
+      gzip: args.gzip ?? args.compress,
     }
-  }
+  })
 );
 
 registerToolConditional(
   'ssh_db_import',
   {
-    description: 'Import database from SQL file (MySQL, PostgreSQL, MongoDB)',
+    description: 'Import DB (preview-capable, high-risk guardrails)',
     inputSchema: {
       server: z.string().describe('Server name'),
-      type: z.enum(['mysql', 'postgresql', 'mongodb'])
-        .describe('Database type'),
-      database: z.string().describe('Target database name'),
-      inputFile: z.string().describe('Input file path (on remote server)'),
-      dbUser: z.string().optional().describe('Database user'),
-      dbPassword: z.string().optional().describe('Database password'),
-      dbHost: z.string().optional().describe('Database host (default: localhost)'),
-      dbPort: z.number().optional().describe('Database port'),
-      drop: z.boolean().optional().describe('Drop existing collections/tables before import (MongoDB only, default: true)')
+      db_type: z.enum(['mysql', 'postgresql', 'mongodb']).optional().describe('DB type'),
+      type: z.enum(['mysql', 'postgresql', 'mongodb']).optional().describe('Alias'),
+      database: z.string().describe('Target database'),
+      input_file: z.string().optional().describe('Input path'),
+      inputFile: z.string().optional().describe('Input path (alias)'),
+      user: z.string().optional().describe('DB user'),
+      dbUser: z.string().optional().describe('DB user (alias)'),
+      password: z.string().optional().describe('DB password'),
+      dbPassword: z.string().optional().describe('DB password (alias)'),
+      host: z.string().optional().describe('DB host'),
+      dbHost: z.string().optional().describe('DB host (alias)'),
+      port: z.number().optional().describe('DB port'),
+      dbPort: z.number().optional().describe('DB port (alias)'),
+      drop: z.boolean().optional().describe('Drop existing before import (Mongo)'),
+      preview: z.boolean().optional().describe('Show plan without importing'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ server: serverName, type, database, inputFile, dbUser, dbPassword, dbHost, dbPort, drop = true }) => {
-    try {
-      const ssh = await getConnection(serverName);
-
-      logger.info(`Importing ${type} database: ${database}`, {
-        server: serverName,
-        inputFile
-      });
-
-      // Build import command based on type
-      let importCommand;
-      const options = {
-        database,
-        user: dbUser,
-        password: dbPassword,
-        host: dbHost,
-        port: dbPort,
-        inputFile,
-        drop
-      };
-
-      switch (type) {
-      case DB_TYPES.MYSQL:
-        importCommand = buildMySQLImportCommand(options);
-        break;
-      case DB_TYPES.POSTGRESQL:
-        importCommand = buildPostgreSQLImportCommand(options);
-        break;
-      case DB_TYPES.MONGODB:
-        options.inputPath = inputFile;
-        importCommand = buildMongoDBRestoreCommand(options);
-        break;
-      default:
-        throw new Error(`Unsupported database type: ${type}`);
-      }
-
-      // Execute import
-      const result = await ssh.execCommand(importCommand);
-
-      if (result.code !== 0) {
-        throw new Error(`Import failed: ${result.stderr || result.stdout}`);
-      }
-
-      logger.info('Database import completed', {
-        server: serverName,
-        database
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: true,
-              server: serverName,
-              type,
-              database,
-              input_file: inputFile,
-              timestamp: new Date().toISOString(),
-              message: `Database ${database} imported successfully`
-            }, null, 2)
-          }
-        ]
-      };
-
-    } catch (error) {
-      logger.error('Database import failed', {
-        server: serverName,
-        type,
-        database,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Database import failed: ${error.message}`
-          }
-        ]
-      };
+  async (args) => handleSshDbImport({
+    getConnection,
+    args: {
+      ...args,
+      db_type: args.db_type || args.type,
+      input_file: args.input_file || args.inputFile,
+      user: args.user || args.dbUser,
+      password: args.password || args.dbPassword,
+      host: args.host || args.dbHost,
+      port: args.port || args.dbPort,
     }
-  }
+  })
 );
 
 registerToolConditional(
   'ssh_db_list',
   {
-    description: 'List databases or tables/collections',
+    description: 'List databases or tables/collections (typed)',
     inputSchema: {
       server: z.string().describe('Server name'),
-      type: z.enum(['mysql', 'postgresql', 'mongodb'])
-        .describe('Database type'),
-      database: z.string().optional()
-        .describe('Database name (if provided, lists tables/collections; if omitted, lists databases)'),
-      dbUser: z.string().optional().describe('Database user'),
-      dbPassword: z.string().optional().describe('Database password'),
-      dbHost: z.string().optional().describe('Database host (default: localhost)'),
-      dbPort: z.number().optional().describe('Database port')
+      db_type: z.enum(['mysql', 'postgresql', 'mongodb']).optional().describe('DB type'),
+      type: z.enum(['mysql', 'postgresql', 'mongodb']).optional().describe('Alias'),
+      database: z.string().optional().describe('DB (lists tables) or omit for databases'),
+      user: z.string().optional().describe('DB user'),
+      dbUser: z.string().optional().describe('DB user (alias)'),
+      password: z.string().optional().describe('DB password'),
+      dbPassword: z.string().optional().describe('DB password (alias)'),
+      host: z.string().optional().describe('DB host'),
+      dbHost: z.string().optional().describe('DB host (alias)'),
+      port: z.number().optional().describe('DB port'),
+      dbPort: z.number().optional().describe('DB port (alias)'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ server: serverName, type, database, dbUser, dbPassword, dbHost, dbPort }) => {
-    try {
-      const ssh = await getConnection(serverName);
-
-      const listType = database ? 'tables/collections' : 'databases';
-      logger.info(`Listing ${listType} for ${type}`, {
-        server: serverName,
-        database
-      });
-
-      let listCommand;
-      const options = {
-        database,
-        user: dbUser,
-        password: dbPassword,
-        host: dbHost,
-        port: dbPort
-      };
-
-      // Build command based on type and what to list
-      if (database) {
-        // List tables/collections
-        switch (type) {
-        case DB_TYPES.MYSQL:
-          listCommand = buildMySQLListTablesCommand(options);
-          break;
-        case DB_TYPES.POSTGRESQL:
-          listCommand = buildPostgreSQLListTablesCommand(options);
-          break;
-        case DB_TYPES.MONGODB:
-          listCommand = buildMongoDBListCollectionsCommand(options);
-          break;
-        }
-      } else {
-        // List databases
-        switch (type) {
-        case DB_TYPES.MYSQL:
-          listCommand = buildMySQLListDatabasesCommand(options);
-          break;
-        case DB_TYPES.POSTGRESQL:
-          listCommand = buildPostgreSQLListDatabasesCommand(options);
-          break;
-        case DB_TYPES.MONGODB:
-          listCommand = buildMongoDBListDatabasesCommand(options);
-          break;
-        }
-      }
-
-      // Execute list command
-      const result = await ssh.execCommand(listCommand);
-
-      if (result.code !== 0 && result.stderr) {
-        throw new Error(`List failed: ${result.stderr}`);
-      }
-
-      // Parse results
-      const items = database
-        ? parseTableList(result.stdout)
-        : parseDatabaseList(result.stdout, type);
-
-      const response = {
-        success: true,
-        server: serverName,
-        type,
-        listing: database ? 'tables' : 'databases'
-      };
-
-      if (database) {
-        response.database = database;
-        response.tables = items;
-        response.count = items.length;
-      } else {
-        response.databases = items;
-        response.count = items.length;
-      }
-
-      logger.info(`Listed ${items.length} ${listType}`, {
-        server: serverName,
-        type
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(response, null, 2)
-          }
-        ]
-      };
-
-    } catch (error) {
-      logger.error('Database list failed', {
-        server: serverName,
-        type,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Database list failed: ${error.message}`
-          }
-        ]
-      };
+  async (args) => handleSshDbList({
+    getConnection,
+    args: {
+      ...args,
+      db_type: args.db_type || args.type,
+      user: args.user || args.dbUser,
+      password: args.password || args.dbPassword,
+      host: args.host || args.dbHost,
+      port: args.port || args.dbPort,
     }
-  }
+  })
 );
 
 registerToolConditional(
   'ssh_db_query',
   {
-    description: 'Execute SELECT query on database (read-only, SELECT queries only)',
+    description: 'Execute SELECT query (token-level SQL safety, no substring matching)',
     inputSchema: {
       server: z.string().describe('Server name'),
-      type: z.enum(['mysql', 'postgresql', 'mongodb'])
-        .describe('Database type'),
+      db_type: z.enum(['mysql', 'postgresql', 'mongodb']).optional().describe('DB type'),
+      type: z.enum(['mysql', 'postgresql', 'mongodb']).optional().describe('Alias'),
       database: z.string().describe('Database name'),
-      query: z.string().describe('SQL query (SELECT only) or MongoDB find query'),
-      collection: z.string().optional()
-        .describe('Collection name (MongoDB only)'),
-      dbUser: z.string().optional().describe('Database user'),
-      dbPassword: z.string().optional().describe('Database password'),
-      dbHost: z.string().optional().describe('Database host (default: localhost)'),
-      dbPort: z.number().optional().describe('Database port')
+      query: z.string().describe('SELECT-only SQL or Mongo find'),
+      collection: z.string().optional().describe('Collection (MongoDB)'),
+      user: z.string().optional().describe('DB user'),
+      dbUser: z.string().optional().describe('DB user (alias)'),
+      password: z.string().optional().describe('DB password'),
+      dbPassword: z.string().optional().describe('DB password (alias)'),
+      host: z.string().optional().describe('DB host'),
+      dbHost: z.string().optional().describe('DB host (alias)'),
+      port: z.number().optional().describe('DB port'),
+      dbPort: z.number().optional().describe('DB port (alias)'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
-  async ({ server: serverName, type, database, query, collection, dbUser, dbPassword, dbHost, dbPort }) => {
-    try {
-      const ssh = await getConnection(serverName);
-
-      // Validate query safety for SQL databases
-      if (type !== DB_TYPES.MONGODB && !isSafeQuery(query)) {
-        throw new Error('Only SELECT queries are allowed for security reasons');
-      }
-
-      logger.info(`Executing ${type} query`, {
-        server: serverName,
-        database,
-        query: query.substring(0, 100)
-      });
-
-      let queryCommand;
-      const options = {
-        database,
-        query,
-        user: dbUser,
-        password: dbPassword,
-        host: dbHost,
-        port: dbPort
-      };
-
-      // Build query command based on type
-      switch (type) {
-      case DB_TYPES.MYSQL:
-        queryCommand = buildMySQLQueryCommand(options);
-        break;
-      case DB_TYPES.POSTGRESQL:
-        queryCommand = buildPostgreSQLQueryCommand(options);
-        break;
-      case DB_TYPES.MONGODB:
-        if (!collection) {
-          throw new Error('collection parameter required for MongoDB queries');
-        }
-        options.collection = collection;
-        queryCommand = buildMongoDBQueryCommand(options);
-        break;
-      default:
-        throw new Error(`Unsupported database type: ${type}`);
-      }
-
-      // Execute query
-      const result = await ssh.execCommand(queryCommand);
-
-      if (result.code !== 0) {
-        throw new Error(`Query failed: ${result.stderr || result.stdout}`);
-      }
-
-      // Parse output (basic parsing, output depends on database type)
-      const output = result.stdout.trim();
-      const lines = output.split('\n');
-
-      logger.info('Query executed successfully', {
-        server: serverName,
-        database,
-        rows: lines.length
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: true,
-              server: serverName,
-              type,
-              database,
-              collection: collection || null,
-              query,
-              row_count: lines.length,
-              output: output,
-              timestamp: new Date().toISOString()
-            }, null, 2)
-          }
-        ]
-      };
-
-    } catch (error) {
-      logger.error('Database query failed', {
-        server: serverName,
-        type,
-        database,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `❌ Database query failed: ${error.message}`
-          }
-        ]
-      };
+  async (args) => handleSshDbQuery({
+    getConnection,
+    args: {
+      ...args,
+      db_type: args.db_type || args.type,
+      user: args.user || args.dbUser,
+      password: args.password || args.dbPassword,
+      host: args.host || args.dbHost,
+      port: args.port || args.dbPort,
     }
-  }
+  })
 );
 
 // Clean up connections on shutdown
