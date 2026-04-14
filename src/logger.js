@@ -27,7 +27,7 @@ const COLORS = {
   RESET: '\x1b[0m'
 };
 
-// Level tags — 6-char fixed-width for column alignment
+// Level tags: 6-char fixed-width for column alignment
 const ICONS = {
   DEBUG: '[dbg] ',
   INFO:  '[info]',
