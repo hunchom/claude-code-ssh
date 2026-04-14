@@ -18,7 +18,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-console.log('🧪 Testing Profile Loader...\n');
+console.log('[test] Testing Profile Loader...\n');
 
 // Test 1: Load default profile
 console.log('Test 1: Load default profile');
@@ -27,9 +27,9 @@ try {
   assert(profile.name === 'default', 'Default profile should have name "default"');
   assert(profile.commandAliases, 'Default profile should have commandAliases');
   assert(profile.hooks, 'Default profile should have hooks');
-  console.log('✅ Default profile loaded successfully\n');
+  console.log('[ok] Default profile loaded successfully\n');
 } catch (error) {
-  console.error(`❌ Failed to load default profile: ${error.message}\n`);
+  console.error(`[err] Failed to load default profile: ${error.message}\n`);
   process.exit(1);
 }
 
@@ -43,13 +43,13 @@ try {
   const defaultProfile = profiles.find(p => p.name === 'default');
   assert(defaultProfile, 'Default profile should be in the list');
   
-  console.log(`✅ Found ${profiles.length} profiles:`);
+  console.log(`[ok] Found ${profiles.length} profiles:`);
   profiles.forEach(p => {
     console.log(`   - ${p.name}: ${p.aliasCount} aliases, ${p.hookCount} hooks`);
   });
   console.log();
 } catch (error) {
-  console.error(`❌ Failed to list profiles: ${error.message}\n`);
+  console.error(`[err] Failed to list profiles: ${error.message}\n`);
   process.exit(1);
 }
 
@@ -60,11 +60,11 @@ try {
   assert(profile.name === 'frappe', 'Frappe profile should have name "frappe"');
   assert(profile.commandAliases['bench-update'], 'Frappe profile should have bench-update alias');
   assert(profile.hooks['pre-bench-update'], 'Frappe profile should have pre-bench-update hook');
-  console.log('✅ Frappe profile loaded successfully');
+  console.log('[ok] Frappe profile loaded successfully');
   console.log(`   - Aliases: ${Object.keys(profile.commandAliases).length}`);
   console.log(`   - Hooks: ${Object.keys(profile.hooks).length}\n`);
 } catch (error) {
-  console.error(`❌ Failed to load Frappe profile: ${error.message}\n`);
+  console.error(`[err] Failed to load Frappe profile: ${error.message}\n`);
   process.exit(1);
 }
 
@@ -73,9 +73,9 @@ console.log('Test 4: Get active profile name');
 try {
   const currentProfile = getActiveProfileName();
   assert(typeof currentProfile === 'string', 'Active profile name should be a string');
-  console.log(`✅ Current active profile: ${currentProfile}\n`);
+  console.log(`[ok] Current active profile: ${currentProfile}\n`);
 } catch (error) {
-  console.error(`❌ Failed to get active profile: ${error.message}\n`);
+  console.error(`[err] Failed to get active profile: ${error.message}\n`);
   process.exit(1);
 }
 
@@ -93,7 +93,7 @@ try {
   const newProfile = getActiveProfileName();
   assert(newProfile === 'docker', 'Active profile should be docker after switch');
   
-  console.log('✅ Successfully switched to docker profile');
+  console.log('[ok] Successfully switched to docker profile');
   
   // Restore original profile
   if (originalProfile) {
@@ -101,9 +101,9 @@ try {
   } else if (fs.existsSync(testProfileFile)) {
     fs.unlinkSync(testProfileFile);
   }
-  console.log('✅ Restored original profile setting\n');
+  console.log('[ok] Restored original profile setting\n');
 } catch (error) {
-  console.error(`❌ Failed to switch profiles: ${error.message}\n`);
+  console.error(`[err] Failed to switch profiles: ${error.message}\n`);
   // Cleanup
   if (originalProfile) {
     fs.writeFileSync(testProfileFile, originalProfile);
@@ -120,9 +120,9 @@ try {
   assert(profile, 'Should return a profile even for non-existent name');
   assert(profile.name === 'default' || profile.name === 'minimal', 
     'Should fallback to default or minimal profile');
-  console.log(`✅ Correctly fell back to ${profile.name} profile\n`);
+  console.log(`[ok] Correctly fell back to ${profile.name} profile\n`);
 } catch (error) {
-  console.error(`❌ Failed to handle non-existent profile: ${error.message}\n`);
+  console.error(`[err] Failed to handle non-existent profile: ${error.message}\n`);
   process.exit(1);
 }
 
@@ -144,12 +144,12 @@ try {
     assert(typeof profile.hooks === 'object', 
       `Profile ${file} should have hooks object`);
     
-    console.log(`   ✓ ${file} is valid`);
+    console.log(`   [ok] ${file} is valid`);
   }
-  console.log(`✅ All ${files.length} profile files are valid\n`);
+  console.log(`[ok] All ${files.length} profile files are valid\n`);
 } catch (error) {
-  console.error(`❌ Profile validation failed: ${error.message}\n`);
+  console.error(`[err] Profile validation failed: ${error.message}\n`);
   process.exit(1);
 }
 
-console.log('🎉 All profile tests passed!');
+console.log('[*] All profile tests passed!');

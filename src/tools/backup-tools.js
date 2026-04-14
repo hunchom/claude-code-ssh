@@ -1,21 +1,21 @@
 /**
- * Rewritten backup tools — content-addressed + hash-verified.
+ * Rewritten backup tools -- content-addressed + hash-verified.
  *
  * Tools:
- *   - handleSshBackupCreate    — dump/archive then sha256 + write meta sidecar
- *   - handleSshBackupList      — parse *.meta sidecars into structured backup list
- *   - handleSshBackupRestore   — verify sha256 matches meta BEFORE restoring
- *   - handleSshBackupSchedule  — append a cron entry for recurring backups
+ *   - handleSshBackupCreate    -- dump/archive then sha256 + write meta sidecar
+ *   - handleSshBackupList      -- parse *.meta sidecars into structured backup list
+ *   - handleSshBackupRestore   -- verify sha256 matches meta BEFORE restoring
+ *   - handleSshBackupSchedule  -- append a cron entry for recurring backups
  *
  * Security invariants:
  *   - Credentials NEVER appear in argv. MySQL uses MYSQL_PWD, Postgres uses
  *     PGPASSWORD, Mongo uses mongodump --uri (URI written to stdin of a
- *     tiny shell read → mongodump --uri "$u"; we stick with env for simplicity
+ *     tiny shell read -> mongodump --uri "$u"; we stick with env for simplicity
  *     and consistency with db-tools: MONGO_URI="..." mongodump --uri "$MONGO_URI").
  *   - All interpolated strings run through shQuote().
  *   - Every write is followed by a `sha256sum` verification when verify:true.
  *     The digest + size + UUID backup_id are written to OUTPUT.meta as JSON.
- *   - Restore refuses to proceed on checksum mismatch — the artifact is treated
+ *   - Restore refuses to proceed on checksum mismatch -- the artifact is treated
  *     as corrupt/tampered and the original target is untouched.
  *
  * Wire shape (returned `data` of a successful create):
@@ -31,13 +31,13 @@ import { ok, fail, preview, toMcp, defaultRender } from '../structured-result.js
 import { buildPlan } from '../preview-mode.js';
 import { formatBytes, formatDuration } from '../output-formatter.js';
 
-const DEFAULT_TIMEOUT_MS = 600_000;        // 10 min — dumps can be large
+const DEFAULT_TIMEOUT_MS = 600_000;        // 10 min -- dumps can be large
 const DEFAULT_BACKUP_DIR = '/var/backups/mcp-ssh';
 const VALID_TYPES = new Set(['mysql', 'postgresql', 'mongodb', 'files']);
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Helpers
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 function nowIso() { return new Date().toISOString(); }
 
@@ -62,7 +62,7 @@ function defaultOutputPath(type, name, { gzip, backupDir = DEFAULT_BACKUP_DIR, b
  * `outputPath` must already be shQuoted by caller when fed into the command,
  * but we receive the raw path and shQuote internally.
  *
- * Returns { command, envPrefix } — envPrefix must be prepended verbatim by caller.
+ * Returns { command, envPrefix } -- envPrefix must be prepended verbatim by caller.
  */
 export function buildBackupCommand({ backup_type, database, paths, user, password, host, port, outputPath, gzip = true }) {
   const out = shQuote(outputPath);
@@ -133,7 +133,7 @@ function dirnameOf(p) {
 }
 
 /**
- * Run `sha256sum PATH | awk '{print $1}'` → hex digest (throws on non-zero).
+ * Run `sha256sum PATH | awk '{print $1}'` -> hex digest (throws on non-zero).
  */
 async function remoteSha256(client, remotePath, { timeout = 120_000 } = {}) {
   const cmd = `sha256sum ${shQuote(remotePath)} | awk '{print $1}'`;
@@ -145,7 +145,7 @@ async function remoteSha256(client, remotePath, { timeout = 120_000 } = {}) {
 }
 
 /**
- * Run `stat -c %s PATH` → bytes (throws on non-zero).
+ * Run `stat -c %s PATH` -> bytes (throws on non-zero).
  */
 async function remoteSizeBytes(client, remotePath) {
   const r = await streamExecCommand(client, `stat -c '%s' ${shQuote(remotePath)}`, { timeoutMs: 15_000 });
@@ -161,7 +161,7 @@ async function remoteSizeBytes(client, remotePath) {
  */
 async function writeMeta(client, metaPath, metaObject, { timeout = 15_000 } = {}) {
   const json = JSON.stringify(metaObject);
-  // printf '%s' 'json' → the JSON is a single shQuoted arg.
+  // printf '%s' 'json' -> the JSON is a single shQuoted arg.
   const cmd = `printf '%s' ${shQuote(json)} > ${shQuote(metaPath)}`;
   const r = await streamExecCommand(client, cmd, { timeoutMs: timeout });
   if (r.code !== 0) {
@@ -170,7 +170,7 @@ async function writeMeta(client, metaPath, metaObject, { timeout = 15_000 } = {}
 }
 
 /**
- * Read a JSON meta file → object. Returns null on non-zero or parse failure.
+ * Read a JSON meta file -> object. Returns null on non-zero or parse failure.
  */
 async function readMeta(client, metaPath, { timeout = 15_000 } = {}) {
   const r = await streamExecCommand(client, `cat ${shQuote(metaPath)}`, { timeoutMs: timeout });
@@ -179,9 +179,9 @@ async function readMeta(client, metaPath, { timeout = 15_000 } = {}) {
   catch (_) { return null; }
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_backup_create
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 export async function handleSshBackupCreate({ getConnection, args }) {
   const {
     server,
@@ -232,7 +232,7 @@ export async function handleSshBackupCreate({ getConnection, args }) {
           : `database: \`${database}\``,
         `output: \`${outPath}\``,
         gzip ? 'gzip compression enabled' : 'no compression',
-        verify ? 'sha256 verification enabled — hash written to .meta sidecar' : 'no verification (NOT recommended)',
+        verify ? 'sha256 verification enabled -- hash written to .meta sidecar' : 'no verification (NOT recommended)',
         `estimated size: unknown (will be measured post-write)`,
         `meta sidecar: \`${metaPath}\``,
       ],
@@ -328,19 +328,19 @@ function renderBackupCreate(result) {
   if (!result.success) return defaultRender(result);
   const d = result.data;
   const meta = result.meta || {};
-  const dur = meta.duration_ms != null ? `  ·  \`${formatDuration(meta.duration_ms)}\`` : '';
+  const dur = meta.duration_ms != null ? `  |  \`${formatDuration(meta.duration_ms)}\`` : '';
   const lines = [];
-  lines.push(`▶ **ssh_backup_create**  ·  \`${result.server}\`  ·  \`${d.backup_type}\`${dur}`);
+  lines.push(`[ok] **ssh_backup_create**  |  \`${result.server}\`  |  \`${d.backup_type}\`${dur}`);
   lines.push(`\`${d.output_path}\``);
-  lines.push(`size: **${formatBytes(d.size_bytes || 0)}**${d.verified ? '  ·  **verified**' : ''}${d.compressed ? '  ·  gzip' : ''}`);
+  lines.push(`size: **${formatBytes(d.size_bytes || 0)}**${d.verified ? '  |  **verified**' : ''}${d.compressed ? '  |  gzip' : ''}`);
   if (d.sha256) lines.push(`sha256: \`${d.sha256}\``);
   lines.push(`backup_id: \`${d.backup_id}\``);
   return lines.join('\n');
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_backup_list
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 export async function handleSshBackupList({ getConnection, args }) {
   const {
     server,
@@ -359,7 +359,7 @@ export async function handleSshBackupList({ getConnection, args }) {
   }
 
   // List meta files, then cat them with "---" separators.
-  // Missing dir → return [] cleanly (find would fail, we handle).
+  // Missing dir -> return [] cleanly (find would fail, we handle).
   const cmd = `if [ -d ${shQuote(backup_dir)} ]; then ` +
     `find ${shQuote(backup_dir)} -maxdepth 2 -name '*.meta' -type f -print0 ` +
     `| while IFS= read -r -d '' f; do cat "$f"; printf '\\n---META---\\n'; done; ` +
@@ -410,7 +410,7 @@ function renderBackupList(result) {
   if (!result.success) return defaultRender(result);
   const d = result.data;
   const lines = [];
-  lines.push(`▶ **ssh_backup_list**  ·  \`${result.server}\`  ·  **${d.count}** backup${d.count === 1 ? '' : 's'}`);
+  lines.push(`[ok] **ssh_backup_list**  |  \`${result.server}\`  |  **${d.count}** backup${d.count === 1 ? '' : 's'}`);
   lines.push(`dir: \`${d.backup_dir}\``);
   if (d.count === 0) {
     lines.push('');
@@ -419,20 +419,20 @@ function renderBackupList(result) {
   }
   lines.push('');
   for (const b of d.backups.slice(0, 25)) {
-    const verified = b.verified ? ' ✓' : '';
-    lines.push(`- \`${b.backup_id}\`${verified}  ·  \`${b.backup_type}\`  ·  ${formatBytes(b.size_bytes || 0)}  ·  ${b.created_at || '?'}`);
+    const verified = b.verified ? ' [ok]' : '';
+    lines.push(`- \`${b.backup_id}\`${verified}  |  \`${b.backup_type}\`  |  ${formatBytes(b.size_bytes || 0)}  |  ${b.created_at || '?'}`);
     lines.push(`  \`${b.output_path}\``);
   }
   if (d.backups.length > 25) {
     lines.push('');
-    lines.push(`> … ${d.backups.length - 25} more elided`);
+    lines.push(`> ... ${d.backups.length - 25} more elided`);
   }
   return lines.join('\n');
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_backup_restore
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 export async function handleSshBackupRestore({ getConnection, args }) {
   const {
     server,
@@ -495,7 +495,7 @@ export async function handleSshBackupRestore({ getConnection, args }) {
         target_path
           ? `target_path override: \`${target_path}\``
           : (meta.backup_type === 'files'
-            ? `target_path: / (original) — paths: ${(meta.paths || []).map(p => `\`${p}\``).join(', ')}`
+            ? `target_path: / (original) -- paths: ${(meta.paths || []).map(p => `\`${p}\``).join(', ')}`
             : `database: \`${meta.database}\``),
       ],
       reversibility: meta.backup_type === 'files' ? 'manual' : 'irreversible',
@@ -507,7 +507,7 @@ export async function handleSshBackupRestore({ getConnection, args }) {
     return toMcp(preview('ssh_backup_restore', plan, { server }), { format });
   }
 
-  // Verify sha256 BEFORE restoring. Mismatch → refuse.
+  // Verify sha256 BEFORE restoring. Mismatch -> refuse.
   if (verify && meta.sha256) {
     let actual;
     try { actual = await remoteSha256(client, meta.output_path, { timeout }); }
@@ -518,7 +518,7 @@ export async function handleSshBackupRestore({ getConnection, args }) {
     }
     if (actual !== meta.sha256) {
       return toMcp(fail('ssh_backup_restore',
-        `sha256 mismatch — artifact may be corrupt or tampered. expected=${meta.sha256} actual=${actual}. Restore aborted.`,
+        `sha256 mismatch -- artifact may be corrupt or tampered. expected=${meta.sha256} actual=${actual}. Restore aborted.`,
         { server, duration_ms: Date.now() - startedAt }), { format });
     }
   }
@@ -601,9 +601,9 @@ function renderBackupRestore(result) {
   if (!result.success) return defaultRender(result);
   const d = result.data;
   const meta = result.meta || {};
-  const dur = meta.duration_ms != null ? `  ·  \`${formatDuration(meta.duration_ms)}\`` : '';
+  const dur = meta.duration_ms != null ? `  |  \`${formatDuration(meta.duration_ms)}\`` : '';
   const lines = [];
-  lines.push(`▶ **ssh_backup_restore**  ·  \`${result.server}\`  ·  \`${d.backup_type}\`${dur}`);
+  lines.push(`[ok] **ssh_backup_restore**  |  \`${result.server}\`  |  \`${d.backup_type}\`${dur}`);
   lines.push(`from: \`${d.restored_from}\``);
   if (d.target_path) lines.push(`target: \`${d.target_path}\``);
   if (d.database) lines.push(`database: \`${d.database}\``);
@@ -611,10 +611,10 @@ function renderBackupRestore(result) {
   return lines.join('\n');
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// ssh_backup_schedule — append a cron entry that invokes the same backup
+// --------------------------------------------------------------------------
+// ssh_backup_schedule -- append a cron entry that invokes the same backup
 // command as handleSshBackupCreate.
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 export async function handleSshBackupSchedule({ getConnection, args }) {
   const {
     server,
@@ -643,7 +643,7 @@ export async function handleSshBackupSchedule({ getConnection, args }) {
 
   // Build the backup command that cron will run. Output path is templated with
   // $(date) so each run produces a distinct artifact. We intentionally do NOT
-  // embed the password into the cron line — caller should put `password` into
+  // embed the password into the cron line -- caller should put `password` into
   // ~/.my.cnf, ~/.pgpass, or environment to pick it up at run time.
   //
   // Schedule is a best-effort convenience: if `password` was provided, we include
@@ -679,7 +679,7 @@ export async function handleSshBackupSchedule({ getConnection, args }) {
           : `database: \`${database}\``,
         `output template: \`${scheduledOutTemplate}\``,
         'appends to user crontab; other entries preserved',
-        password ? 'WARNING: password embedded in cron line — prefer ~/.my.cnf or ~/.pgpass' : 'no password embedded',
+        password ? 'WARNING: password embedded in cron line -- prefer ~/.my.cnf or ~/.pgpass' : 'no password embedded',
       ],
       reversibility: 'manual',
       risk: 'medium',
@@ -730,9 +730,9 @@ function renderBackupSchedule(result) {
   if (!result.success) return defaultRender(result);
   const d = result.data;
   const meta = result.meta || {};
-  const dur = meta.duration_ms != null ? `  ·  \`${formatDuration(meta.duration_ms)}\`` : '';
+  const dur = meta.duration_ms != null ? `  |  \`${formatDuration(meta.duration_ms)}\`` : '';
   const lines = [];
-  lines.push(`▶ **ssh_backup_schedule**  ·  \`${result.server}\`  ·  \`${d.backup_type}\`${dur}`);
+  lines.push(`[ok] **ssh_backup_schedule**  |  \`${result.server}\`  |  \`${d.backup_type}\`${dur}`);
   lines.push(`cron: \`${d.cron}\``);
   lines.push(`output template: \`${d.output_template}\``);
   lines.push(`marker: \`${d.marker}\``);

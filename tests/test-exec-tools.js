@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Tests for src/tools/exec-tools.js — mocks getConnection/getServerConfig/resolveGroup.
+ * Tests for src/tools/exec-tools.js -- mocks getConnection/getServerConfig/resolveGroup.
  */
 
 import assert from 'assert';
@@ -13,12 +13,12 @@ import {
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
-  try { await fn(); passed++; console.log(`✅ ${name}`); }
-  catch (e) { failed++; fails.push({ name, err: e }); console.error(`❌ ${name}: ${e.message}`); }
+  try { await fn(); passed++; console.log(`[ok] ${name}`); }
+  catch (e) { failed++; fails.push({ name, err: e }); console.error(`[err] ${name}: ${e.message}`); }
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// ─── Fake ssh2 client ────────────────────────────────────────────────────
+// --- Fake ssh2 client ----------------------------------------------------
 class FakeStream extends EventEmitter {
   constructor() {
     super();
@@ -54,12 +54,12 @@ class FakeClient {
   }
 }
 
-console.log('🧪 Testing exec-tools\n');
+console.log('[test] Testing exec-tools\n');
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_execute
-// ──────────────────────────────────────────────────────────────────────────
-await test('ssh_execute: success renders ▶ marker + exit 0', async () => {
+// --------------------------------------------------------------------------
+await test('ssh_execute: success renders [ok] marker + exit 0', async () => {
   const client = new FakeClient({ script: () => ({ stdout: 'hi\n', code: 0 }) });
   const r = await handleSshExecute({
     getConnection: async () => client,
@@ -67,7 +67,7 @@ await test('ssh_execute: success renders ▶ marker + exit 0', async () => {
   });
   assert.strictEqual(r.isError, undefined);
   const md = r.content[0].text;
-  assert(md.startsWith('▶ **ssh_execute**'));
+  assert(md.startsWith('[ok] **ssh_execute**'));
   assert(md.includes('**exit 0**'));
   assert(md.includes('hi'));
 });
@@ -81,18 +81,18 @@ await test('ssh_execute: cwd shell-safely quoted in remote command', async () =>
   assert.strictEqual(client.lastCommand, "cd '/tmp; rm -rf /' && ls");
 });
 
-await test('ssh_execute: non-zero exit renders ✕ marker (not isError)', async () => {
+await test('ssh_execute: non-zero exit renders [err] marker (not isError)', async () => {
   const client = new FakeClient({ script: () => ({ stdout: '', stderr: 'nope', code: 127 }) });
   const r = await handleSshExecute({
     getConnection: async () => client,
     args: { server: 's', command: 'missing' },
   });
   assert.strictEqual(r.isError, undefined, 'non-zero is not tool-level error');
-  assert(r.content[0].text.startsWith('✕ **ssh_execute**'));
+  assert(r.content[0].text.startsWith('[err] **ssh_execute**'));
   assert(r.content[0].text.includes('**exit 127**'));
 });
 
-await test('ssh_execute: connection failure → isError with stderr explanation', async () => {
+await test('ssh_execute: connection failure -> isError with stderr explanation', async () => {
   const r = await handleSshExecute({
     getConnection: async () => { throw new Error('host unreachable'); },
     args: { server: 's', command: 'x' },
@@ -124,9 +124,9 @@ await test('ssh_execute: format:json returns JSON-only content', async () => {
   assert.strictEqual(parsed.stdout, 'x');
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_execute_sudo
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 await test('ssh_execute_sudo: password written to stdin, NEVER in argv', async () => {
   const client = new FakeClient({ script: () => ({ stdout: 'root', code: 0 }) });
   const secret = 'p@ss$w0rd"`'; // contains shell metachars that would break echo-pipe
@@ -200,9 +200,9 @@ await test('ssh_execute_sudo: preview returns high-risk dry-run, never calls rem
   assert(md.includes('password never enters argv'));
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_execute_group
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 await test('ssh_execute_group: runs on all servers, aggregates ok/fail counts', async () => {
   const clients = {
     s1: new FakeClient({ script: () => ({ stdout: 'ok1', code: 0 }) }),
@@ -231,7 +231,7 @@ await test('ssh_execute_group: markdown render shows per-server mini-cards', asy
     args: { group: 'pair', command: 'hostname' },
   });
   const md = r.content[0].text;
-  assert(md.includes('▶ **ssh_execute_group**'));
+  assert(md.includes('[ok] **ssh_execute_group**'));
   assert(md.includes('2/2 ok'));
   assert(md.includes('`a`'));
   assert(md.includes('`b`'));
@@ -277,7 +277,7 @@ await test('ssh_execute_group: concurrency caps parallelism', async () => {
     resolveGroup: async () => ['a','b','c','d','e','f'],
     args: { group: 'six', command: 'c', concurrency: 2, format: 'json' },
   });
-  assert(peak <= 2, `expected peak ≤ 2, got ${peak}`);
+  assert(peak <= 2, `expected peak <= 2, got ${peak}`);
 });
 
 await test('ssh_execute_group: empty group returns structured failure', async () => {
@@ -303,8 +303,8 @@ await test('ssh_execute_group: preview shows fan-out plan, never connects', asyn
   assert(r.content[0].text.includes('s1, s2'));
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Summary
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);
-if (failed > 0) { for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`); process.exit(1); }
+if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }

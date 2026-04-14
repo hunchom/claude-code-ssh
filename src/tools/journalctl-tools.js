@@ -1,5 +1,5 @@
 /**
- * ssh_journalctl — typed journal reads.
+ * ssh_journalctl -- typed journal reads.
  *
  * Reads systemd journal entries with optional filtering.
  *
@@ -10,10 +10,10 @@
  * Text-mode returns raw journalctl output (human-friendly).
  *
  * All interpolated values are shell-quoted via shQuote(). `since`/`until`
- * are opaque strings from journalctl's perspective — both absolute
+ * are opaque strings from journalctl's perspective -- both absolute
  * ("2024-01-01 10:00") and relative ("5 minutes ago", "1h") work.
  *
- * follow:true is NOT supported in this tool — it would block indefinitely.
+ * follow:true is NOT supported in this tool -- it would block indefinitely.
  * Use ssh_tail against /var/log/messages or ssh_tail_start for streaming.
  */
 
@@ -31,7 +31,7 @@ export const ALLOWED_PRIORITIES = new Set([
 ]);
 
 /**
- * Priority numeric→name map (from syslog severity). Used when JSON mode
+ * Priority numeric->name map (from syslog severity). Used when JSON mode
  * returns the numeric PRIORITY field.
  */
 export const PRIORITY_NAMES = {
@@ -48,7 +48,7 @@ export const PRIORITY_NAMES = {
 /**
  * Coerce a priority value to a journalctl-safe token. 'warn' is accepted as
  * an alias for 'warning' (which journalctl also honors). Returns null on bad
- * input — callers must reject.
+ * input -- callers must reject.
  */
 export function normalizePriority(p) {
   if (p == null) return 'info';
@@ -68,9 +68,9 @@ export function safeLines(n, fallback = DEFAULT_LINES) {
   return v;
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// Command builder — exported for tests
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// Command builder -- exported for tests
+// --------------------------------------------------------------------------
 
 /**
  * Build the journalctl command string. All interpolated values shell-quoted.
@@ -106,22 +106,22 @@ export function buildJournalctlCommand({
   return cmd;
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// Parser — exported for tests
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// Parser -- exported for tests
+// --------------------------------------------------------------------------
 
 /**
  * Parse JSONL output from `journalctl --output=json` into typed entries.
  *
  * Each journal record uses ALL-CAPS field names. We map to lowercase
  * typed properties:
- *   __REALTIME_TIMESTAMP (µs) → time (ISO-8601 string)
- *   PRIORITY (0..7 numeric)   → priority (string name)
- *   _HOSTNAME                 → hostname
- *   _SYSTEMD_UNIT             → unit
- *   MESSAGE                   → message
- *   _PID                      → pid (number)
- *   _UID                      → uid (number)
+ *   __REALTIME_TIMESTAMP (us) -> time (ISO-8601 string)
+ *   PRIORITY (0..7 numeric)   -> priority (string name)
+ *   _HOSTNAME                 -> hostname
+ *   _SYSTEMD_UNIT             -> unit
+ *   MESSAGE                   -> message
+ *   _PID                      -> pid (number)
+ *   _UID                      -> uid (number)
  *
  * Malformed JSON lines are skipped. Returns [] on empty input.
  */
@@ -135,7 +135,7 @@ export function parseJournalJsonl(text) {
     try { rec = JSON.parse(line); } catch (_) { continue; }
     if (!rec || typeof rec !== 'object') continue;
 
-    // Timestamp: journald stores µs-since-epoch as string
+    // Timestamp: journald stores us-since-epoch as string
     let time = null;
     const ts = rec.__REALTIME_TIMESTAMP;
     if (ts) {
@@ -164,31 +164,31 @@ export function parseJournalJsonl(text) {
   return out;
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Renderer
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 export function renderJournalctl(result) {
-  if (!result.success) return `✕ **ssh_journalctl** — ${result.error || 'failed'}`;
+  if (!result.success) return `[err] **ssh_journalctl** -- ${result.error || 'failed'}`;
   const d = result.data;
-  const srv = result.server ? `  ·  \`${result.server}\`` : '';
-  const dur = result.meta?.duration_ms != null ? `  ·  \`${formatDuration(result.meta.duration_ms)}\`` : '';
+  const srv = result.server ? `  |  \`${result.server}\`` : '';
+  const dur = result.meta?.duration_ms != null ? `  |  \`${formatDuration(result.meta.duration_ms)}\`` : '';
   const lines = [];
-  lines.push(`▶ **ssh_journalctl**${srv}  ·  ${d.count} entries${dur}`);
+  lines.push(`[ok] **ssh_journalctl**${srv}  |  ${d.count} entries${dur}`);
 
   if (d.entries && d.entries.length) {
     lines.push('');
-    // JSON entries → typed table
+    // JSON entries -> typed table
     if (typeof d.entries[0] === 'object') {
       lines.push('| time | priority | unit | message |');
       lines.push('| --- | --- | --- | --- |');
       for (const e of d.entries) {
-        const t = (e.time ?? '—').toString();
+        const t = (e.time ?? '--').toString();
         const msg = (e.message ?? '').toString().slice(0, 120).replace(/\|/g, '\\|').replace(/\n/g, ' ');
-        lines.push(`| ${t} | ${e.priority ?? '—'} | ${e.unit ?? '—'} | ${msg} |`);
+        lines.push(`| ${t} | ${e.priority ?? '--'} | ${e.unit ?? '--'} | ${msg} |`);
       }
     } else {
-      // Raw text → code block
+      // Raw text -> code block
       lines.push('```text');
       for (const e of d.entries) lines.push(String(e));
       lines.push('```');
@@ -197,9 +197,9 @@ export function renderJournalctl(result) {
   return lines.join('\n');
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Handler
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 /**
  * @param {Object} params
@@ -212,7 +212,7 @@ export function renderJournalctl(result) {
  *   - priority (default 'info')
  *   - lines (default 100)
  *   - grep (optional)
- *   - follow (default false; true → structured failure)
+ *   - follow (default false; true -> structured failure)
  *   - json (default true)
  *   - format (markdown | json | both)
  */
@@ -230,10 +230,10 @@ export async function handleSshJournalctl({ getConnection, args }) {
     format = 'markdown',
   } = args || {};
 
-  // ── Validation ────────────────────────────────────────────────────────
+  // -- Validation --------------------------------------------------------
   if (follow) {
     return toMcp(fail('ssh_journalctl',
-      'follow:true is not supported — use ssh_tail on /var/log or ssh_tail_start for streaming', { server }), {
+      'follow:true is not supported -- use ssh_tail on /var/log or ssh_tail_start for streaming', { server }), {
       format, renderer: renderJournalctl,
     });
   }

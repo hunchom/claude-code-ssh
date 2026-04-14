@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Test suite for src/tool-exec-stream.js — full pipeline with a fake client.
+ * Test suite for src/tool-exec-stream.js -- full pipeline with a fake client.
  * Run: node tests/test-tool-exec-stream.js
  */
 
@@ -17,11 +17,11 @@ async function test(name, fn) {
   try {
     await fn();
     passed++;
-    console.log(`✅ ${name}`);
+    console.log(`[ok] ${name}`);
   } catch (e) {
     failed++;
     fails.push({ name, err: e });
-    console.error(`❌ ${name}: ${e.message}`);
+    console.error(`[err] ${name}: ${e.message}`);
   }
 }
 
@@ -52,10 +52,10 @@ class FakeClient {
 }
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-console.log('🧪 Testing tool-exec-stream\n');
+console.log('[test] Testing tool-exec-stream\n');
 
-// ─── Happy path ──────────────────────────────────────────────────────────
-await test('success returns markdown content with ▶ marker and exit 0 badge', async () => {
+// --- Happy path ----------------------------------------------------------
+await test('success returns markdown content with [ok] marker and exit 0 badge', async () => {
   const client = new FakeClient();
   const p = runStreamedExec({
     client, server: 'prod01', command: 'echo hi', cwd: '/var/app',
@@ -69,7 +69,7 @@ await test('success returns markdown content with ▶ marker and exit 0 badge', 
   assert.strictEqual(r.isError, undefined, 'not a tool-level error');
   assert.strictEqual(r.content.length, 1);
   const md = r.content[0].text;
-  assert(md.startsWith('▶ **ssh_execute**'), 'success marker');
+  assert(md.startsWith('[ok] **ssh_execute**'), 'success marker');
   assert(md.includes('`prod01`'));
   assert(md.includes('**exit 0**'));
   assert(md.includes('*(in `/var/app`)*'));
@@ -85,10 +85,10 @@ await test('non-zero exit is NOT isError (command ran, just failed)', async () =
   const r = await p;
   assert.strictEqual(r.isError, undefined);
   assert(r.content[0].text.includes('**exit 1**'));
-  assert(r.content[0].text.startsWith('✕ **ssh_execute**'));
+  assert(r.content[0].text.startsWith('[err] **ssh_execute**'));
 });
 
-await test('exec error → isError:true with stderr populated', async () => {
+await test('exec error -> isError:true with stderr populated', async () => {
   const client = new FakeClient({ execError: new Error('connection refused') });
   const r = await runStreamedExec({ client, server: 's', command: 'anything' });
   assert.strictEqual(r.isError, true);
@@ -108,7 +108,7 @@ await test('timeout bubbles up as isError:true with timeout message', async () =
   assert(client.streams[0].signals.includes('INT'));
 });
 
-// ─── cwd shell safety at the tool layer ─────────────────────────────────
+// --- cwd shell safety at the tool layer ---------------------------------
 await test('cwd with injection attempt is neutralized before reaching remote', async () => {
   const client = new FakeClient();
   const p = runStreamedExec({
@@ -122,7 +122,7 @@ await test('cwd with injection attempt is neutralized before reaching remote', a
   await p;
 });
 
-// ─── onChunk forwarding ──────────────────────────────────────────────────
+// --- onChunk forwarding --------------------------------------------------
 await test('onChunk receives debounced stdout chunks', async () => {
   const chunks = [];
   const client = new FakeClient();
@@ -142,7 +142,7 @@ await test('onChunk receives debounced stdout chunks', async () => {
   assert(chunks.every(c => c.kind === 'stdout'));
 });
 
-// ─── format variants ─────────────────────────────────────────────────────
+// --- format variants -----------------------------------------------------
 await test('format:json returns single JSON block parseable into wire schema', async () => {
   const client = new FakeClient();
   const p = runStreamedExec({
@@ -176,7 +176,7 @@ await test('format:both returns markdown + json in content array', async () => {
   assert.doesNotThrow(() => JSON.parse(r.content[1].text));
 });
 
-// ─── Large output truncation through the pipeline ───────────────────────
+// --- Large output truncation through the pipeline -----------------------
 await test('oversized stdout is truncated and rendered with elided blockquote', async () => {
   const client = new FakeClient();
   const p = runStreamedExec({
@@ -194,9 +194,9 @@ await test('oversized stdout is truncated and rendered with elided blockquote', 
   assert(md.includes('> elided:'), 'truncation blockquote');
 });
 
-// ─── Summary ─────────────────────────────────────────────────────────────
+// --- Summary -------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
-  for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`);
+  for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`);
   process.exit(1);
 }

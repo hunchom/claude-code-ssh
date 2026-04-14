@@ -27,12 +27,12 @@ const COLORS = {
   RESET: '\x1b[0m'
 };
 
-// Icons for each level
+// Level tags
 const ICONS = {
-  DEBUG: '🔍',
-  INFO: '✅',
-  WARN: '⚠️',
-  ERROR: '❌'
+  DEBUG: '[dbg] ',
+  INFO:  '[ok]  ',
+  WARN:  '[warn]',
+  ERROR: '[err] '
 };
 
 class Logger {

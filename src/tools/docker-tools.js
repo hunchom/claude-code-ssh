@@ -1,5 +1,5 @@
 /**
- * ssh_docker — typed Docker CLI wrapper over SSH.
+ * ssh_docker -- typed Docker CLI wrapper over SSH.
  *
  * Actions:
  *   - ps       list containers (JSONL-parsed)
@@ -14,7 +14,7 @@
  *     acceptance of 12-64-char hex IDs). Arbitrary strings are rejected.
  *   - image ref validated against a conservative subset (name[:tag][@digest]).
  *   - every interpolated value shell-quoted via shQuote().
- *   - mutating actions support preview:true — nothing remote runs.
+ *   - mutating actions support preview:true -- nothing remote runs.
  */
 
 import { streamExecCommand, shQuote } from '../stream-exec.js';
@@ -26,9 +26,9 @@ const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_TAIL_LINES = 100;
 const MAX_TAIL_LINES = 100_000;
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Whitelists
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 export const ALLOWED_ACTIONS = new Set([
   'ps', 'logs', 'exec', 'inspect',
@@ -56,9 +56,9 @@ export const RISK_MAP = {
   pull: 'low',
 };
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Validators
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 /**
  * Docker container NAME (as enforced by Docker itself):
@@ -97,9 +97,9 @@ export function isValidImage(ref) {
   return IMAGE_REF_RE.test(ref);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Helpers
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 function safeTailLines(n, fallback = DEFAULT_TAIL_LINES) {
   const v = Math.floor(Number(n));
@@ -149,27 +149,27 @@ export function parseDockerInspect(text) {
   }
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Renderer
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 export function renderDocker(result) {
-  if (!result.success) return `✕ **ssh_docker** — ${result.error || 'failed'}`;
+  if (!result.success) return `[err] **ssh_docker** -- ${result.error || 'failed'}`;
   const d = result.data;
   if (d && d.preview) {
     const lines = [];
-    lines.push(`▶ **ssh_docker** — dry run`);
+    lines.push(`[ok] **ssh_docker** -- dry run`);
     lines.push('');
     lines.push('```json');
     lines.push(JSON.stringify(d.plan, null, 2));
     lines.push('```');
     return lines.join('\n');
   }
-  const srv = result.server ? `  ·  \`${result.server}\`` : '';
-  const dur = result.meta?.duration_ms != null ? `  ·  \`${formatDuration(result.meta.duration_ms)}\`` : '';
+  const srv = result.server ? `  |  \`${result.server}\`` : '';
+  const dur = result.meta?.duration_ms != null ? `  |  \`${formatDuration(result.meta.duration_ms)}\`` : '';
 
   if (d.action === 'ps') {
-    const lines = [`▶ **ssh_docker ps**${srv}  ·  ${d.containers.length} containers${dur}`];
+    const lines = [`[ok] **ssh_docker ps**${srv}  |  ${d.containers.length} containers${dur}`];
     if (d.containers.length) {
       lines.push('');
       lines.push('| id | name | image | status | ports |');
@@ -177,14 +177,14 @@ export function renderDocker(result) {
       for (const c of d.containers) {
         const id = (c.id || '').slice(0, 12);
         const ports = (c.ports || '').slice(0, 40).replace(/\|/g, '\\|');
-        lines.push(`| \`${id}\` | ${c.name ?? '—'} | ${c.image ?? '—'} | ${c.status ?? '—'} | ${ports} |`);
+        lines.push(`| \`${id}\` | ${c.name ?? '--'} | ${c.image ?? '--'} | ${c.status ?? '--'} | ${ports} |`);
       }
     }
     return lines.join('\n');
   }
 
   if (d.action === 'logs') {
-    const lines = [`▶ **ssh_docker logs**  ·  \`${d.container}\`${srv}${dur}`];
+    const lines = [`[ok] **ssh_docker logs**  |  \`${d.container}\`${srv}${dur}`];
     if (d.output) {
       lines.push('');
       lines.push('```text');
@@ -195,8 +195,8 @@ export function renderDocker(result) {
   }
 
   if (d.action === 'exec') {
-    const badge = d.exit_code === 0 ? '▶' : '✕';
-    const lines = [`${badge} **ssh_docker exec**  ·  \`${d.container}\`${srv}  ·  exit ${d.exit_code}${dur}`];
+    const badge = d.exit_code === 0 ? '[ok]' : '[err]';
+    const lines = [`${badge} **ssh_docker exec**  |  \`${d.container}\`${srv}  |  exit ${d.exit_code}${dur}`];
     lines.push(`\`$ ${d.command}\``);
     if (d.stdout) {
       lines.push('');
@@ -215,7 +215,7 @@ export function renderDocker(result) {
   }
 
   if (d.action === 'inspect') {
-    const lines = [`▶ **ssh_docker inspect**  ·  \`${d.container}\`${srv}${dur}`];
+    const lines = [`[ok] **ssh_docker inspect**  |  \`${d.container}\`${srv}${dur}`];
     lines.push('');
     lines.push('```json');
     lines.push(JSON.stringify(d.inspect, null, 2));
@@ -224,9 +224,9 @@ export function renderDocker(result) {
   }
 
   // stop/start/restart/rm/pull
-  const badge = d.exit_code === 0 ? '▶' : '✕';
+  const badge = d.exit_code === 0 ? '[ok]' : '[err]';
   const target = d.container || d.image || '';
-  const lines = [`${badge} **ssh_docker ${d.action}**  ·  \`${target}\`${srv}  ·  exit ${d.exit_code}${dur}`];
+  const lines = [`${badge} **ssh_docker ${d.action}**  |  \`${target}\`${srv}  |  exit ${d.exit_code}${dur}`];
   if (d.output) {
     lines.push('');
     lines.push('```text');
@@ -236,9 +236,9 @@ export function renderDocker(result) {
   return lines.join('\n');
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Handler
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 /**
  * @param {Object} params
@@ -250,7 +250,7 @@ export function renderDocker(result) {
  *   - image (required for pull)
  *   - command (required for exec; arbitrary shell string inside container)
  *   - tail_lines (default 100; logs action)
- *   - follow (default false; logs/pull — not supported in one-shot)
+ *   - follow (default false; logs/pull -- not supported in one-shot)
  *   - preview (default false)
  *   - format (markdown | json | both)
  */
@@ -268,19 +268,19 @@ export async function handleSshDocker({ getConnection, args }) {
     onChunk,
   } = args || {};
 
-  // ── Whitelist ─────────────────────────────────────────────────────────
+  // -- Whitelist ---------------------------------------------------------
   if (!action || !ALLOWED_ACTIONS.has(action)) {
     return toMcp(fail('ssh_docker', `invalid action "${action}"`, { server }), {
       format, renderer: renderDocker,
     });
   }
 
-  // ── ps (no container needed) ──────────────────────────────────────────
+  // -- ps (no container needed) ------------------------------------------
   if (action === 'ps') {
     return runPs({ getConnection, server, format });
   }
 
-  // ── pull (image needed, no container) ────────────────────────────────
+  // -- pull (image needed, no container) --------------------------------
   if (action === 'pull') {
     if (!image) {
       return toMcp(fail('ssh_docker', 'pull requires an image', { server }), {
@@ -295,7 +295,7 @@ export async function handleSshDocker({ getConnection, args }) {
     return runPull({ getConnection, server, image, isPreview, format, onChunk });
   }
 
-  // ── All other actions need container ──────────────────────────────────
+  // -- All other actions need container ----------------------------------
   if (!container) {
     return toMcp(fail('ssh_docker', `action "${action}" requires a container`, { server }), {
       format, renderer: renderDocker,
@@ -310,7 +310,7 @@ export async function handleSshDocker({ getConnection, args }) {
   if (action === 'logs') {
     if (follow) {
       return toMcp(fail('ssh_docker',
-        'follow:true not supported by this tool — use ssh_tail for streaming', { server }), {
+        'follow:true not supported by this tool -- use ssh_tail for streaming', { server }), {
         format, renderer: renderDocker,
       });
     }
@@ -334,9 +334,9 @@ export async function handleSshDocker({ getConnection, args }) {
   return runMutation({ getConnection, server, action, container, isPreview, format });
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Runners
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 async function runPs({ getConnection, server, format }) {
   const command = `docker ps --format ${shQuote('{{json .}}')}`;

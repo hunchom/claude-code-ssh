@@ -1,15 +1,15 @@
 /**
  * ssh_tail tool family.
  *
- *   ssh_tail        — one-shot `tail -n N FILE` (optionally grep-filtered).
- *   ssh_tail_start  — start a long-lived `tail -n N -f FILE | grep ...` session.
+ *   ssh_tail        -- one-shot `tail -n N FILE` (optionally grep-filtered).
+ *   ssh_tail_start  -- start a long-lived `tail -n N -f FILE | grep ...` session.
  *                     Stores a ring-buffered accumulator (cap 1 MB) keyed by
  *                     session_id. Returns initial chunk + session_id.
- *   ssh_tail_read   — pull new chunks from a session since a given offset.
- *   ssh_tail_stop   — INT the stream, close it, drop the session. Idempotent.
+ *   ssh_tail_read   -- pull new chunks from a session since a given offset.
+ *   ssh_tail_stop   -- INT the stream, close it, drop the session. Idempotent.
  *
  * All shell-interpolated values (file path, grep pattern) pass through
- * shQuote(). Line counts coerce via Number() → Math.floor → safe default.
+ * shQuote(). Line counts coerce via Number() -> Math.floor -> safe default.
  */
 
 import crypto from 'crypto';
@@ -22,7 +22,7 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_MAX_LEN = 10_000;
 const RING_BUFFER_CAP = 1_000_000;
 
-/** Session registry — module-level Map so tools across calls share it. */
+/** Session registry -- module-level Map so tools across calls share it. */
 const sessions = new Map();
 /** Bounded set of recently-stopped session IDs, so a repeat stop is a no-op. */
 const stoppedIds = new Set();
@@ -60,9 +60,9 @@ export function buildTailCommand({ file, lines, grep, follow = false }) {
   return `tail ${flags} ${f}${grepSuffix}`;
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_tail (one-shot)
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 export async function handleSshTail({ getConnection, args }) {
   const {
     server, file, lines = DEFAULT_LINES, grep,
@@ -112,9 +112,9 @@ function makeTailExecError(tool, server, command, error, format, durationMs) {
   return { content: makeMcpContent(exec, { format }), isError: true };
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// ssh_tail_start — long-lived follow session
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// ssh_tail_start -- long-lived follow session
+// --------------------------------------------------------------------------
 export async function handleSshTailStart({ getConnection, args }) {
   const {
     server, file, lines = DEFAULT_LINES, grep,
@@ -135,7 +135,7 @@ export async function handleSshTailStart({ getConnection, args }) {
     return toMcp(fail('ssh_tail_start', e, { server, command }), { format });
   }
 
-  // Raw client.exec — we need the long-lived stream; streamExecCommand
+  // Raw client.exec -- we need the long-lived stream; streamExecCommand
   // resolves on close and is therefore unsuitable for follow sessions.
   const session = await new Promise((resolve, reject) => {
     client.exec(fullCommand, (err, stream) => {
@@ -191,9 +191,9 @@ export async function handleSshTailStart({ getConnection, args }) {
   );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// ssh_tail_read — pull accumulated chunks since `since_offset`
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// ssh_tail_read -- pull accumulated chunks since `since_offset`
+// --------------------------------------------------------------------------
 export async function handleSshTailRead({ args }) {
   const { session_id, since_offset, format = 'markdown' } = args || {};
 
@@ -246,9 +246,9 @@ export async function handleSshTailRead({ args }) {
   );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// ssh_tail_stop — idempotent teardown
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// ssh_tail_stop -- idempotent teardown
+// --------------------------------------------------------------------------
 export async function handleSshTailStop({ args }) {
   const { session_id, format = 'markdown' } = args || {};
 

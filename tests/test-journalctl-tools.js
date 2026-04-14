@@ -9,8 +9,8 @@ import {
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
-  try { await fn(); passed++; console.log(`✅ ${name}`); }
-  catch (e) { failed++; fails.push({ name, err: e }); console.error(`❌ ${name}: ${e.message}`); }
+  try { await fn(); passed++; console.log(`[ok] ${name}`); }
+  catch (e) { failed++; fails.push({ name, err: e }); console.error(`[err] ${name}: ${e.message}`); }
 }
 
 class FakeStream extends EventEmitter {
@@ -34,23 +34,23 @@ class FakeClient {
   }
 }
 
-console.log('🧪 Testing journalctl-tools\n');
+console.log('[test] Testing journalctl-tools\n');
 
-// ─── normalizePriority ──────────────────────────────────────────────────
+// --- normalizePriority --------------------------------------------------
 await test('normalizePriority: default info', () => assert.strictEqual(normalizePriority(undefined), 'info'));
-await test('normalizePriority: warn → warning alias', () => assert.strictEqual(normalizePriority('warn'), 'warning'));
+await test('normalizePriority: warn -> warning alias', () => assert.strictEqual(normalizePriority('warn'), 'warning'));
 await test('normalizePriority: numeric 3 accepted', () => assert.strictEqual(normalizePriority(3), '3'));
 await test('normalizePriority: numeric 7 accepted', () => assert.strictEqual(normalizePriority('7'), '7'));
-await test('normalizePriority: garbage → null', () => assert.strictEqual(normalizePriority('xxx'), null));
+await test('normalizePriority: garbage -> null', () => assert.strictEqual(normalizePriority('xxx'), null));
 await test('normalizePriority: too-high numeric rejected', () => assert.strictEqual(normalizePriority('9'), null));
 
-// ─── safeLines ──────────────────────────────────────────────────────────
+// --- safeLines ----------------------------------------------------------
 await test('safeLines: default when not a number', () => assert.strictEqual(safeLines(undefined), 100));
 await test('safeLines: clamp max 10000', () => assert.strictEqual(safeLines(99_999_999), 10_000));
 await test('safeLines: clamp min 1', () => assert.strictEqual(safeLines(0), 1));
 await test('safeLines: NaN-equivalent falls back', () => assert.strictEqual(safeLines('abc'), 100));
 
-// ─── buildJournalctlCommand ─────────────────────────────────────────────
+// --- buildJournalctlCommand ---------------------------------------------
 await test('buildJournalctlCommand: defaults', () => {
   const cmd = buildJournalctlCommand({});
   assert(cmd.includes('journalctl'));
@@ -76,7 +76,7 @@ await test('buildJournalctlCommand: grep pattern appended safely', () => {
   assert(cmd.includes("| grep -E 'ERROR'\\''; rm'"));
 });
 
-// ─── parseJournalJsonl ──────────────────────────────────────────────────
+// --- parseJournalJsonl --------------------------------------------------
 await test('parseJournalJsonl: parses single record', () => {
   const line = JSON.stringify({
     __REALTIME_TIMESTAMP: '1700000000000000',
@@ -109,12 +109,12 @@ await test('parseJournalJsonl: skips malformed JSON lines', () => {
   assert.strictEqual(r.length, 2);
 });
 
-await test('parseJournalJsonl: empty input → []', () => {
+await test('parseJournalJsonl: empty input -> []', () => {
   assert.deepStrictEqual(parseJournalJsonl(''), []);
   assert.deepStrictEqual(parseJournalJsonl(null), []);
 });
 
-// ─── handleSshJournalctl ────────────────────────────────────────────────
+// --- handleSshJournalctl ------------------------------------------------
 await test('handleSshJournalctl: happy path json mode', async () => {
   const sample = JSON.stringify({ MESSAGE: 'hello', PRIORITY: '6', _HOSTNAME: 'h' });
   const client = new FakeClient({ script: () => ({ stdout: sample, code: 0 }) });
@@ -140,7 +140,7 @@ await test('handleSshJournalctl: text mode returns entries array of raw lines', 
   assert(parsed.data.entries[0].includes('hello'));
 });
 
-await test('handleSshJournalctl: invalid priority → fail, no remote call', async () => {
+await test('handleSshJournalctl: invalid priority -> fail, no remote call', async () => {
   let called = false;
   const r = await handleSshJournalctl({
     getConnection: async () => { called = true; throw new Error('should not call'); },
@@ -150,7 +150,7 @@ await test('handleSshJournalctl: invalid priority → fail, no remote call', asy
   assert.strictEqual(r.isError, true);
 });
 
-await test('handleSshJournalctl: connection failure → isError', async () => {
+await test('handleSshJournalctl: connection failure -> isError', async () => {
   const r = await handleSshJournalctl({
     getConnection: async () => { throw new Error('ssh down'); },
     args: { server: 's' },
@@ -160,4 +160,4 @@ await test('handleSshJournalctl: connection failure → isError', async () => {
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
-if (failed > 0) { for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`); process.exit(1); }
+if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }

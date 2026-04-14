@@ -1,11 +1,11 @@
 /**
  * Minimal bounded-concurrency map. Zero deps, tiny surface.
  *
- * pMap(items, fn, { concurrency, stopOnError }) → Promise<Array<{item, ok, value?, error?}>>
+ * pMap(items, fn, { concurrency, stopOnError }) -> Promise<Array<{item, ok, value?, error?}>>
  *
  * - Preserves input order in the result.
  * - Never throws; each element resolves independently into {ok, value|error}.
- *   (Opt in to fail-fast via stopOnError:true → rejects on first error.)
+ *   (Opt in to fail-fast via stopOnError:true -> rejects on first error.)
  */
 
 export async function pMap(items, fn, { concurrency = 5, stopOnError = false } = {}) {

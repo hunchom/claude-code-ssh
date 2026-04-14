@@ -81,7 +81,7 @@ export async function runStreamedExec({
   });
   return {
     content: makeMcpContent(exec, { format }),
-    // Non-zero exit is NOT a tool-level isError — the command ran, just failed.
+    // Non-zero exit is NOT a tool-level isError -- the command ran, just failed.
     // Claude can read exit_code from the JSON or badge from the markdown.
   };
 }

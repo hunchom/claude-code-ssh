@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Tests for src/tools/monitoring-tools.js — FakeClient pattern per cat/exec tests.
+ * Tests for src/tools/monitoring-tools.js -- FakeClient pattern per cat/exec tests.
  */
 
 import assert from 'assert';
@@ -32,7 +32,7 @@ async function test(name, fn) {
   catch (e) { failed++; fails.push({ name, err: e }); console.error(`FAIL  ${name}: ${e.message}`); }
 }
 
-// ─── FakeClient ──────────────────────────────────────────────────────────
+// --- FakeClient ----------------------------------------------------------
 class FakeStream extends EventEmitter {
   constructor() { super(); this.stderr = new EventEmitter(); this.writes = []; this.endCalls = 0; this.signals = []; }
   write(d) { this.writes.push(String(d)); return true; }
@@ -62,7 +62,7 @@ class FakeClient {
 
 console.log('Testing monitoring-tools\n');
 
-// ─── Parsers ─────────────────────────────────────────────────────────────
+// --- Parsers -------------------------------------------------------------
 
 await test('parseTopCpu: extracts user/system/idle/iowait', () => {
   const sample = [
@@ -89,7 +89,7 @@ await test('parseFreeMem: -b output gives byte-level numeric fields', () => {
   assert.strictEqual(r.used_bytes, 8388608000);
   assert.strictEqual(r.free_bytes, 2097152000);
   assert.strictEqual(r.available_bytes, 8000000000);
-  // 8388608000 / 16777216000 = 0.5 → 50%
+  // 8388608000 / 16777216000 = 0.5 -> 50%
   assert.strictEqual(r.used_pct, 50);
 });
 
@@ -102,7 +102,7 @@ await test('parseLoadAvg: /proc/loadavg extracts 1/5/15m + procs', () => {
   assert.strictEqual(r.total_procs, 123);
 });
 
-await test('parseUptime: /proc/uptime → seconds + idle_seconds', () => {
+await test('parseUptime: /proc/uptime -> seconds + idle_seconds', () => {
   const r = parseUptime('12345.67 98765.43\n');
   assert.strictEqual(r.seconds, 12345.67);
   assert.strictEqual(r.idle_seconds, 98765.43);
@@ -133,7 +133,7 @@ await test('parseNetDev: skips lo, extracts rx/tx bytes', () => {
     '  eth0: 1000000    100    0    0    0     0          0         0 2000000    200    1    0    0     0       0          0',
   ].join('\n');
   const r = parseNetDev(sample);
-  // We include lo — tool strips nothing; caller decides
+  // We include lo -- tool strips nothing; caller decides
   assert(r.find(x => x.interface === 'eth0'));
   const eth = r.find(x => x.interface === 'eth0');
   assert.strictEqual(eth.rx_bytes, 1000000);
@@ -220,7 +220,7 @@ await test('splitHealthSections: separates output by ---NAME--- markers', () => 
   assert(!r.CPU.includes('---'));
 });
 
-// ─── status heuristic ────────────────────────────────────────────────────
+// --- status heuristic ----------------------------------------------------
 
 await test('computeStatus: healthy when nothing exceeds thresholds', () => {
   const s = computeStatus({
@@ -258,7 +258,7 @@ await test('computeStatus: critical when load_1m > cores*2', () => {
   assert.strictEqual(s, 'critical');
 });
 
-// ─── handleSshHealthCheck ────────────────────────────────────────────────
+// --- handleSshHealthCheck ------------------------------------------------
 
 function buildHealthOutput({
   cpu = '%Cpu(s):  3.1 us,  1.2 sy,  0.0 ni, 95.5 id,  0.2 wa,  0.0 hi,  0.0 si,  0.0 st',
@@ -298,7 +298,7 @@ await test('ssh_health_check: parses realistic output into typed JSON', async ()
   assert.strictEqual(parsed.data.status, 'healthy');
 });
 
-await test('ssh_health_check: status heuristic — critical via disk > 95', async () => {
+await test('ssh_health_check: status heuristic -- critical via disk > 95', async () => {
   const disk = '/dev/sda1 100 97 3 97% /';
   const client = new FakeClient({ script: () => ({ stdout: buildHealthOutput({ disk }), code: 0 }) });
   const r = await handleSshHealthCheck({
@@ -309,7 +309,7 @@ await test('ssh_health_check: status heuristic — critical via disk > 95', asyn
   assert.strictEqual(parsed.data.status, 'critical');
 });
 
-await test('ssh_health_check: status heuristic — degraded via memory > 85', async () => {
+await test('ssh_health_check: status heuristic -- degraded via memory > 85', async () => {
   // 14000000000 / 16000000000 = 87.5%
   const mem = 'Mem:     16000000000 14000000000 2000000000 100 1000000000 1500000000';
   const client = new FakeClient({ script: () => ({ stdout: buildHealthOutput({ mem }), code: 0 }) });
@@ -321,7 +321,7 @@ await test('ssh_health_check: status heuristic — degraded via memory > 85', as
   assert.strictEqual(parsed.data.status, 'degraded');
 });
 
-await test('ssh_health_check: missing section → graceful null field', async () => {
+await test('ssh_health_check: missing section -> graceful null field', async () => {
   // Drop the CPU section entirely
   const stdout = [
     '---MEM---', '              total', 'Mem:     16000000000 8000000000 2000000000 100 1000000000 8000000000',
@@ -341,7 +341,7 @@ await test('ssh_health_check: missing section → graceful null field', async ()
   assert(parsed.data.memory != null);
 });
 
-await test('ssh_health_check: connection failure → isError', async () => {
+await test('ssh_health_check: connection failure -> isError', async () => {
   const r = await handleSshHealthCheck({
     getConnection: async () => { throw new Error('host unreachable'); },
     args: { server: 's', format: 'json' },
@@ -365,7 +365,7 @@ await test('ssh_health_check: markdown render contains status badge + tables', a
   assert(md.includes('**Disk**'));
 });
 
-// ─── handleSshMonitor ────────────────────────────────────────────────────
+// --- handleSshMonitor ----------------------------------------------------
 
 await test('ssh_monitor cpu: typed cpu payload', async () => {
   const stdout = 'top - x\nTasks: 1\n%Cpu(s):  5.0 us,  2.0 sy,  0.0 ni, 92.0 id,  1.0 wa,  0.0 hi,  0.0 si,  0.0 st\n';
@@ -448,7 +448,7 @@ await test('ssh_monitor process: typed process list sorted by cpu desc', async (
   assert(parsed.data.process[0].cpu_pct >= parsed.data.process[1].cpu_pct);
 });
 
-// ─── handleSshServiceStatus ─────────────────────────────────────────────
+// --- handleSshServiceStatus ---------------------------------------------
 
 await test('ssh_service_status: parses show output into typed record', async () => {
   const show = [
@@ -462,7 +462,7 @@ await test('ssh_service_status: parses show output into typed record', async () 
     'Description=nginx HTTP server',
   ].join('\n');
   const statusText = [
-    '● nginx.service - nginx HTTP server',
+    '* nginx.service - nginx HTTP server',
     '   Loaded: loaded (/lib/systemd/system/nginx.service; enabled)',
     '   Active: active (running)',
     '',
@@ -507,14 +507,14 @@ await test('ssh_service_status: handles [not set] and infinity gracefully', asyn
   const parsed = JSON.parse(r.content[0].text);
   assert.strictEqual(parsed.data.memory_bytes, null);
   assert.strictEqual(parsed.data.cpu_ns, null);
-  // MainPID=0 → numeric 0 is valid
+  // MainPID=0 -> numeric 0 is valid
   assert.strictEqual(parsed.data.main_pid, 0);
 });
 
 await test('ssh_service_status: extracts recent_logs as string array', async () => {
   const show = 'ActiveState=active\nSubState=running\nLoadState=loaded\nUnitFileState=enabled\nMainPID=1\nMemoryCurrent=1\nCPUUsageNSec=1\nDescription=x';
   const statusText = [
-    '● nginx.service - x',
+    '* nginx.service - x',
     '   Loaded: loaded',
     '   Active: active',
     '',
@@ -534,7 +534,7 @@ await test('ssh_service_status: extracts recent_logs as string array', async () 
   assert(parsed.data.recent_logs.some(l => l.includes('line three')));
 });
 
-await test('ssh_service_status: missing service arg → structured failure', async () => {
+await test('ssh_service_status: missing service arg -> structured failure', async () => {
   const r = await handleSshServiceStatus({
     getConnection: async () => { throw new Error('should not be called'); },
     args: { server: 's' },
@@ -556,7 +556,7 @@ await test('ssh_service_status: service name is shell-quoted in remote command',
   assert(client.lastCommand.includes("'foo; rm -rf /'"));
 });
 
-// ─── handleSshProcessManager ────────────────────────────────────────────
+// --- handleSshProcessManager --------------------------------------------
 
 await test('ssh_process_manager list: returns typed array sorted by cpu desc', async () => {
   const stdout = [
@@ -614,7 +614,7 @@ await test('ssh_process_manager kill: remote command is `kill -TERM 1234`', asyn
   assert.strictEqual(parsed.data.sent_signal, 'TERM');
 });
 
-await test('ssh_process_manager kill: signal normalized (SIGKILL → KILL)', async () => {
+await test('ssh_process_manager kill: signal normalized (SIGKILL -> KILL)', async () => {
   const client = new FakeClient({ script: () => ({ stdout: '', code: 0 }) });
   await handleSshProcessManager({
     getConnection: async () => client,
@@ -623,7 +623,7 @@ await test('ssh_process_manager kill: signal normalized (SIGKILL → KILL)', asy
   assert.strictEqual(client.lastCommand, 'kill -KILL 42');
 });
 
-await test('ssh_process_manager kill: NaN pid → structured fail, no remote call', async () => {
+await test('ssh_process_manager kill: NaN pid -> structured fail, no remote call', async () => {
   let called = false;
   const r = await handleSshProcessManager({
     getConnection: async () => { called = true; throw new Error('should not connect'); },
@@ -636,7 +636,7 @@ await test('ssh_process_manager kill: NaN pid → structured fail, no remote cal
   assert(parsed.error.includes('pid'));
 });
 
-await test('ssh_process_manager kill: negative pid → structured fail, no remote call', async () => {
+await test('ssh_process_manager kill: negative pid -> structured fail, no remote call', async () => {
   let called = false;
   const r = await handleSshProcessManager({
     getConnection: async () => { called = true; throw new Error('no'); },
@@ -646,7 +646,7 @@ await test('ssh_process_manager kill: negative pid → structured fail, no remot
   assert.strictEqual(r.isError, true);
 });
 
-await test('ssh_process_manager kill: invalid signal → structured fail, no remote call', async () => {
+await test('ssh_process_manager kill: invalid signal -> structured fail, no remote call', async () => {
   let called = false;
   const r = await handleSshProcessManager({
     getConnection: async () => { called = true; throw new Error('no'); },
@@ -669,11 +669,11 @@ await test('ssh_process_manager kill: preview shows plan + target pid, never cal
   assert(parsed.data.plan.effects.some(e => e.includes('kill -KILL 9999')));
 });
 
-// ─── extractJournalLines ────────────────────────────────────────────────
+// --- extractJournalLines ------------------------------------------------
 
 await test('extractJournalLines: trims header block, keeps trailing log lines', () => {
   const text = [
-    '● nginx.service - x',
+    '* nginx.service - x',
     '   Loaded: loaded',
     '   Active: active',
     '   Main PID: 1234',
@@ -687,6 +687,6 @@ await test('extractJournalLines: trims header block, keeps trailing log lines', 
   assert(lines[1].includes('two'));
 });
 
-// ─── Summary ────────────────────────────────────────────────────────────
+// --- Summary ------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) { for (const f of fails) console.error(`  FAIL ${f.name}\n    ${f.err.stack}`); process.exit(1); }

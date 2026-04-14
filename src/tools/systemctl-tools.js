@@ -1,5 +1,5 @@
 /**
- * ssh_systemctl — typed systemd unit control.
+ * ssh_systemctl -- typed systemd unit control.
  *
  * Actions:
  *   - start / stop / restart / reload / enable / disable  (mutating; sudo by default)
@@ -12,7 +12,7 @@
  *   - unit name validated by regex; no shell metacharacters can slip through
  *   - action is whitelisted; invalid values fail before any remote call
  *   - all interpolated values shell-quoted via shQuote()
- *   - mutating actions support preview:true — dry-run card, no remote touch
+ *   - mutating actions support preview:true -- dry-run card, no remote touch
  */
 
 import { streamExecCommand, shQuote } from '../stream-exec.js';
@@ -27,9 +27,9 @@ import {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Whitelists
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 /** All allowed action verbs. */
 export const ALLOWED_ACTIONS = new Set([
@@ -40,7 +40,7 @@ export const ALLOWED_ACTIONS = new Set([
   'daemon-reload',
 ]);
 
-/** Mutating actions — default to sudo; support preview. */
+/** Mutating actions -- default to sudo; support preview. */
 export const MUTATING_ACTIONS = new Set([
   'start', 'stop', 'restart', 'reload',
   'enable', 'disable',
@@ -54,13 +54,13 @@ export const NO_UNIT_ACTIONS = new Set([
 
 /**
  * Reversibility map for mutating actions.
- *   start     → stop   (auto)
- *   stop      → start  (manual — needs human to know correct start)
- *   restart   → restart itself restores state (auto)
- *   reload    → reloads config without restart; auto-safe
- *   enable    → disable (auto)
- *   disable   → enable  (auto)
- *   daemon-reload → no visible mutation (auto-safe)
+ *   start     -> stop   (auto)
+ *   stop      -> start  (manual -- needs human to know correct start)
+ *   restart   -> restart itself restores state (auto)
+ *   reload    -> reloads config without restart; auto-safe
+ *   enable    -> disable (auto)
+ *   disable   -> enable  (auto)
+ *   daemon-reload -> no visible mutation (auto-safe)
  */
 export const REVERSIBILITY = {
   start: 'auto',
@@ -85,9 +85,9 @@ export const RISK_MAP = {
   'daemon-reload': 'medium',
 };
 
-// ──────────────────────────────────────────────────────────────────────────
-// Validators — exported for tests
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// Validators -- exported for tests
+// --------------------------------------------------------------------------
 
 /**
  * Systemd unit name regex.
@@ -97,7 +97,7 @@ export const RISK_MAP = {
  *     path separators, NUL, newline, etc.)
  *
  * We intentionally require the suffix to be present so that bare "nginx" fails
- * fast — caller must be explicit about unit type.
+ * fast -- caller must be explicit about unit type.
  */
 export const UNIT_NAME_RE = /^[A-Za-z0-9@._:-]+\.(service|socket|timer|target|mount|path|device)$/;
 
@@ -106,9 +106,9 @@ export function isValidUnit(unit) {
   return UNIT_NAME_RE.test(unit);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// Parsers — exported for tests
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// Parsers -- exported for tests
+// --------------------------------------------------------------------------
 
 /**
  * Parse `systemctl list-units --no-legend --plain` output.
@@ -194,15 +194,15 @@ export function parseJournalLines(text, maxLines = 10) {
   return clean.slice(-maxLines);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Renderer
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 function fmtBadge(active) {
-  if (active === 'active') return '▶ **active**';
-  if (active === 'failed') return '✕ **failed**';
-  if (active === 'inactive') return '⚠ **inactive**';
-  return `· \`${active || 'unknown'}\``;
+  if (active === 'active') return '[ok] **active**';
+  if (active === 'failed') return '[err] **failed**';
+  if (active === 'inactive') return '[warn] **inactive**';
+  return `| \`${active || 'unknown'}\``;
 }
 
 function renderKV(rows) {
@@ -212,32 +212,32 @@ function renderKV(rows) {
 }
 
 export function renderSystemctl(result) {
-  if (!result.success) return `✕ **ssh_systemctl** — ${result.error || 'failed'}`;
+  if (!result.success) return `[err] **ssh_systemctl** -- ${result.error || 'failed'}`;
   const d = result.data;
   if (d && d.preview) {
     const lines = [];
-    lines.push(`▶ **ssh_systemctl** — dry run`);
+    lines.push(`[ok] **ssh_systemctl** -- dry run`);
     lines.push('');
     lines.push('```json');
     lines.push(JSON.stringify(d.plan, null, 2));
     lines.push('```');
     return lines.join('\n');
   }
-  const srv = result.server ? `  ·  \`${result.server}\`` : '';
+  const srv = result.server ? `  |  \`${result.server}\`` : '';
 
   if (d.action === 'status' && d.unit) {
     const lines = [];
-    lines.push(`${fmtBadge(d.active_state)}  ·  **ssh_systemctl status**  ·  \`${d.unit}\`${srv}`);
+    lines.push(`${fmtBadge(d.active_state)}  |  **ssh_systemctl status**  |  \`${d.unit}\`${srv}`);
     lines.push('');
     lines.push(renderKV([
-      ['active', d.active_state ?? '—'],
-      ['sub', d.sub_state ?? '—'],
-      ['load', d.load_state ?? '—'],
-      ['unit_file', d.unit_file_state ?? '—'],
-      ['main_pid', d.main_pid ?? '—'],
-      ['memory', d.memory_bytes != null ? formatBytes(d.memory_bytes) : '—'],
-      ['cpu_time', d.cpu_ns != null ? formatDuration(d.cpu_ns / 1e6) : '—'],
-      ['description', d.description ?? '—'],
+      ['active', d.active_state ?? '--'],
+      ['sub', d.sub_state ?? '--'],
+      ['load', d.load_state ?? '--'],
+      ['unit_file', d.unit_file_state ?? '--'],
+      ['main_pid', d.main_pid ?? '--'],
+      ['memory', d.memory_bytes != null ? formatBytes(d.memory_bytes) : '--'],
+      ['cpu_time', d.cpu_ns != null ? formatDuration(d.cpu_ns / 1e6) : '--'],
+      ['description', d.description ?? '--'],
     ]));
     if (Array.isArray(d.recent_logs) && d.recent_logs.length) {
       lines.push('');
@@ -250,7 +250,7 @@ export function renderSystemctl(result) {
   }
 
   if (d.action === 'list-units') {
-    const lines = [`▶ **ssh_systemctl list-units**${srv}  ·  ${d.units.length} units`];
+    const lines = [`[ok] **ssh_systemctl list-units**${srv}  |  ${d.units.length} units`];
     if (d.units.length) {
       lines.push('');
       lines.push('| unit | load | active | sub | description |');
@@ -264,23 +264,23 @@ export function renderSystemctl(result) {
   }
 
   if (d.action === 'list-unit-files') {
-    const lines = [`▶ **ssh_systemctl list-unit-files**${srv}  ·  ${d.units.length} files`];
+    const lines = [`[ok] **ssh_systemctl list-unit-files**${srv}  |  ${d.units.length} files`];
     if (d.units.length) {
       lines.push('');
       lines.push('| unit | state | vendor_preset |');
       lines.push('| --- | --- | --- |');
       for (const u of d.units) {
-        lines.push(`| \`${u.unit}\` | ${u.state} | ${u.vendor_preset ?? '—'} |`);
+        lines.push(`| \`${u.unit}\` | ${u.state} | ${u.vendor_preset ?? '--'} |`);
       }
     }
     return lines.join('\n');
   }
 
   // Mutation result
-  const badge = d.exit_code === 0 ? '▶' : '✕';
+  const badge = d.exit_code === 0 ? '[ok]' : '[err]';
   const lines = [];
-  const target = d.unit ? `  ·  \`${d.unit}\`` : '';
-  lines.push(`${badge} **ssh_systemctl ${d.action}**${target}${srv}  ·  exit ${d.exit_code}`);
+  const target = d.unit ? `  |  \`${d.unit}\`` : '';
+  lines.push(`${badge} **ssh_systemctl ${d.action}**${target}${srv}  |  exit ${d.exit_code}`);
   if (d.result) {
     lines.push('');
     lines.push('```text');
@@ -290,9 +290,9 @@ export function renderSystemctl(result) {
   return lines.join('\n');
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // handleSshSystemctl
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 /**
  * @param {Object} params
@@ -317,7 +317,7 @@ export async function handleSshSystemctl({ getConnection, args }) {
     format = 'markdown',
   } = args || {};
 
-  // ── Validation ────────────────────────────────────────────────────────
+  // -- Validation --------------------------------------------------------
   if (!action || !ALLOWED_ACTIONS.has(action)) {
     return toMcp(fail('ssh_systemctl', `invalid action "${action}"`, { server }), {
       format, renderer: renderSystemctl,
@@ -342,26 +342,26 @@ export async function handleSshSystemctl({ getConnection, args }) {
     ? MUTATING_ACTIONS.has(action)
     : Boolean(use_sudo);
 
-  // ── status action — read-only, typed record ───────────────────────────
+  // -- status action -- read-only, typed record ---------------------------
   if (action === 'status') {
     return runStatus({ getConnection, server, unit, format });
   }
 
-  // ── list-units / list-unit-files ──────────────────────────────────────
+  // -- list-units / list-unit-files --------------------------------------
   if (action === 'list-units' || action === 'list-unit-files') {
     return runList({ getConnection, server, action, pattern, format });
   }
 
-  // ── Mutating actions ──────────────────────────────────────────────────
+  // -- Mutating actions --------------------------------------------------
   return runMutation({
     getConnection, server, action, unit, useSudo,
     isPreview, format,
   });
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Internal runners
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 async function runStatus({ getConnection, server, unit, format }) {
   const quoted = shQuote(String(unit));
@@ -455,7 +455,7 @@ async function runMutation({ getConnection, server, action, unit, useSudo, isPre
       `runs \`${remote}\` on ${server}`,
     ];
     if (unit) {
-      // Reachability probe — we document it but don't fire it in preview;
+      // Reachability probe -- we document it but don't fire it in preview;
       // claude can call status beforehand if it wants confirmation.
       effects.push(`reachability probe: \`systemctl cat ${unit} 2>&1 | head -1\``);
     }

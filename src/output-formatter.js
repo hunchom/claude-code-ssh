@@ -37,7 +37,7 @@ export function truncateHeadTail(s, max = 10_000) {
   const head = input.slice(0, keep);
   const tail = input.slice(-keep);
   const dropped = originalBytes - head.length - tail.length;
-  const marker = `\n… [${dropped} bytes elided] …\n`;
+  const marker = `\n... [${dropped} bytes elided] ...\n`;
   return {
     text: head + marker + tail,
     originalBytes,
@@ -82,7 +82,7 @@ export function formatExecResult({
 
 /**
  * Human-friendly byte count (B / KB / MB).
- * 0 → "0 B", 1023 → "1023 B", 1024 → "1.0 KB", 1500000 → "1.4 MB"
+ * 0 -> "0 B", 1023 -> "1023 B", 1024 -> "1.0 KB", 1500000 -> "1.4 MB"
  */
 export function formatBytes(n) {
   const b = Number(n) || 0;
@@ -92,7 +92,7 @@ export function formatBytes(n) {
 }
 
 /**
- * Human-friendly duration (ms → "245 ms" / "2.34 s" / "1m 23s").
+ * Human-friendly duration (ms -> "245 ms" / "2.34 s" / "1m 23s").
  */
 export function formatDuration(ms) {
   const n = Math.max(0, Number(ms) || 0);
@@ -107,7 +107,7 @@ export function formatDuration(ms) {
  * Render an ExecResult as cool, scannable Claude Code markdown.
  *
  * Layout:
- *   ▶ **ssh_execute**  ·  `server`  ·  **exit 0**  ·  `2.34 s`
+ *   [ok] **ssh_execute**  |  `server`  |  **exit 0**  |  `2.34 s`
  *   `$ <command>`   *(in /some/cwd)*
  *
  *   ```
@@ -121,18 +121,18 @@ export function formatDuration(ms) {
  *
  *   > elided: stdout 12.0 KB, stderr 0 B
  *
- * - Success uses ▶ marker and bold "exit 0"; failure uses ✕ and bold "exit N".
+ * - Success uses [ok] marker and bold "exit 0"; failure uses [err] and bold "exit N".
  * - Empty sections are omitted. cwd suppressed when null.
  * - Language-tagged fenced blocks (`text`) render with a subtle tint in Claude Code.
  */
 export function renderMarkdown(r) {
   const ok = r.success;
-  const marker = ok ? '▶' : '✕';
+  const marker = ok ? '[ok]' : '[err]';
   const exitBadge = ok ? '**exit 0**' : `**exit ${r.exit_code}**`;
   const duration = `\`${formatDuration(r.duration_ms)}\``;
 
   const lines = [];
-  lines.push(`${marker} **ssh_execute**  ·  \`${r.server}\`  ·  ${exitBadge}  ·  ${duration}`);
+  lines.push(`${marker} **ssh_execute**  |  \`${r.server}\`  |  ${exitBadge}  |  ${duration}`);
 
   const cwdFragment = r.cwd ? `   *(in \`${r.cwd}\`)*` : '';
   lines.push(`\`$ ${r.command}\`${cwdFragment}`);

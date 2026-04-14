@@ -9,13 +9,13 @@ import { buildPlan, maybePreview, renderPlan } from '../src/preview-mode.js';
 let passed = 0, failed = 0;
 const fails = [];
 function test(name, fn) {
-  try { fn(); passed++; console.log(`✅ ${name}`); }
-  catch (e) { failed++; fails.push({ name, err: e }); console.error(`❌ ${name}: ${e.message}`); }
+  try { fn(); passed++; console.log(`[ok] ${name}`); }
+  catch (e) { failed++; fails.push({ name, err: e }); console.error(`[err] ${name}: ${e.message}`); }
 }
 
-console.log('🧪 Testing structured-result + preview-mode\n');
+console.log('[test] Testing structured-result + preview-mode\n');
 
-// ─── ok / fail / preview shape ───────────────────────────────────────────
+// --- ok / fail / preview shape -------------------------------------------
 test('ok: wire shape', () => {
   const r = ok('ssh_execute', { stdout: 'hi' }, { server: 'prod01', duration_ms: 42 });
   assert.strictEqual(r.success, true);
@@ -46,7 +46,7 @@ test('preview: data carries preview:true + plan', () => {
   assert.strictEqual(r.server, 'prod01');
 });
 
-// ─── toMcp format variants ───────────────────────────────────────────────
+// --- toMcp format variants -----------------------------------------------
 test('toMcp markdown: wraps in content[0].text, isError reflects success', () => {
   const r = toMcp(ok('t', { x: 1 }));
   assert.strictEqual(r.content.length, 1);
@@ -73,18 +73,18 @@ test('toMcp custom renderer is honored', () => {
   assert.strictEqual(r.content[0].text, 'CUSTOM');
 });
 
-// ─── defaultRender ───────────────────────────────────────────────────────
-test('defaultRender: success card has ▶ marker, tool name, server, duration', () => {
+// --- defaultRender -------------------------------------------------------
+test('defaultRender: success card has [ok] marker, tool name, server, duration', () => {
   const md = defaultRender(ok('ssh_execute', { x: 1 }, { server: 'prod01', duration_ms: 1234 }));
-  assert(md.startsWith('▶ **ssh_execute**'));
+  assert(md.startsWith('[ok] **ssh_execute**'));
   assert(md.includes('`prod01`'));
   assert(md.includes('`1.23 s`'));
   assert(md.includes('```json'));
 });
 
-test('defaultRender: failure uses ✕ marker and "failed" badge', () => {
+test('defaultRender: failure uses [err] marker and "failed" badge', () => {
   const md = defaultRender(fail('ssh_execute', 'boom'));
-  assert(md.startsWith('✕ **ssh_execute**'));
+  assert(md.startsWith('[err] **ssh_execute**'));
   assert(md.includes('**failed**'));
   assert(md.includes('boom'));
 });
@@ -106,7 +106,7 @@ test('defaultRender: elided bytes footer rendered', () => {
   assert(md.includes('> elided: 5.0 KB'));
 });
 
-// ─── buildPlan ───────────────────────────────────────────────────────────
+// --- buildPlan -----------------------------------------------------------
 test('buildPlan: defaults fill in safely', () => {
   const p = buildPlan({ action: 'exec', target: 'prod01' });
   assert.deepStrictEqual(p.effects, []);
@@ -125,7 +125,7 @@ test('buildPlan: passes through extra fields', () => {
   assert.strictEqual(p.custom, 42);
 });
 
-// ─── maybePreview ────────────────────────────────────────────────────────
+// --- maybePreview --------------------------------------------------------
 test('maybePreview returns null when preview=false', () => {
   const r = maybePreview(false, 'ssh_upload', { action: 'upload', target: 'x' }, {}, toMcp, preview);
   assert.strictEqual(r, null);
@@ -144,7 +144,7 @@ test('maybePreview returns MCP response when preview=true', () => {
   assert(r.content[0].text.includes('"action": "upload"'));
 });
 
-// ─── renderPlan ──────────────────────────────────────────────────────────
+// --- renderPlan ----------------------------------------------------------
 test('renderPlan: shows action, target, risk, effects', () => {
   const md = renderPlan(buildPlan({
     action: 'restart', target: 'nginx',
@@ -161,9 +161,9 @@ test('renderPlan: shows action, target, risk, effects', () => {
   assert(md.includes('`3.00 s`'));
 });
 
-// ─── Summary ─────────────────────────────────────────────────────────────
+// --- Summary -------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
-  for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`);
+  for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`);
   process.exit(1);
 }

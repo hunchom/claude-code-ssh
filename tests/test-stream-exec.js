@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Test suite for src/stream-exec.js — uses a fake ssh2 Client, no network.
+ * Test suite for src/stream-exec.js -- uses a fake ssh2 Client, no network.
  * Run: node tests/test-stream-exec.js
  */
 
@@ -17,15 +17,15 @@ async function test(name, fn) {
   try {
     await fn();
     passed++;
-    console.log(`✅ ${name}`);
+    console.log(`[ok] ${name}`);
   } catch (e) {
     failed++;
     fails.push({ name, err: e });
-    console.error(`❌ ${name}: ${e.message}`);
+    console.error(`[err] ${name}: ${e.message}`);
   }
 }
 
-// ─── Test harness: ssh2-shaped fakes ─────────────────────────────────────
+// --- Test harness: ssh2-shaped fakes -------------------------------------
 class FakeStream extends EventEmitter {
   constructor() {
     super();
@@ -77,9 +77,9 @@ class FakeClient {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-console.log('🧪 Testing stream-exec\n');
+console.log('[test] Testing stream-exec\n');
 
-// ─── shQuote / buildRemoteCommand ────────────────────────────────────────
+// --- shQuote / buildRemoteCommand ----------------------------------------
 await test('shQuote: simple path', () => {
   assert.strictEqual(shQuote('/var/app'), "'/var/app'");
 });
@@ -96,7 +96,7 @@ await test('shQuote: path with injection attempt stays literal', () => {
   // Classic injection: /tmp; rm -rf /
   const dangerous = '/tmp; rm -rf /';
   const quoted = shQuote(dangerous);
-  // The quoted form wraps in single quotes — bash treats `;` as literal inside.
+  // The quoted form wraps in single quotes -- bash treats `;` as literal inside.
   assert.strictEqual(quoted, "'/tmp; rm -rf /'");
 });
 
@@ -120,12 +120,12 @@ await test('buildRemoteCommand: cwd is quoted', () => {
 
 await test('buildRemoteCommand: shell-injection in cwd neutralized', () => {
   const cmd = buildRemoteCommand('ls', '/tmp; rm -rf /');
-  // After quoting, `;` is inside single quotes → bash treats as literal dir name.
+  // After quoting, `;` is inside single quotes -> bash treats as literal dir name.
   assert.strictEqual(cmd, "cd '/tmp; rm -rf /' && ls");
 });
 
-// ─── Happy path ──────────────────────────────────────────────────────────
-await test('happy path: stdout chunks + close → resolves with full output', async () => {
+// --- Happy path ----------------------------------------------------------
+await test('happy path: stdout chunks + close -> resolves with full output', async () => {
   const client = new FakeClient();
   const p = streamExecCommand(client, 'echo hi', { debounceMs: 10 });
   await sleep(5);
@@ -153,7 +153,7 @@ await test('stderr is collected separately', async () => {
   assert.strictEqual(r.code, 1);
 });
 
-await test('no stdout + non-zero exit → resolves with empty output and code', async () => {
+await test('no stdout + non-zero exit -> resolves with empty output and code', async () => {
   const client = new FakeClient();
   const p = streamExecCommand(client, 'false', { debounceMs: 10 });
   await sleep(5);
@@ -164,22 +164,22 @@ await test('no stdout + non-zero exit → resolves with empty output and code', 
   assert.strictEqual(r.code, 1);
 });
 
-// ─── UTF-8 split codepoint handling ──────────────────────────────────────
-await test('UTF-8: emoji split across two chunks is reassembled intact', async () => {
-  // 🚀 U+1F680 encodes to 4 bytes: F0 9F 9A 80
+// --- UTF-8 split codepoint handling --------------------------------------
+await test('UTF-8: multi-byte codepoint split across two chunks is reassembled intact', async () => {
+  // U+1F680 (rocket) encodes to 4 bytes: F0 9F 9A 80
   const rocket = Buffer.from([0xF0, 0x9F, 0x9A, 0x80]);
-  const part1 = rocket.slice(0, 2); // F0 9F
-  const part2 = rocket.slice(2);     // 9A 80
+  const part1 = rocket.slice(0, 2);
+  const part2 = rocket.slice(2);
 
   const client = new FakeClient();
-  const p = streamExecCommand(client, 'echo 🚀', { debounceMs: 5 });
+  const p = streamExecCommand(client, 'echo x', { debounceMs: 5 });
   await sleep(5);
   const s = client.streams[0];
   s.pushStdout(part1);
   s.pushStdout(part2);
   s.finish(0);
   const r = await p;
-  assert.strictEqual(r.stdout, '🚀');
+  assert.strictEqual(r.stdout, rocket.toString('utf8'));
 });
 
 await test('UTF-8: trailing partial codepoint surfaces on .end() without crash', async () => {
@@ -197,7 +197,7 @@ await test('UTF-8: trailing partial codepoint surfaces on .end() without crash',
   assert(r.stdout.length <= 'ok'.length + 1, 'no runaway output');
 });
 
-// ─── Debounce behavior ───────────────────────────────────────────────────
+// --- Debounce behavior ---------------------------------------------------
 await test('debounce: many tiny chunks coalesce into fewer onChunk calls', async () => {
   const chunks = [];
   const client = new FakeClient();
@@ -236,7 +236,7 @@ await test('debounce: pending chunk flushed on close before resolve', async () =
   assert.strictEqual(chunks[0].text, 'late-arriving');
 });
 
-// ─── Abort semantics ─────────────────────────────────────────────────────
+// --- Abort semantics -----------------------------------------------------
 await test('abort: already-aborted signal rejects immediately', async () => {
   const ac = new AbortController();
   ac.abort();
@@ -247,7 +247,7 @@ await test('abort: already-aborted signal rejects immediately', async () => {
   );
 });
 
-await test('abort: mid-flight → rejects, stream.signal(INT) + close called', async () => {
+await test('abort: mid-flight -> rejects, stream.signal(INT) + close called', async () => {
   const ac = new AbortController();
   const client = new FakeClient();
   const p = streamExecCommand(client, 'cmd', { abortSignal: ac.signal, debounceMs: 5 });
@@ -272,8 +272,8 @@ await test('abort: after command completes is a no-op (no double-resolve)', asyn
   assert.strictEqual(r.code, 0);  // first resolve wins
 });
 
-// ─── Timeout semantics ───────────────────────────────────────────────────
-await test('timeout: exceeds deadline → rejects with timeout error', async () => {
+// --- Timeout semantics ---------------------------------------------------
+await test('timeout: exceeds deadline -> rejects with timeout error', async () => {
   const client = new FakeClient();
   const p = streamExecCommand(client, 'sleep 9999', { timeoutMs: 30, debounceMs: 5 });
   await sleep(5);
@@ -282,7 +282,7 @@ await test('timeout: exceeds deadline → rejects with timeout error', async () 
   assert(client.streams[0].signals.includes('INT'));
 });
 
-await test('timeout: command finishes before deadline → resolves normally', async () => {
+await test('timeout: command finishes before deadline -> resolves normally', async () => {
   const client = new FakeClient();
   const p = streamExecCommand(client, 'ok', { timeoutMs: 500, debounceMs: 5 });
   await sleep(5);
@@ -295,8 +295,8 @@ await test('timeout: command finishes before deadline → resolves normally', as
   await sleep(10);
 });
 
-// ─── Error surfaces ──────────────────────────────────────────────────────
-await test('exec callback error → rejects with that error', async () => {
+// --- Error surfaces ------------------------------------------------------
+await test('exec callback error -> rejects with that error', async () => {
   const boom = new Error('connection dropped');
   const client = new FakeClient({ execError: boom });
   await assert.rejects(
@@ -305,7 +305,7 @@ await test('exec callback error → rejects with that error', async () => {
   );
 });
 
-await test('stream error event → rejects', async () => {
+await test('stream error event -> rejects', async () => {
   const client = new FakeClient();
   const p = streamExecCommand(client, 'cmd', { debounceMs: 5 });
   await sleep(5);
@@ -327,8 +327,8 @@ await test('onChunk throwing does not crash the stream', async () => {
   assert.strictEqual(r.stdout, 'still-arrives');
 });
 
-// ─── Backpressure ────────────────────────────────────────────────────────
-await test('backpressure: stdout > maxBufferedBytes → keeps tail only', async () => {
+// --- Backpressure --------------------------------------------------------
+await test('backpressure: stdout > maxBufferedBytes -> keeps tail only', async () => {
   const client = new FakeClient();
   const p = streamExecCommand(client, 'yes', {
     debounceMs: 5,
@@ -342,11 +342,11 @@ await test('backpressure: stdout > maxBufferedBytes → keeps tail only', async 
   s.pushStdout('TAIL_MARKER');
   s.finish(0);
   const r = await p;
-  assert(r.stdout.length <= 1000, `buffer must stay ≤ cap, got ${r.stdout.length}`);
+  assert(r.stdout.length <= 1000, `buffer must stay <= cap, got ${r.stdout.length}`);
   assert(r.stdout.endsWith('TAIL_MARKER'), 'tail must survive the cap');
 });
 
-// ─── Wiring of cwd into remote command ───────────────────────────────────
+// --- Wiring of cwd into remote command -----------------------------------
 await test('cwd propagates into the remote command with shell-safe quoting', async () => {
   const client = new FakeClient();
   const p = streamExecCommand(client, 'ls', {
@@ -362,7 +362,7 @@ await test('cwd propagates into the remote command with shell-safe quoting', asy
   await p;
 });
 
-// ─── stdin pass-through (for sudo -S) ────────────────────────────────────
+// --- stdin pass-through (for sudo -S) ------------------------------------
 await test('stdin: string written to stream and stream.end() called', async () => {
   const client = new FakeClient();
   const p = streamExecCommand(client, 'sudo -S -p "" id', {
@@ -410,21 +410,21 @@ await test('stdin with special chars does NOT end up in argv (injection-free)', 
   await p;
 });
 
-// ─── Idempotency ─────────────────────────────────────────────────────────
-await test('close fired twice → resolves once', async () => {
+// --- Idempotency ---------------------------------------------------------
+await test('close fired twice -> resolves once', async () => {
   const client = new FakeClient();
   const p = streamExecCommand(client, 'cmd', { debounceMs: 5 });
   await sleep(5);
   const s = client.streams[0];
   s.finish(0);
-  s.finish(1);  // duplicate — must be ignored
+  s.finish(1);  // duplicate -- must be ignored
   const r = await p;
   assert.strictEqual(r.code, 0);
 });
 
-// ─── Summary ─────────────────────────────────────────────────────────────
+// --- Summary -------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
-  for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`);
+  for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`);
   process.exit(1);
 }

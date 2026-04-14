@@ -1,14 +1,14 @@
 /**
- * ssh_key_manage — rewritten with real fingerprint comparison.
+ * ssh_key_manage -- rewritten with real fingerprint comparison.
  *
  * Pure helpers:
- *   - sha256Fingerprint(publicKeyBuffer) → 'SHA256:<base64_no_padding>'
- *   - compareFingerprints(stored, current) → { match, stored, current, algorithm }
- *   - parseKnownHostsContent(text) → array of parsed entries
- *   - parseKeyscanOutput(text) → array of live host keys (with computed fingerprints)
+ *   - sha256Fingerprint(publicKeyBuffer) -> 'SHA256:<base64_no_padding>'
+ *   - compareFingerprints(stored, current) -> { match, stored, current, algorithm }
+ *   - parseKnownHostsContent(text) -> array of parsed entries
+ *   - parseKeyscanOutput(text) -> array of live host keys (with computed fingerprints)
  *
  * Handler:
- *   - handleSshKeyManage({getConnection, args}) — list / show / verify / accept / remove / rotate
+ *   - handleSshKeyManage({getConnection, args}) -- list / show / verify / accept / remove / rotate
  *
  * Design notes:
  *   - The OpenSSH canonical fingerprint format is:
@@ -21,7 +21,7 @@
  *     and host: '(hashed)'.
  *   - We do NOT write to the filesystem in preview mode.
  *   - Injection surface: the host argument is passed to `ssh-keyscan` via
- *     child_process.spawn with an argv array — no shell interpolation. It is
+ *     child_process.spawn with an argv array -- no shell interpolation. It is
  *     also shQuote'd in rendered previews for display safety.
  */
 
@@ -42,9 +42,9 @@ const KNOWN_HOSTS_BACKUP = path.join(os.homedir(), '.ssh', 'known_hosts.mcp-back
 // mutating user files unless explicitly asked (accept action).
 const internalStore = new Map();
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Pure helpers
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 /**
  * Compute the OpenSSH canonical SHA256 fingerprint of a raw public-key buffer.
@@ -68,7 +68,7 @@ export function sha256Fingerprint(publicKeyBuffer) {
  * Compare two fingerprints in constant-time-ish (Buffer.compare short-circuits
  * on length mismatch but is not timing-sensitive for the remaining bytes; for
  * cryptographic equality this is sufficient because the fingerprints are public
- * data — we're not gating on secrecy, just equality).
+ * data -- we're not gating on secrecy, just equality).
  *
  * Arguments may be full 'SHA256:xxx' strings or nullable; returns structured
  * comparison with the algorithm derived from the 'ALG:' prefix (or 'unknown').
@@ -84,7 +84,7 @@ export function compareFingerprints(stored, current) {
   const cAlg = cFp && cFp.includes(':') ? cFp.split(':')[0] : 'unknown';
   const algorithm = sAlg === cAlg ? sAlg : `${sAlg}!=${cAlg}`;
 
-  // Both null → vacuous match only if both strictly equal (null).
+  // Both null -> vacuous match only if both strictly equal (null).
   if (sFp === null && cFp === null) {
     return { match: true, stored: null, current: null, algorithm: 'unknown' };
   }
@@ -120,7 +120,7 @@ export function compareFingerprints(stored, current) {
  * Supported formats:
  *   host[,host2,...]  algorithm  base64key  [comment]
  *   [host]:port       algorithm  base64key
- *   |1|salt|hash      algorithm  base64key            (hashed host — opaque)
+ *   |1|salt|hash      algorithm  base64key            (hashed host -- opaque)
  *
  * The returned shape:
  *   { raw, hosts: string[], host: string, port: number, algorithm: string,
@@ -138,7 +138,7 @@ export function parseKnownHostLine(line) {
   const [hostSpec, algorithm, base64Key] = parts;
   const comment = parts.slice(3).join(' ');
 
-  // Hashed host — can't un-hash, leave opaque.
+  // Hashed host -- can't un-hash, leave opaque.
   const hashed = hostSpec.startsWith('|1|');
 
   // Multiple hosts can share a line: comma-separated.
@@ -154,12 +154,12 @@ export function parseKnownHostLine(line) {
     port = parseInt(bracketMatch[2], 10) || 22;
   }
 
-  // Fingerprint the key (base64 decode → SHA256).
+  // Fingerprint the key (base64 decode -> SHA256).
   let fingerprint = null;
   try {
     const keyBytes = Buffer.from(base64Key, 'base64');
     fingerprint = sha256Fingerprint(keyBytes);
-  } catch (_) { /* malformed base64 — leave fingerprint null */ }
+  } catch (_) { /* malformed base64 -- leave fingerprint null */ }
 
   return {
     raw: trimmed,
@@ -193,9 +193,9 @@ export function parseKeyscanOutput(text) {
   return parseKnownHostsContent(text);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Internal store API
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 function storeKey(host, port, algorithm, fingerprint, base64Key) {
   const key = `${host}:${port}`;
@@ -218,12 +218,12 @@ export function __resetInternalStore() {
   internalStore.clear();
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Live key fetching via ssh-keyscan
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 /**
- * Fetch live host keys via ssh-keyscan. Uses spawn with argv — no shell.
+ * Fetch live host keys via ssh-keyscan. Uses spawn with argv -- no shell.
  *
  * @param {string} host
  * @param {number} port
@@ -268,9 +268,9 @@ export async function fetchLiveKeys(host, port, opts = {}) {
   return parseKeyscanOutput(stdout);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // known_hosts I/O (injectable for tests)
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 function defaultFsReadKnownHosts(p) {
   if (!fs.existsSync(p)) return '';
@@ -283,9 +283,9 @@ function defaultFsWriteKnownHosts(p, content) {
   fs.writeFileSync(p, content, { mode: 0o600 });
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Handler
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 /**
  * @param {Object} ctx
@@ -332,7 +332,7 @@ export async function handleSshKeyManage(ctx = {}) {
     throw new Error('must provide either server or host');
   }
 
-  // ── list ────────────────────────────────────────────────────────────
+  // -- list ------------------------------------------------------------
   if (action === 'list') {
     const text = fsReadKnownHosts(knownHostsPath) || '';
     const openssh = parseKnownHostsContent(text).map(e => ({
@@ -391,7 +391,7 @@ export async function handleSshKeyManage(ctx = {}) {
     return out;
   }
 
-  // ── show / verify (both need live fetch) ────────────────────────────
+  // -- show / verify (both need live fetch) ----------------------------
   if (action === 'show' || action === 'verify') {
     let liveKeys;
     try { liveKeys = await fetchLiveKeys(host, port, { runKeyscan }); }
@@ -448,7 +448,7 @@ export async function handleSshKeyManage(ctx = {}) {
     return toMcp(ok('ssh_key_manage', { ...data, verdict }, { server: server ?? null }), { format });
   }
 
-  // ── accept: write live into store (+ known_hosts) ───────────────────
+  // -- accept: write live into store (+ known_hosts) -------------------
   if (action === 'accept') {
     if (isPreview) {
       let liveKeys = [];
@@ -494,7 +494,7 @@ export async function handleSshKeyManage(ctx = {}) {
     }, { server: server ?? null }), { format });
   }
 
-  // ── remove ──────────────────────────────────────────────────────────
+  // -- remove ----------------------------------------------------------
   if (action === 'remove') {
     const stored = readStoredAll();
     if (isPreview) {
@@ -536,7 +536,7 @@ export async function handleSshKeyManage(ctx = {}) {
     }, { server: server ?? null }), { format });
   }
 
-  // ── rotate: remove-then-accept ──────────────────────────────────────
+  // -- rotate: remove-then-accept --------------------------------------
   if (action === 'rotate') {
     if (isPreview) {
       const stored = readStoredAll();
@@ -558,7 +558,7 @@ export async function handleSshKeyManage(ctx = {}) {
     }
 
     // Execute: remove then accept in sequence. Errors on accept leave the
-    // removed state in place — caller can re-run accept to retry.
+    // removed state in place -- caller can re-run accept to retry.
     const removeResult = await handleSshKeyManage({
       ...ctx,
       args: { action: 'remove', host, port, format: 'json' },

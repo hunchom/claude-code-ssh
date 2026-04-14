@@ -64,10 +64,10 @@ export function maybePreview(isPreview, toolName, planArgs, { format = 'markdown
  */
 export function renderPlan(plan, { title = 'preview' } = {}) {
   const lines = [];
-  lines.push(`▶ **${title}**  ·  \`${plan.action}\`  ·  \`${plan.target}\``);
-  if (plan.risk) lines.push(`  ·  risk: **${plan.risk}**`);
+  lines.push(`[ok] **${title}**  |  \`${plan.action}\`  |  \`${plan.target}\``);
+  if (plan.risk) lines.push(`  |  risk: **${plan.risk}**`);
   lines.push('');
-  lines.push('> **dry run** — nothing executed');
+  lines.push('> **dry run** -- nothing executed');
   if (plan.effects && plan.effects.length) {
     lines.push('');
     lines.push('**effects:**');

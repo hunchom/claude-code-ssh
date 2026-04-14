@@ -2,9 +2,9 @@
  * Rewritten SSH session family with a bulletproof marker-prompt protocol.
  *
  * Motivation
- * ──────────
+ * ----------
  * The previous regex-based prompt detector (/[$#>]\s*$/) fires on any user
- * output that happens to end in `$`, `#` or `>` — i.e., effectively all real
+ * output that happens to end in `$`, `#` or `>` -- i.e., effectively all real
  * shells with git-branch, color, or jobspec prompts. It also confuses command
  * echo, prompt, and real stdout.
  *
@@ -30,7 +30,7 @@
  * a per-session random hex that the user does not know.
  *
  * Session memory
- * ──────────────
+ * --------------
  * Every session keeps:
  *   - cwd, user, home (seeded from `pwd; whoami; echo $HOME` at start)
  *   - command_history (ring of last 50 entries: ts, cmd, exit, duration, cwd_before)
@@ -51,16 +51,16 @@ import { StringDecoder } from 'string_decoder';
 import { stripAnsi, formatDuration } from '../output-formatter.js';
 import { ok, fail, toMcp, defaultRender } from '../structured-result.js';
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Constants
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const HISTORY_CAP = 50;
 const FILES_TOUCHED_CAP = 200;
 const SESSION_BUFFER_CAP = 4_000_000; // absolute ceiling per-session, catches runaway output
 
-// Module-level session registry — lives for the MCP server lifetime.
+// Module-level session registry -- lives for the MCP server lifetime.
 const sessions = new Map();
 
 /** Exposed for tests to inspect internal state. */
@@ -73,9 +73,9 @@ export function _registerSessionForTest(session) {
   sessions.set(session.id, session);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Marker protocol
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 /** Build a unique per-session marker: __MCP_EOC_<16-hex>. */
 export function makeMarker() {
@@ -101,7 +101,7 @@ export function wrapCommandWithMarker(cmd, marker) {
 
 /**
  * Build a regex that matches a sentinel line for a given marker.
- * Marker is sealed into the pattern — the user cannot forge it because the
+ * Marker is sealed into the pattern -- the user cannot forge it because the
  * hex suffix is cryptographic randomness unknown to them.
  *
  * Group 1: the exit code.
@@ -137,7 +137,7 @@ export function parseMarkerOutput(raw, marker, { commandEcho } = {}) {
 
   // Extract exit code from the marker line. Marker line format:
   //    MARKER <digits>
-  // (possibly with leading CR). We scan last-to-first for robustness — a
+  // (possibly with leading CR). We scan last-to-first for robustness -- a
   // user's output could never legitimately contain the random marker.
   let exitCode = -1;
   const keep = [];
@@ -178,9 +178,9 @@ export function parseMarkerOutput(raw, marker, { commandEcho } = {}) {
   };
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // SSHSessionV2
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 export class SSHSessionV2 {
   constructor({ id, server, shell, stream, cols = 120, rows = 40 }) {
@@ -269,7 +269,7 @@ export class SSHSessionV2 {
 
   _drainWaiters() {
     if (this._waiters.length === 0) return;
-    // Only the head waiter is active — commands are serialized.
+    // Only the head waiter is active -- commands are serialized.
     const head = this._waiters[0];
     const m = this._buffer.match(head.regex);
     if (m) {
@@ -375,7 +375,7 @@ export class SSHSessionV2 {
 
   /**
    * Very small heuristic to detect files the user referenced. We're happy
-   * to be approximate — this is a memory aid, not a security mechanism.
+   * to be approximate -- this is a memory aid, not a security mechanism.
    */
   _detectFilesTouched(command) {
     const s = String(command);
@@ -450,9 +450,9 @@ export class SSHSessionV2 {
   }
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Handlers
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 /**
  * Open a shell stream on the given ssh2 client. Returns the stream.
@@ -470,7 +470,7 @@ async function openShellStream(client, { cols, rows }) {
 }
 
 /**
- * ssh_session_start — open a new persistent session.
+ * ssh_session_start -- open a new persistent session.
  *
  * args: { server, shell='bash', cols=120, rows=40, format }
  * side: seeds cwd/user/home from pwd/whoami/$HOME.
@@ -505,7 +505,7 @@ export async function handleSshSessionStart({ getConnection, args, _openShellStr
   const session = new SSHSessionV2({ id, server, shell, stream, cols, rows });
   sessions.set(id, session);
 
-  // Seed session memory — pwd, whoami, echo $HOME — silently (no history).
+  // Seed session memory -- pwd, whoami, echo $HOME -- silently (no history).
   try {
     const pwd = await session.runCommand('pwd', { timeoutMs: 10_000, silent: true });
     if (pwd.exit_code === 0) session.cwd = pwd.stdout.trim();
@@ -541,7 +541,7 @@ function renderSessionStart(result) {
   if (!result.success) return defaultRender(result);
   const d = result.data;
   const lines = [];
-  lines.push(`▶ **ssh_session_start**  ·  \`${d.server}\`  ·  \`${result.meta?.duration_ms != null ? formatDuration(result.meta.duration_ms) : ''}\``);
+  lines.push(`[ok] **ssh_session_start**  |  \`${d.server}\`  |  \`${result.meta?.duration_ms != null ? formatDuration(result.meta.duration_ms) : ''}\``);
   lines.push('');
   lines.push(`- **session_id**: \`${d.session_id}\``);
   lines.push(`- **shell**: \`${d.shell}\``);
@@ -552,7 +552,7 @@ function renderSessionStart(result) {
 }
 
 /**
- * ssh_session_send — run a command in an existing session.
+ * ssh_session_send -- run a command in an existing session.
  *
  * args: { session_id, command, timeout=30000, format }
  * returns { command, stdout, stderr, exit_code, duration_ms, cwd_after }
@@ -581,7 +581,7 @@ export async function handleSshSessionSend({ args }) {
   }
 
   // Update cwd_after: cheap by running silent pwd. This keeps memory accurate
-  // even when the user ran `cd` inside a subshell (which wouldn't stick —
+  // even when the user ran `cd` inside a subshell (which wouldn't stick --
   // but `cd` in the interactive shell *does*).
   let cwdAfter = session.cwd;
   try {
@@ -614,10 +614,10 @@ function renderSessionSend(result) {
   if (!result.success) return defaultRender(result);
   const d = result.data;
   const good = d.exit_code === 0;
-  const marker = good ? '▶' : '✕';
+  const marker = good ? '[ok]' : '[err]';
   const badge = good ? '**exit 0**' : `**exit ${d.exit_code}**`;
   const lines = [];
-  lines.push(`${marker} **ssh_session_send**  ·  \`${result.server}\`  ·  ${badge}  ·  \`${formatDuration(d.duration_ms)}\``);
+  lines.push(`${marker} **ssh_session_send**  |  \`${result.server}\`  |  ${badge}  |  \`${formatDuration(d.duration_ms)}\``);
   lines.push(`\`$ ${d.command}\`   *(in \`${d.cwd_after}\`)*`);
   if (d.stdout && d.stdout.trim()) {
     lines.push('');
@@ -636,7 +636,7 @@ function renderSessionSend(result) {
 }
 
 /**
- * ssh_session_list — enumerate active sessions.
+ * ssh_session_list -- enumerate active sessions.
  */
 export async function handleSshSessionList({ args }) {
   const { format = 'markdown' } = args || {};
@@ -656,7 +656,7 @@ export async function handleSshSessionList({ args }) {
 }
 
 /**
- * ssh_session_close — idempotent close.
+ * ssh_session_close -- idempotent close.
  */
 export async function handleSshSessionClose({ args }) {
   const { session_id, format = 'markdown' } = args || {};
@@ -689,7 +689,7 @@ export async function handleSshSessionClose({ args }) {
 }
 
 /**
- * ssh_session_replay — recent command history for a session.
+ * ssh_session_replay -- recent command history for a session.
  */
 export async function handleSshSessionReplay({ args }) {
   const { session_id, limit = 20, format = 'markdown' } = args || {};
@@ -715,7 +715,7 @@ export async function handleSshSessionReplay({ args }) {
 }
 
 /**
- * ssh_session_memory — full memory snapshot.
+ * ssh_session_memory -- full memory snapshot.
  */
 export async function handleSshSessionMemory({ args }) {
   const { session_id, format = 'markdown' } = args || {};

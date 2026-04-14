@@ -5,12 +5,12 @@ import { pMap } from '../src/concurrency.js';
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
-  try { await fn(); passed++; console.log(`✅ ${name}`); }
-  catch (e) { failed++; fails.push({ name, err: e }); console.error(`❌ ${name}: ${e.message}`); }
+  try { await fn(); passed++; console.log(`[ok] ${name}`); }
+  catch (e) { failed++; fails.push({ name, err: e }); console.error(`[err] ${name}: ${e.message}`); }
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-console.log('🧪 Testing concurrency\n');
+console.log('[test] Testing concurrency\n');
 
 await test('pMap: empty input returns empty array', async () => {
   const r = await pMap([], async x => x);
@@ -29,7 +29,7 @@ await test('pMap: limits parallelism to `concurrency`', async () => {
     await sleep(10);
     inFlight--;
   }, { concurrency: 3 });
-  assert(peak <= 3, `peak=${peak}, expected ≤3`);
+  assert(peak <= 3, `peak=${peak}, expected <=3`);
 });
 
 await test('pMap: individual failures captured per-item by default', async () => {
@@ -63,4 +63,4 @@ await test('pMap: concurrency > items still works', async () => {
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
-if (failed > 0) { for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`); process.exit(1); }
+if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }

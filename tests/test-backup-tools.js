@@ -9,8 +9,8 @@ import {
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
-  try { await fn(); passed++; console.log(`✅ ${name}`); }
-  catch (e) { failed++; fails.push({ name, err: e }); console.error(`❌ ${name}: ${e.message}`); }
+  try { await fn(); passed++; console.log(`[ok] ${name}`); }
+  catch (e) { failed++; fails.push({ name, err: e }); console.error(`[err] ${name}: ${e.message}`); }
 }
 
 class FakeStream extends EventEmitter {
@@ -34,9 +34,9 @@ class FakeClient {
   }
 }
 
-console.log('🧪 Testing backup-tools\n');
+console.log('[test] Testing backup-tools\n');
 
-// ─── buildBackupCommand — password always via env, never argv ───────────
+// --- buildBackupCommand -- password always via env, never argv -----------
 await test('buildBackupCommand: mysql uses MYSQL_PWD env, not -p flag', () => {
   const { command, envPrefix } = buildBackupCommand({
     backup_type: 'mysql', database: 'app', user: 'root',
@@ -45,7 +45,7 @@ await test('buildBackupCommand: mysql uses MYSQL_PWD env, not -p flag', () => {
   assert(envPrefix.includes('MCP_BACKUP_PASS='), 'env prefix contains pass');
   assert(envPrefix.includes("'sekret'"), 'password shQuoted in env');
   assert(!command.includes('sekret'), 'password NOT in command body');
-  // No password-flag: mysqldump -p<pass> or -p <pass>. (mkdir's -p is fine — different tool.)
+  // No password-flag: mysqldump -p<pass> or -p <pass>. (mkdir's -p is fine -- different tool.)
   assert(!/mysqldump[^|]*\s-p[\s'"]/.test(command), 'no mysqldump -p flag with password');
   assert(command.includes('MYSQL_PWD="$MCP_BACKUP_PASS"'));
   assert(command.includes('mysqldump'));
@@ -95,7 +95,7 @@ await test('buildBackupCommand: unsupported type throws', () => {
   assert.throws(() => buildBackupCommand({ backup_type: 'bogus', outputPath: '/tmp/x' }));
 });
 
-// ─── handleSshBackupCreate — preview ────────────────────────────────────
+// --- handleSshBackupCreate -- preview ------------------------------------
 await test('backup_create: preview never calls exec', async () => {
   let called = false;
   const r = await handleSshBackupCreate({
@@ -111,7 +111,7 @@ await test('backup_create: preview never calls exec', async () => {
   assert.strictEqual(parsed.data.plan.reversibility, 'manual');
 });
 
-await test('backup_create: missing server → fail', async () => {
+await test('backup_create: missing server -> fail', async () => {
   const r = await handleSshBackupCreate({
     getConnection: async () => { throw new Error('no'); },
     args: { backup_type: 'mysql', database: 'app' },
@@ -119,7 +119,7 @@ await test('backup_create: missing server → fail', async () => {
   assert.strictEqual(r.isError, true);
 });
 
-await test('backup_create: invalid backup_type → fail', async () => {
+await test('backup_create: invalid backup_type -> fail', async () => {
   const r = await handleSshBackupCreate({
     getConnection: async () => { throw new Error('no'); },
     args: { server: 's', backup_type: 'evil' },
@@ -158,7 +158,7 @@ await test('backup_create: happy path generates meta + returns typed', async () 
   assert(parsed.data.output_path);
 });
 
-// ─── handleSshBackupList ────────────────────────────────────────────────
+// --- handleSshBackupList ------------------------------------------------
 await test('backup_list: empty dir returns empty array, success', async () => {
   const client = new FakeClient({ script: () => ({ stdout: '', code: 0 }) });
   const r = await handleSshBackupList({
@@ -185,8 +185,8 @@ await test('backup_list: parses --- separator into typed array', async () => {
   assert.strictEqual(parsed.data.backups[1].backup_id, 'id1');
 });
 
-// ─── handleSshBackupRestore ─────────────────────────────────────────────
-await test('backup_restore: missing backup_id → fail', async () => {
+// --- handleSshBackupRestore ---------------------------------------------
+await test('backup_restore: missing backup_id -> fail', async () => {
   const r = await handleSshBackupRestore({
     getConnection: async () => { throw new Error('no'); },
     args: { server: 's' },
@@ -194,7 +194,7 @@ await test('backup_restore: missing backup_id → fail', async () => {
   assert.strictEqual(r.isError, true);
 });
 
-await test('backup_restore: sha256 mismatch → refuse restore', async () => {
+await test('backup_restore: sha256 mismatch -> refuse restore', async () => {
   const meta = { backup_id: 'id1', backup_type: 'files', paths: ['/etc/x'],
     output_path: '/b/1.tgz', sha256: 'expected-hash', compressed: true };
   const metaJson = JSON.stringify(meta);
@@ -231,7 +231,7 @@ await test('backup_restore: preview loads meta and shows high-risk plan', async 
   assert.strictEqual(parsed.data.plan.expected_sha256, 'hhh');
 });
 
-await test('backup_restore: missing backup_id on server → fail', async () => {
+await test('backup_restore: missing backup_id on server -> fail', async () => {
   const client = new FakeClient({ script: () => ({ stdout: '', code: 0 }) });
   const r = await handleSshBackupRestore({
     getConnection: async () => client,
@@ -241,7 +241,7 @@ await test('backup_restore: missing backup_id on server → fail', async () => {
   assert(r.content[0].text.includes('no backup found'));
 });
 
-// ─── handleSshBackupSchedule ────────────────────────────────────────────
+// --- handleSshBackupSchedule --------------------------------------------
 await test('backup_schedule: preview shows cron plan', async () => {
   const r = await handleSshBackupSchedule({
     getConnection: async () => { throw new Error('should not call'); },
@@ -257,4 +257,4 @@ await test('backup_schedule: preview shows cron plan', async () => {
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
-if (failed > 0) { for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`); process.exit(1); }
+if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }

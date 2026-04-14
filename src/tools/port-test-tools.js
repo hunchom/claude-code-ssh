@@ -1,11 +1,11 @@
 /**
- * ssh_port_test — run a chain of network probes FROM a remote server.
+ * ssh_port_test -- run a chain of network probes FROM a remote server.
  *
  * Probes (each optional, executed in order the caller provides):
- *   - dns:   `getent hosts HOST` or `nslookup HOST` fallback → resolved_ip, ttl?
- *   - tcp:   `nc -z -w T HOST PORT` (or bash /dev/tcp fallback) → tcp_open, latency_ms
- *   - tls:   `openssl s_client … | openssl x509 …` → tls_cert (subject, dates, sha256 fp)
- *   - http:  `curl -sS -o /dev/null -w "%{http_code} %{time_total}"` → http_status, time_seconds
+ *   - dns:   `getent hosts HOST` or `nslookup HOST` fallback -> resolved_ip, ttl?
+ *   - tcp:   `nc -z -w T HOST PORT` (or bash /dev/tcp fallback) -> tcp_open, latency_ms
+ *   - tls:   `openssl s_client ... | openssl x509 ...` -> tls_cert (subject, dates, sha256 fp)
+ *   - http:  `curl -sS -o /dev/null -w "%{http_code} %{time_total}"` -> http_status, time_seconds
  *
  * Parsing functions are exported for unit testing without touching SSH.
  */
@@ -16,9 +16,9 @@ import { ok, fail, toMcp } from '../structured-result.js';
 const DEFAULT_PROBE_TIMEOUT_MS = 5000;
 const DEFAULT_CHAIN = ['dns', 'tcp', 'tls', 'http'];
 
-// ──────────────────────────────────────────────────────────────────────────
-// Parsers — pure, exported for tests.
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// Parsers -- pure, exported for tests.
+// --------------------------------------------------------------------------
 
 /**
  * Parse `getent hosts HOST` output:
@@ -119,9 +119,9 @@ export function parseHttpOutput(text) {
   };
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Remote command builders (exported for tests).
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 export function buildDnsCommand(host) {
   const h = shQuote(host);
@@ -176,9 +176,9 @@ export function buildHttpCommand(host, port, timeoutMs) {
   return `curl -sS -k -o /dev/null -w "%{http_code} %{time_total}" --connect-timeout ${timeoutSecs} --max-time ${timeoutSecs} ${scheme}://${h}:${p}/`;
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Handler
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 export async function handleSshPortTest(ctx = {}) {
   const { getConnection, args = {} } = ctx;

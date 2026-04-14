@@ -12,8 +12,8 @@ import {
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
-  try { await fn(); passed++; console.log(`✅ ${name}`); }
-  catch (e) { failed++; fails.push({ name, err: e }); console.error(`❌ ${name}: ${e.message}`); }
+  try { await fn(); passed++; console.log(`[ok] ${name}`); }
+  catch (e) { failed++; fails.push({ name, err: e }); console.error(`[err] ${name}: ${e.message}`); }
 }
 
 class FakeStream extends EventEmitter {
@@ -37,9 +37,9 @@ class FakeClient {
   }
 }
 
-console.log('🧪 Testing docker-tools\n');
+console.log('[test] Testing docker-tools\n');
 
-// ─── Validators ─────────────────────────────────────────────────────────
+// --- Validators ---------------------------------------------------------
 await test('isValidContainer: normal name', () => assert.strictEqual(isValidContainer('my-app'), true));
 await test('isValidContainer: underscore + dot', () => assert.strictEqual(isValidContainer('svc_1.0'), true));
 await test('isValidContainer: 12-hex id', () => assert.strictEqual(isValidContainer('0123456789ab'), true));
@@ -57,7 +57,7 @@ await test('isValidImage: digest', () => assert.strictEqual(isValidImage(`alpine
 await test('isValidImage: injection rejected', () => assert.strictEqual(isValidImage('alpine; rm'), false));
 await test('isValidImage: command substitution rejected', () => assert.strictEqual(isValidImage('$(curl evil)'), false));
 
-// ─── parseDockerPs ──────────────────────────────────────────────────────
+// --- parseDockerPs ------------------------------------------------------
 await test('parseDockerPs: JSONL with typical shape', () => {
   const lines = [
     JSON.stringify({ ID: 'abc123def456', Names: 'nginx', Image: 'nginx:latest', Status: 'Up 3 days', Ports: '80/tcp', State: 'running', CreatedAt: '2024-01-01' }),
@@ -76,7 +76,7 @@ await test('parseDockerPs: skips malformed lines', () => {
   assert.strictEqual(r.length, 1);
 });
 
-// ─── parseDockerInspect ─────────────────────────────────────────────────
+// --- parseDockerInspect -------------------------------------------------
 await test('parseDockerInspect: array form', () => {
   const r = parseDockerInspect(JSON.stringify([{ Id: 'x', Name: '/nginx' }]));
   assert(Array.isArray(r));
@@ -93,7 +93,7 @@ await test('parseDockerInspect: malformed returns null', () => {
   assert.strictEqual(parseDockerInspect('junk'), null);
 });
 
-// ─── Reversibility + Risk maps ──────────────────────────────────────────
+// --- Reversibility + Risk maps ------------------------------------------
 await test('REVERSIBILITY: rm is irreversible, start/stop auto', () => {
   assert.strictEqual(REVERSIBILITY.rm, 'irreversible');
   assert.strictEqual(REVERSIBILITY.start, 'auto');
@@ -104,8 +104,8 @@ await test('RISK_MAP: rm is high risk', () => {
   assert.strictEqual(RISK_MAP.rm, 'high');
 });
 
-// ─── handleSshDocker ────────────────────────────────────────────────────
-await test('handleSshDocker: unknown action → fail, no remote', async () => {
+// --- handleSshDocker ----------------------------------------------------
+await test('handleSshDocker: unknown action -> fail, no remote', async () => {
   let called = false;
   const r = await handleSshDocker({
     getConnection: async () => { called = true; throw new Error('no'); },
@@ -180,4 +180,4 @@ await test('handleSshDocker: exec is command-shQuoted', async () => {
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
-if (failed > 0) { for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`); process.exit(1); }
+if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }

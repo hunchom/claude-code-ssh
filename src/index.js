@@ -161,7 +161,7 @@ import {
 } from './database-manager.js';
 import { loadToolConfig, isToolEnabled } from './tool-config-manager.js';
 
-// Modularized tool handlers (src/tools/*.js) — 10/10 "gamechanger" versions
+// Modularized tool handlers (src/tools/*.js) -- 10/10 "gamechanger" versions
 import { handleSshExecute, handleSshExecuteSudo, handleSshExecuteGroup } from './tools/exec-tools.js';
 import { handleSshUpload, handleSshDownload, handleSshSync, handleSshDiff, handleSshEdit } from './tools/transfer-tools.js';
 import { handleSshTail, handleSshTailStart, handleSshTailRead, handleSshTailStop } from './tools/tail-tools.js';
@@ -191,7 +191,7 @@ const __dirname = path.dirname(__filename);
 
 // Resolve .env file path with fallback chain:
 // 1. SSH_ENV_PATH env var (explicit override)
-// 2. ~/.ssh-manager/.env (user config dir — where ssh-manager CLI writes)
+// 2. ~/.ssh-manager/.env (user config dir -- where ssh-manager CLI writes)
 // 3. process.cwd()/.env (standard working directory)
 // 4. ~/.env (home directory)
 // 5. __dirname/../.env (backward compat for local installs)
@@ -254,7 +254,7 @@ try {
   const summary = toolConfig.getSummary();
   logger.info(`Tool configuration loaded: ${summary.mode} mode, ${summary.enabledCount}/${summary.totalTools} tools enabled`);
   if (summary.mode === 'all') {
-    logger.info('💡 Tip: Run "ssh-manager tools configure" to reduce context usage in Claude Code');
+    logger.info('[tip] Tip: Run "ssh-manager tools configure" to reduce context usage in Claude Code');
   }
 } catch (error) {
   logger.error('Failed to load tool configuration', { error: error.message });
@@ -477,7 +477,7 @@ async function getConnection(serverName) {
         current = servers[current]?.proxyJump?.toLowerCase() || null;
       }
 
-      // Connect to jump server (recursive — handles chained jumps)
+      // Connect to jump server (recursive -- handles chained jumps)
       const jumpSSH = await getConnection(serverConfig.proxyJump);
 
       // Create forwarded stream through the jump server
@@ -667,7 +667,7 @@ registerToolConditional(
 registerToolConditional(
   'ssh_monitor',
   {
-    description: 'Monitor system resources (CPU, RAM, disk, network) — typed output',
+    description: 'Monitor system resources (CPU, RAM, disk, network) -- typed output',
     inputSchema: {
       server: z.string().describe('Server name from configuration'),
       type: z.enum(['overview', 'cpu', 'memory', 'disk', 'network', 'process']).optional().describe('Monitor type'),
@@ -712,7 +712,7 @@ registerToolConditional(
       history = history.slice(-limit);
 
       // Format output
-      let output = '📜 SSH Command History\n';
+      let output = '[log] SSH Command History\n';
       output += `Showing last ${history.length} commands`;
 
       const filters = [];
@@ -724,14 +724,14 @@ registerToolConditional(
         output += ` (filtered: ${filters.join(', ')})`;
       }
 
-      output += '\n' + '━'.repeat(60) + '\n\n';
+      output += '\n' + '-'.repeat(60) + '\n\n';
 
       if (history.length === 0) {
         output += 'No commands found matching the criteria.\n';
       } else {
         history.forEach((entry, index) => {
           const time = new Date(entry.timestamp).toLocaleString();
-          const status = entry.success ? '✅' : '❌';
+          const status = entry.success ? '[ok]' : '[err]';
           const duration = entry.duration || 'N/A';
 
           output += `${history.length - index}. ${status} [${time}]\n`;
@@ -751,7 +751,7 @@ registerToolConditional(
         });
       }
 
-      output += '━'.repeat(60) + '\n';
+      output += '-'.repeat(60) + '\n';
       output += `Total commands in history: ${logger.getHistory(1000).length}\n`;
 
       logger.info('Command history retrieved', {
@@ -773,7 +773,7 @@ registerToolConditional(
         content: [
           {
             type: 'text',
-            text: `❌ Error retrieving history: ${error.message}`
+            text: `[err] Error retrieving history: ${error.message}`
           }
         ]
       };
@@ -907,7 +907,7 @@ registerToolConditional(
           delay,
           stopOnError
         });
-        output = `✅ Group '${name}' created\n`;
+        output = `[ok] Group '${name}' created\n`;
         output += `Servers: ${result.servers.join(', ') || 'none'}\n`;
         output += `Strategy: ${result.strategy}\n`;
         break;
@@ -921,21 +921,21 @@ registerToolConditional(
           delay,
           stopOnError
         });
-        output = `✅ Group '${name}' updated\n`;
+        output = `[ok] Group '${name}' updated\n`;
         output += `Servers: ${result.servers.join(', ')}\n`;
         break;
 
       case 'delete':
         if (!name) throw new Error('Group name required for delete');
         deleteGroup(name);
-        output = `✅ Group '${name}' deleted`;
+        output = `[ok] Group '${name}' deleted`;
         break;
 
       case 'add-servers':
         if (!name) throw new Error('Group name required');
         if (!servers || servers.length === 0) throw new Error('Servers required');
         result = addServersToGroup(name, servers);
-        output = `✅ Added ${servers.length} servers to '${name}'\n`;
+        output = `[ok] Added ${servers.length} servers to '${name}'\n`;
         output += `Total servers: ${result.servers.length}\n`;
         output += `Members: ${result.servers.join(', ')}`;
         break;
@@ -944,18 +944,18 @@ registerToolConditional(
         if (!name) throw new Error('Group name required');
         if (!servers || servers.length === 0) throw new Error('Servers required');
         result = removeServersFromGroup(name, servers);
-        output = `✅ Removed ${servers.length} servers from '${name}'\n`;
+        output = `[ok] Removed ${servers.length} servers from '${name}'\n`;
         output += `Remaining: ${result.servers.length}\n`;
         output += `Members: ${result.servers.join(', ') || 'none'}`;
         break;
 
       case 'list': {
         const groups = listGroups();
-        output = '📋 Server Groups\n';
-        output += '━'.repeat(60) + '\n\n';
+        output = '[list] Server Groups\n';
+        output += '-'.repeat(60) + '\n\n';
 
         groups.forEach(group => {
-          output += `📁 ${group.name}`;
+          output += `[dir] ${group.name}`;
           if (group.dynamic) output += ' (dynamic)';
           output += '\n';
           output += `   Description: ${group.description}\n`;
@@ -971,7 +971,7 @@ registerToolConditional(
           output += '\n';
         });
 
-        output += '━'.repeat(60) + '\n';
+        output += '-'.repeat(60) + '\n';
         output += `Total groups: ${groups.length}`;
         break;
       }
@@ -1005,7 +1005,7 @@ registerToolConditional(
         content: [
           {
             type: 'text',
-            text: `❌ Group management error: ${error.message}`
+            text: `[err] Group management error: ${error.message}`
           }
         ]
       };
@@ -1091,7 +1091,7 @@ registerToolConditional(
 
         // Upload file to temp location first
         await ssh.putFile(file.local, tempFile);
-        results.push(`✅ Uploaded ${path.basename(file.local)} to temp location`);
+        results.push(`[ok] Uploaded ${path.basename(file.local)} to temp location`);
 
         // Execute deployment strategy
         const deployServers = loadServerConfig();
@@ -1106,7 +1106,7 @@ registerToolConditional(
           }
 
           if (step.type !== 'cleanup') {
-            results.push(`✅ ${step.type}: ${file.remote}`);
+            results.push(`[ok] ${step.type}: ${file.remote}`);
           }
         }
 
@@ -1128,7 +1128,7 @@ registerToolConditional(
         content: [
           {
             type: 'text',
-            text: `🚀 Deployment successful!\n\n${results.join('\n')}`,
+            text: `[run] Deployment successful!\n\n${results.join('\n')}`,
           },
         ],
       };
@@ -1137,7 +1137,7 @@ registerToolConditional(
         content: [
           {
             type: 'text',
-            text: `❌ Deployment failed: ${error.message}`,
+            text: `[err] Deployment failed: ${error.message}`,
           },
         ],
       };
@@ -1190,7 +1190,7 @@ registerToolConditional(
           content: [
             {
               type: 'text',
-              text: `✅ Command alias created: ${alias} -> ${command}`,
+              text: `[ok] Command alias created: ${alias} -> ${command}`,
             },
           ],
         };
@@ -1206,7 +1206,7 @@ registerToolConditional(
           content: [
             {
               type: 'text',
-              text: `✅ Command alias removed: ${alias}`,
+              text: `[ok] Command alias removed: ${alias}`,
             },
           ],
         };
@@ -1224,8 +1224,8 @@ registerToolConditional(
             {
               type: 'text',
               text: aliases.length > 0 ?
-                `📝 Command aliases:\n${aliasInfo}` :
-                '📝 No command aliases configured',
+                `[log] Command aliases:\n${aliasInfo}` :
+                '[log] No command aliases configured',
             },
           ],
         };
@@ -1247,8 +1247,8 @@ registerToolConditional(
             {
               type: 'text',
               text: suggestions.length > 0 ?
-                `💡 Suggested aliases for "${command}":\n${suggestionInfo}` :
-                `💡 No aliases found matching "${command}"`,
+                `[tip] Suggested aliases for "${command}":\n${suggestionInfo}` :
+                `[tip] No aliases found matching "${command}"`,
             },
           ],
         };
@@ -1259,7 +1259,7 @@ registerToolConditional(
         content: [
           {
             type: 'text',
-            text: `❌ Command alias operation failed: ${error.message}`,
+            text: `[err] Command alias operation failed: ${error.message}`,
           },
         ],
       };
@@ -1284,7 +1284,7 @@ registerToolConditional(
         const hooks = listHooks();
 
         const hooksInfo = hooks.map(({ name, enabled, description, actionCount }) =>
-          `  ${enabled ? '✅' : '⭕'} ${name}: ${description} (${actionCount} actions)`
+          `  ${enabled ? '[ok]' : '[err]'} ${name}: ${description} (${actionCount} actions)`
         ).join('\n');
 
         return {
@@ -1292,8 +1292,8 @@ registerToolConditional(
             {
               type: 'text',
               text: hooks.length > 0 ?
-                `🎣 Available hooks:\n${hooksInfo}` :
-                '🎣 No hooks configured',
+                `[hook] Available hooks:\n${hooksInfo}` :
+                '[hook] No hooks configured',
             },
           ],
         };
@@ -1309,7 +1309,7 @@ registerToolConditional(
           content: [
             {
               type: 'text',
-              text: `✅ Hook enabled: ${hook}`,
+              text: `[ok] Hook enabled: ${hook}`,
             },
           ],
         };
@@ -1325,7 +1325,7 @@ registerToolConditional(
           content: [
             {
               type: 'text',
-              text: `⭕ Hook disabled: ${hook}`,
+              text: `[err] Hook disabled: ${hook}`,
             },
           ],
         };
@@ -1340,7 +1340,7 @@ registerToolConditional(
           content: [
             {
               type: 'text',
-              text: `🎣 Hook status:\n  Enabled: ${enabledHooks.map(h => h.name).join(', ') || 'none'}\n  Disabled: ${disabledHooks.map(h => h.name).join(', ') || 'none'}`,
+              text: `[hook] Hook status:\n  Enabled: ${enabledHooks.map(h => h.name).join(', ') || 'none'}\n  Disabled: ${disabledHooks.map(h => h.name).join(', ') || 'none'}`,
             },
           ],
         };
@@ -1351,7 +1351,7 @@ registerToolConditional(
         content: [
           {
             type: 'text',
-            text: `❌ Hook operation failed: ${error.message}`,
+            text: `[err] Hook operation failed: ${error.message}`,
           },
         ],
       };
@@ -1386,8 +1386,8 @@ registerToolConditional(
             {
               type: 'text',
               text: profiles.length > 0 ?
-                `📚 Available profiles (current: ${current}):\n${profileInfo}` :
-                '📚 No profiles found',
+                `[docs] Available profiles (current: ${current}):\n${profileInfo}` :
+                '[docs] No profiles found',
             },
           ],
         };
@@ -1403,7 +1403,7 @@ registerToolConditional(
             content: [
               {
                 type: 'text',
-                text: `✅ Switched to profile: ${profile}\n⚠️  Restart Claude Code to apply profile changes`,
+                text: `[ok] Switched to profile: ${profile}\n[warn]  Restart Claude Code to apply profile changes`,
               },
             ],
           };
@@ -1420,7 +1420,7 @@ registerToolConditional(
           content: [
             {
               type: 'text',
-              text: `📦 Current profile: ${current}\n📝 Description: ${profile.description || 'No description'}\n🔧 Aliases: ${Object.keys(profile.commandAliases || {}).length}\n🎣 Hooks: ${Object.keys(profile.hooks || {}).length}`,
+              text: `[pkg] Current profile: ${current}\n[log] Description: ${profile.description || 'No description'}\n[conf] Aliases: ${Object.keys(profile.commandAliases || {}).length}\n[hook] Hooks: ${Object.keys(profile.hooks || {}).length}`,
             },
           ],
         };
@@ -1431,7 +1431,7 @@ registerToolConditional(
         content: [
           {
             type: 'text',
-            text: `❌ Profile operation failed: ${error.message}`,
+            text: `[err] Profile operation failed: ${error.message}`,
           },
         ],
       };
@@ -1463,9 +1463,9 @@ registerToolConditional(
 
           activeConnections.push({
             server: serverName,
-            status: isValid ? '✅ Active' : '❌ Dead',
+            status: isValid ? '[ok] Active' : '[err] Dead',
             age: `${ageMinutes} minutes`,
-            keepalive: keepaliveIntervals.has(serverName) ? '✅' : '❌'
+            keepalive: keepaliveIntervals.has(serverName) ? '[ok]' : '[err]'
           });
         }
 
@@ -1477,7 +1477,7 @@ registerToolConditional(
           content: [
             {
               type: 'text',
-              text: `🔌 Connection Pool Status:\n${statusInfo}\n\nSettings:\n  Timeout: ${CONNECTION_TIMEOUT / 1000 / 60} minutes\n  Keepalive: Every ${KEEPALIVE_INTERVAL / 1000 / 60} minutes`,
+              text: `[conn] Connection Pool Status:\n${statusInfo}\n\nSettings:\n  Timeout: ${CONNECTION_TIMEOUT / 1000 / 60} minutes\n  Keepalive: Every ${KEEPALIVE_INTERVAL / 1000 / 60} minutes`,
             },
           ],
         };
@@ -1498,7 +1498,7 @@ registerToolConditional(
           content: [
             {
               type: 'text',
-              text: `♻️  Reconnected to ${server}`,
+              text: `[recycle]  Reconnected to ${server}`,
             },
           ],
         };
@@ -1514,7 +1514,7 @@ registerToolConditional(
           content: [
             {
               type: 'text',
-              text: `🔌 Disconnected from ${server}`,
+              text: `[conn] Disconnected from ${server}`,
             },
           ],
         };
@@ -1537,7 +1537,7 @@ registerToolConditional(
           content: [
             {
               type: 'text',
-              text: `🧹 Cleanup complete: ${cleaned} connections closed, ${connections.size} active`,
+              text: `[clean] Cleanup complete: ${cleaned} connections closed, ${connections.size} active`,
             },
           ],
         };
@@ -1548,7 +1548,7 @@ registerToolConditional(
         content: [
           {
             type: 'text',
-            text: `❌ Connection management failed: ${error.message}`,
+            text: `[err] Connection management failed: ${error.message}`,
           },
         ],
       };
@@ -1616,7 +1616,7 @@ registerToolConditional(
   })
 );
 
-// Manage SSH host keys — real SHA256 fingerprint comparison, no regex guessing
+// Manage SSH host keys -- real SHA256 fingerprint comparison, no regex guessing
 registerToolConditional(
   'ssh_key_manage',
   {
@@ -1669,7 +1669,7 @@ registerToolConditional(
           content: [
             {
               type: 'text',
-              text: `✅ Alias created: ${alias} -> ${resolvedName}`,
+              text: `[ok] Alias created: ${alias} -> ${resolvedName}`,
             },
           ],
         };
@@ -1685,7 +1685,7 @@ registerToolConditional(
           content: [
             {
               type: 'text',
-              text: `✅ Alias removed: ${alias}`,
+              text: `[ok] Alias removed: ${alias}`,
             },
           ],
         };
@@ -1705,8 +1705,8 @@ registerToolConditional(
             {
               type: 'text',
               text: aliases.length > 0 ?
-                `📝 Server aliases:\n${aliasInfo}` :
-                '📝 No aliases configured',
+                `[log] Server aliases:\n${aliasInfo}` :
+                '[log] No aliases configured',
             },
           ],
         };
@@ -1717,7 +1717,7 @@ registerToolConditional(
         content: [
           {
             type: 'text',
-            text: `❌ Alias operation failed: ${error.message}`,
+            text: `[err] Alias operation failed: ${error.message}`,
           },
         ],
       };
@@ -2090,7 +2090,7 @@ registerToolConditional(
         content: [
           {
             type: 'text',
-            text: `❌ Alert setup failed: ${error.message}`
+            text: `[err] Alert setup failed: ${error.message}`
           }
         ]
       };
@@ -2248,14 +2248,14 @@ registerToolConditional(
   })
 );
 
-// ═══════════════════════════════════════════════════════════════════════════
-// NEW "gamechanger" tools — modular handlers not present in v1
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// NEW "gamechanger" tools -- modular handlers not present in v1
+// ===========================================================================
 
 registerToolConditional(
   'ssh_cat',
   {
-    description: 'Read remote file slices (line-range, head/tail, grep, offset+limit) — UTF-8 safe',
+    description: 'Read remote file slices (line-range, head/tail, grep, offset+limit) -- UTF-8 safe',
     inputSchema: {
       server: z.string().describe('Server name'),
       path: z.string().describe('Remote file path'),
@@ -2329,7 +2329,7 @@ registerToolConditional(
 registerToolConditional(
   'ssh_port_test',
   {
-    description: 'Port reachability probe (DNS → TCP → TLS → HTTP chain)',
+    description: 'Port reachability probe (DNS -> TCP -> TLS -> HTTP chain)',
     inputSchema: {
       server: z.string().optional().describe('Server for outbound probe from'),
       host: z.string().describe('Target host'),
@@ -2361,7 +2361,7 @@ registerToolConditional(
 registerToolConditional(
   'ssh_edit',
   {
-    description: 'Atomic safe-edit (tmp → syntax-check → backup → mv swap, preview-capable)',
+    description: 'Atomic safe-edit (tmp -> syntax-check -> backup -> mv swap, preview-capable)',
     inputSchema: {
       server: z.string().describe('Server name'),
       path: z.string().describe('Remote file path'),
@@ -2447,7 +2447,7 @@ registerToolConditional(
 registerToolConditional(
   'ssh_deploy_artifact',
   {
-    description: 'Declarative artifact deploy (snapshot → upload → post_hooks → health_check → rollback)',
+    description: 'Declarative artifact deploy (snapshot -> upload -> post_hooks -> health_check -> rollback)',
     inputSchema: {
       server: z.string().describe('Server name'),
       artifact_local_path: z.string().describe('Local artifact to deploy'),
@@ -2499,7 +2499,7 @@ registerToolConditional(
 
 // Clean up connections on shutdown
 process.on('SIGINT', async () => {
-  console.error('\n🔌 Closing SSH connections...');
+  console.error('\n[conn] Closing SSH connections...');
   for (const [name, ssh] of connections) {
     ssh.dispose();
     console.error(`  Closed connection to ${name}`);
@@ -2516,11 +2516,11 @@ async function main() {
   const serverList = Object.keys(servers);
   const activeProfile = getActiveProfileName();
 
-  console.error('🚀 MCP SSH Manager Server started');
-  console.error(`📦 Profile: ${activeProfile}`);
-  console.error(`🖥️  Available servers: ${serverList.length > 0 ? serverList.join(', ') : 'none configured'}`);
-  console.error('💡 Use server-manager.py to configure servers');
-  console.error('🔄 Connection management: Auto-reconnect enabled, 30min timeout');
+  console.error('[run] MCP SSH Manager Server started');
+  console.error(`[pkg] Profile: ${activeProfile}`);
+  console.error(`[host]  Available servers: ${serverList.length > 0 ? serverList.join(', ') : 'none configured'}`);
+  console.error('[tip] Use server-manager.py to configure servers');
+  console.error('[sync] Connection management: Auto-reconnect enabled, 30min timeout');
 
   // Set up periodic cleanup of old connections (every 10 minutes)
   setInterval(() => {

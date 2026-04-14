@@ -11,8 +11,8 @@ import {
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
-  try { await fn(); passed++; console.log(`✅ ${name}`); }
-  catch (e) { failed++; fails.push({ name, err: e }); console.error(`❌ ${name}: ${e.message}`); }
+  try { await fn(); passed++; console.log(`[ok] ${name}`); }
+  catch (e) { failed++; fails.push({ name, err: e }); console.error(`[err] ${name}: ${e.message}`); }
 }
 
 class FakeStream extends EventEmitter {
@@ -36,9 +36,9 @@ class FakeClient {
   }
 }
 
-console.log('🧪 Testing systemctl-tools\n');
+console.log('[test] Testing systemctl-tools\n');
 
-// ─── isValidUnit ────────────────────────────────────────────────────────
+// --- isValidUnit --------------------------------------------------------
 await test('isValidUnit: well-formed service', () => assert.strictEqual(isValidUnit('nginx.service'), true));
 await test('isValidUnit: timer is allowed', () => assert.strictEqual(isValidUnit('backup.timer'), true));
 await test('isValidUnit: missing suffix rejected', () => assert.strictEqual(isValidUnit('nginx'), false));
@@ -49,7 +49,7 @@ await test('isValidUnit: unknown suffix rejected', () => assert.strictEqual(isVa
 await test('isValidUnit: null / undefined', () => { assert.strictEqual(isValidUnit(null), false); assert.strictEqual(isValidUnit(undefined), false); });
 await test('isValidUnit: @ template', () => assert.strictEqual(isValidUnit('sshd@0.service'), true));
 
-// ─── parseListUnits ─────────────────────────────────────────────────────
+// --- parseListUnits -----------------------------------------------------
 await test('parseListUnits: parses typical output', () => {
   const sample = [
     'nginx.service        loaded active running  nginx HTTP server',
@@ -72,7 +72,7 @@ await test('parseListUnits: ignores footer lines', () => {
   assert.strictEqual(r.length, 1);
 });
 
-// ─── parseListUnitFiles ─────────────────────────────────────────────────
+// --- parseListUnitFiles -------------------------------------------------
 await test('parseListUnitFiles: parses state + vendor preset', () => {
   const sample = [
     'nginx.service  enabled  enabled',
@@ -85,7 +85,7 @@ await test('parseListUnitFiles: parses state + vendor preset', () => {
   assert.strictEqual(r[1].vendor_preset, null);
 });
 
-// ─── shapeUnitStatus ────────────────────────────────────────────────────
+// --- shapeUnitStatus ----------------------------------------------------
 await test('shapeUnitStatus: typed shape with numeric parsing', () => {
   const r = shapeUnitStatus('nginx.service', {
     ActiveState: 'active', SubState: 'running',
@@ -104,7 +104,7 @@ await test('shapeUnitStatus: missing numeric props coerce to null', () => {
   assert.strictEqual(r.memory_bytes, null);
 });
 
-// ─── parseJournalLines ──────────────────────────────────────────────────
+// --- parseJournalLines --------------------------------------------------
 await test('parseJournalLines: keeps last N, drops boilerplate', () => {
   const txt = [
     '-- Logs begin at Mon 2024-01-01 --',
@@ -118,8 +118,8 @@ await test('parseJournalLines: keeps last N, drops boilerplate', () => {
   assert(r[1].includes('again'));
 });
 
-// ─── handleSshSystemctl ─────────────────────────────────────────────────
-await test('handleSshSystemctl: unknown action → fail, no remote', async () => {
+// --- handleSshSystemctl -------------------------------------------------
+await test('handleSshSystemctl: unknown action -> fail, no remote', async () => {
   let called = false;
   const r = await handleSshSystemctl({
     getConnection: async () => { called = true; throw new Error('no'); },
@@ -208,4 +208,4 @@ await test('ALLOWED_ACTIONS exports a Set with expected verbs', () => {
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
-if (failed > 0) { for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`); process.exit(1); }
+if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }

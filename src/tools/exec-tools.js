@@ -5,7 +5,7 @@
  *   - Route through streamExecCommand (shell-quoted cwd, UTF-8 safe, abortable, timeout-safe)
  *   - Return structured results via the formatter + structured-result helpers
  *   - Support format: 'markdown' | 'json' | 'both'
- *   - Support preview: true (dry run — shows plan, never touches remote)
+ *   - Support preview: true (dry run -- shows plan, never touches remote)
  *
  * Sudo never echoes the password into argv. The password is written to the
  * exec stream's fd0 via streamExecCommand's stdin option, which means it
@@ -25,9 +25,9 @@ const DEFAULT_MAX_LEN = 10_000;
 const DEFAULT_DEBOUNCE_MS = 50;
 const DEFAULT_GROUP_CONCURRENCY = 5;
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_execute
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 export async function handleSshExecute({ getConnection, args }) {
   const {
     server, command, cwd, timeout = DEFAULT_TIMEOUT_MS,
@@ -87,9 +87,9 @@ function makeExecErrorResponse(tool, server, command, cwd, error, format, durati
   return { content: makeMcpContent(exec, { format }), isError: true };
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// ssh_execute_sudo — password via stdin, never argv
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// ssh_execute_sudo -- password via stdin, never argv
+// --------------------------------------------------------------------------
 export async function handleSshExecuteSudo({ getConnection, getServerConfig, args }) {
   const {
     server, command, password, cwd,
@@ -99,7 +99,7 @@ export async function handleSshExecuteSudo({ getConnection, getServerConfig, arg
     preview: isPreview = false,
   } = args;
 
-  // Strip leading "sudo " — we always add it explicitly below.
+  // Strip leading "sudo " -- we always add it explicitly below.
   const rawCmd = String(command).replace(/^sudo\s+/, '');
   // `-S` reads password from stdin. `-p ""` suppresses the prompt (no "Password:" bleed).
   // `--` ends sudo's option parsing so the user's command can start with a flag.
@@ -158,14 +158,14 @@ export async function handleSshExecuteSudo({ getConnection, getServerConfig, arg
   return { content: makeMcpContent(exec, { format }) };
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// ssh_execute_group — bounded-concurrency fan-out
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// ssh_execute_group -- bounded-concurrency fan-out
+// --------------------------------------------------------------------------
 export async function handleSshExecuteGroup({ getConnection, resolveGroup, args }) {
   const {
     group, command, cwd,
     timeout = DEFAULT_TIMEOUT_MS,
-    maxLen = 4000,                 // smaller default per-server — results are aggregated
+    maxLen = 4000,                 // smaller default per-server -- results are aggregated
     concurrency = DEFAULT_GROUP_CONCURRENCY,
     format = 'markdown',
     stopOnError = false,
@@ -251,14 +251,14 @@ function renderGroupMarkdown(result) {
   const d = result.data;
   const lines = [];
   const ok = d.failed === 0;
-  const marker = ok ? '▶' : '✕';
-  lines.push(`${marker} **ssh_execute_group**  ·  \`${d.group}\`  ·  ${d.succeeded}/${d.total} ok`);
+  const marker = ok ? '[ok]' : '[err]';
+  lines.push(`${marker} **ssh_execute_group**  |  \`${d.group}\`  |  ${d.succeeded}/${d.total} ok`);
   lines.push(`\`$ ${d.command}\`${d.cwd ? `   *(in \`${d.cwd}\`)*` : ''}`);
   lines.push('');
   for (const r of d.results) {
-    const m = r.success ? '▶' : '✕';
+    const m = r.success ? '[ok]' : '[err]';
     const exitBadge = r.success ? '**exit 0**' : `**exit ${r.exit_code ?? -1}**`;
-    lines.push(`${m} \`${r.server}\`  ·  ${exitBadge}  ·  \`${(r.duration_ms / 1000).toFixed(2)} s\``);
+    lines.push(`${m} \`${r.server}\`  |  ${exitBadge}  |  \`${(r.duration_ms / 1000).toFixed(2)} s\``);
     if (r.stdout && r.stdout.trim()) {
       lines.push('```text');
       lines.push(r.stdout);

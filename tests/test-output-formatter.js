@@ -24,18 +24,18 @@ function test(name, fn) {
   try {
     fn();
     passed++;
-    console.log(`✅ ${name}`);
+    console.log(`[ok] ${name}`);
   } catch (e) {
     failed++;
     fails.push({ name, err: e });
-    console.error(`❌ ${name}: ${e.message}`);
+    console.error(`[err] ${name}: ${e.message}`);
   }
 }
 
-console.log('🧪 Testing output-formatter\n');
+console.log('[test] Testing output-formatter\n');
 
-// ─── stripAnsi ───────────────────────────────────────────────────────────
-test('stripAnsi: null → empty string', () => {
+// --- stripAnsi -----------------------------------------------------------
+test('stripAnsi: null -> empty string', () => {
   assert.strictEqual(stripAnsi(null), '');
   assert.strictEqual(stripAnsi(undefined), '');
   assert.strictEqual(stripAnsi(''), '');
@@ -65,7 +65,7 @@ test('stripAnsi: coerces non-string input', () => {
   assert.strictEqual(stripAnsi(42), '42');
 });
 
-// ─── truncateHeadTail ────────────────────────────────────────────────────
+// --- truncateHeadTail ----------------------------------------------------
 test('truncateHeadTail: under-limit returns unchanged, 0 truncated', () => {
   const r = truncateHeadTail('abc', 100);
   assert.strictEqual(r.text, 'abc');
@@ -108,7 +108,7 @@ test('truncateHeadTail: error context (tail) is preserved when output is long', 
   assert(r.text.endsWith(finalErr), 'the real error at the tail must survive');
 });
 
-// ─── formatExecResult ────────────────────────────────────────────────────
+// --- formatExecResult ----------------------------------------------------
 test('formatExecResult: success shape', () => {
   const r = formatExecResult({
     server: 'prod01',
@@ -174,7 +174,7 @@ test('formatExecResult: truncation reported in truncated block', () => {
   assert.strictEqual(r.truncated.stdout_total, 30_000);
 });
 
-test('formatExecResult: undefined code → exit_code -1, success false', () => {
+test('formatExecResult: undefined code -> exit_code -1, success false', () => {
   const r = formatExecResult({
     server: 's', command: 'c', stdout: '', stderr: '', code: undefined, durationMs: 0,
   });
@@ -189,42 +189,42 @@ test('formatExecResult: negative durationMs clamps to 0', () => {
   assert.strictEqual(r.duration_ms, 0);
 });
 
-// ─── formatBytes ─────────────────────────────────────────────────────────
-test('formatBytes: 0 → "0 B"', () => assert.strictEqual(formatBytes(0), '0 B'));
+// --- formatBytes ---------------------------------------------------------
+test('formatBytes: 0 -> "0 B"', () => assert.strictEqual(formatBytes(0), '0 B'));
 test('formatBytes: sub-KB stays in bytes', () => assert.strictEqual(formatBytes(512), '512 B'));
-test('formatBytes: exactly 1024 → KB with decimal', () => assert.strictEqual(formatBytes(1024), '1.0 KB'));
+test('formatBytes: exactly 1024 -> KB with decimal', () => assert.strictEqual(formatBytes(1024), '1.0 KB'));
 test('formatBytes: MB threshold', () => assert.strictEqual(formatBytes(1_500_000), '1.4 MB'));
-test('formatBytes: garbage → 0 B', () => assert.strictEqual(formatBytes(null), '0 B'));
+test('formatBytes: garbage -> 0 B', () => assert.strictEqual(formatBytes(null), '0 B'));
 
-// ─── formatDuration ──────────────────────────────────────────────────────
-test('formatDuration: sub-second → "N ms"', () => assert.strictEqual(formatDuration(245), '245 ms'));
+// --- formatDuration ------------------------------------------------------
+test('formatDuration: sub-second -> "N ms"', () => assert.strictEqual(formatDuration(245), '245 ms'));
 test('formatDuration: seconds with 2 decimals', () => assert.strictEqual(formatDuration(2340), '2.34 s'));
 test('formatDuration: minutes', () => assert.strictEqual(formatDuration(83_000), '1m 23s'));
 test('formatDuration: negative clamps to 0 ms', () => assert.strictEqual(formatDuration(-100), '0 ms'));
 
-// ─── renderMarkdown ──────────────────────────────────────────────────────
-test('renderMarkdown: success header uses ▶ marker and bold exit 0', () => {
+// --- renderMarkdown ------------------------------------------------------
+test('renderMarkdown: success header uses [ok] marker and bold exit 0', () => {
   const md = renderMarkdown({
     server: 'prod01', command: 'x', cwd: null, exit_code: 0, success: true,
     duration_ms: 2340, stdout: '', stderr: '',
     truncated: { stdout_bytes: 0, stderr_bytes: 0, stdout_total: 0, stderr_total: 0 },
   });
   const firstLine = md.split('\n')[0];
-  assert(firstLine.startsWith('▶ **ssh_execute**'), `expected ▶ marker, got: ${firstLine}`);
+  assert(firstLine.startsWith('[ok] **ssh_execute**'), `expected [ok] marker, got: ${firstLine}`);
   assert(firstLine.includes('`prod01`'), 'server in backticks');
   assert(firstLine.includes('**exit 0**'), 'exit 0 bolded');
   assert(firstLine.includes('`2.34 s`'), 'duration in backticks with unit');
   assert(md.includes('`$ x`'), 'command shown with $ prefix in backticks');
 });
 
-test('renderMarkdown: failure header uses ✕ marker and bold exit N', () => {
+test('renderMarkdown: failure header uses [err] marker and bold exit N', () => {
   const md = renderMarkdown({
     server: 's', command: 'false', cwd: null, exit_code: 127, success: false,
     duration_ms: 0, stdout: '', stderr: 'not found',
     truncated: { stdout_bytes: 0, stderr_bytes: 0, stdout_total: 0, stderr_total: 0 },
   });
   const firstLine = md.split('\n')[0];
-  assert(firstLine.startsWith('✕ **ssh_execute**'), 'failure marker');
+  assert(firstLine.startsWith('[err] **ssh_execute**'), 'failure marker');
   assert(firstLine.includes('**exit 127**'), 'exit 127 bolded');
   assert(md.includes('**stderr**'), 'stderr label');
   assert(md.includes('not found'));
@@ -239,7 +239,7 @@ test('renderMarkdown: cwd rendered as italic backticked path on command line', (
   assert(md.includes('*(in `/srv/app`)*'), 'cwd italic+backticked');
 });
 
-test('renderMarkdown: no cwd → no "(in …)" fragment', () => {
+test('renderMarkdown: no cwd -> no "(in ...)" fragment', () => {
   const md = renderMarkdown({
     server: 's', command: 'c', cwd: null, exit_code: 0, success: true,
     duration_ms: 10, stdout: '', stderr: '',
@@ -286,7 +286,7 @@ test('renderMarkdown: truncation shows both streams when both elided', () => {
   assert(md.includes('stderr 2.0 KB'));
 });
 
-// ─── makeMcpContent ──────────────────────────────────────────────────────
+// --- makeMcpContent ------------------------------------------------------
 test('makeMcpContent: markdown (default)', () => {
   const r = formatExecResult({
     server: 's', command: 'c', stdout: 'out', stderr: '', code: 0, durationMs: 10,
@@ -322,7 +322,7 @@ test('makeMcpContent: both returns markdown and json blocks in order', () => {
   assert.doesNotThrow(() => JSON.parse(c[1].text), 'second block is JSON');
 });
 
-// ─── Integration: real-world-ish shape ───────────────────────────────────
+// --- Integration: real-world-ish shape -----------------------------------
 test('integration: 100KB log with ANSI + error at tail round-trips through all helpers', () => {
   const noise = ('\x1b[32mline of noise\x1b[0m\n').repeat(5000); // ~100KB with ANSI
   const err = 'FATAL: segmentation fault at 0xdeadbeef\n';
@@ -341,15 +341,15 @@ test('integration: 100KB log with ANSI + error at tail round-trips through all h
   const md = renderMarkdown(r);
   assert(md.includes('**exit 139**'), 'failure exit badge');
   assert(md.includes('elided'), 'truncation marker present');
-  assert(md.startsWith('✕'), 'failure marker leads the header');
+  assert(md.startsWith('[err]'), 'failure marker leads the header');
 
   const c = makeMcpContent(r, { format: 'both' });
   assert.strictEqual(c.length, 2);
 });
 
-// ─── Summary ─────────────────────────────────────────────────────────────
+// --- Summary -------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
-  for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`);
+  for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`);
   process.exit(1);
 }

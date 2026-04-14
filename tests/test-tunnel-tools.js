@@ -10,11 +10,11 @@ import {
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
-  try { await fn(); passed++; console.log(`✅ ${name}`); }
-  catch (e) { failed++; fails.push({ name, err: e }); console.error(`❌ ${name}: ${e.message}`); }
+  try { await fn(); passed++; console.log(`[ok] ${name}`); }
+  catch (e) { failed++; fails.push({ name, err: e }); console.error(`[err] ${name}: ${e.message}`); }
 }
 
-// Fake ssh2 Client — provides forwardOut / forwardIn / unforwardIn.
+// Fake ssh2 Client -- provides forwardOut / forwardIn / unforwardIn.
 function makeFakeClient() {
   return {
     forwardOutCalls: [],
@@ -38,9 +38,9 @@ function makeFakeClient() {
   };
 }
 
-console.log('🧪 Testing tunnel-tools\n');
+console.log('[test] Testing tunnel-tools\n');
 
-// ─── probeReachability (with stubs) ─────────────────────────────────────
+// --- probeReachability (with stubs) -------------------------------------
 await test('probeReachability: dns+tcp success via stubs', async () => {
   const r = await probeReachability('example.com', 443, {
     resolver: async () => '93.184.216.34',
@@ -74,8 +74,8 @@ await test('probeReachability: no host/port returns placeholder', async () => {
   assert.strictEqual(r.dns.ok, false);
 });
 
-// ─── handleSshTunnelCreate validation ───────────────────────────────────
-await test('create: invalid type → fail', async () => {
+// --- handleSshTunnelCreate validation -----------------------------------
+await test('create: invalid type -> fail', async () => {
   __resetTunnelStore();
   const r = await handleSshTunnelCreate({
     getConnection: async () => { throw new Error('should not call'); },
@@ -84,7 +84,7 @@ await test('create: invalid type → fail', async () => {
   assert.strictEqual(r.isError, true);
 });
 
-await test('create: invalid local_port → fail', async () => {
+await test('create: invalid local_port -> fail', async () => {
   __resetTunnelStore();
   const r = await handleSshTunnelCreate({
     getConnection: async () => { throw new Error('no'); },
@@ -102,7 +102,7 @@ await test('create: local type requires remote_host/port', async () => {
   assert.strictEqual(r.isError, true);
 });
 
-// ─── preview mode ───────────────────────────────────────────────────────
+// --- preview mode -------------------------------------------------------
 await test('create preview: returns plan, never calls getConnection', async () => {
   __resetTunnelStore();
   let called = false;
@@ -121,7 +121,7 @@ await test('create preview: returns plan, never calls getConnection', async () =
   assert(parsed.data.plan.effects.some(e => e.includes('opens TCP listener')));
 });
 
-await test('create preview: remote type → risk:high', async () => {
+await test('create preview: remote type -> risk:high', async () => {
   __resetTunnelStore();
   const r = await handleSshTunnelCreate({
     getConnection: async () => { throw new Error('no'); },
@@ -136,7 +136,7 @@ await test('create preview: remote type → risk:high', async () => {
   assert.strictEqual(parsed.data.plan.risk, 'high');
 });
 
-// ─── create → list → close round-trip ───────────────────────────────────
+// --- create -> list -> close round-trip -----------------------------------
 await test('create (local) stores tunnel and returns typed data', async () => {
   __resetTunnelStore();
   const client = makeFakeClient();
@@ -209,17 +209,17 @@ await test('list filters by server', async () => {
   await handleSshTunnelClose({ args: { tunnel_id: JSON.parse(b.content[0].text).data.tunnel_id } });
 });
 
-await test('close missing tunnel_id → fail', async () => {
+await test('close missing tunnel_id -> fail', async () => {
   const r = await handleSshTunnelClose({ args: { format: 'json' } });
   assert.strictEqual(r.isError, true);
 });
 
-await test('close unknown tunnel_id → structured fail', async () => {
+await test('close unknown tunnel_id -> structured fail', async () => {
   const r = await handleSshTunnelClose({ args: { tunnel_id: 'tunnel_nope', format: 'json' } });
   assert.strictEqual(r.isError, true);
 });
 
-await test('close is idempotent: second call → already_closed:true', async () => {
+await test('close is idempotent: second call -> already_closed:true', async () => {
   __resetTunnelStore();
   const client = makeFakeClient();
   const c = await handleSshTunnelCreate({
@@ -238,4 +238,4 @@ await test('close is idempotent: second call → already_closed:true', async () 
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
-if (failed > 0) { for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`); process.exit(1); }
+if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }

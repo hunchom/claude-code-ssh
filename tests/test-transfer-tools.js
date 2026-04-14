@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Tests for src/tools/transfer-tools.js — mocks getConnection / sftp / rsync spawn.
+ * Tests for src/tools/transfer-tools.js -- mocks getConnection / sftp / rsync spawn.
  *
  * Coverage:
  *   - ssh_upload: happy, verify match, verify mismatch, preview stat, preview no-op, local missing
@@ -30,11 +30,11 @@ import {
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
-  try { await fn(); passed++; console.log(`✅ ${name}`); }
-  catch (e) { failed++; fails.push({ name, err: e }); console.error(`❌ ${name}: ${e.message}`); }
+  try { await fn(); passed++; console.log(`[ok] ${name}`); }
+  catch (e) { failed++; fails.push({ name, err: e }); console.error(`[err] ${name}: ${e.message}`); }
 }
 
-// ─── Fake ssh2 client (exec + sftp) ──────────────────────────────────────
+// --- Fake ssh2 client (exec + sftp) --------------------------------------
 class FakeStream extends EventEmitter {
   constructor() {
     super();
@@ -113,11 +113,11 @@ function cleanupPath(p) {
   } catch (_) { /* ignore */ }
 }
 
-console.log('🧪 Testing transfer-tools\n');
+console.log('[test] Testing transfer-tools\n');
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_upload
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 await test('ssh_upload: happy path calls fastPut with (local,remote) and reports bytes', async () => {
   const t = mkTmpFile('alpha');
   try {
@@ -160,7 +160,7 @@ await test('ssh_upload: verify=true calls sha256sum with shell-quoted path', asy
   } finally { cleanupPath(t.dir); }
 });
 
-await test('ssh_upload: verify mismatch → structured fail, isError true', async () => {
+await test('ssh_upload: verify mismatch -> structured fail, isError true', async () => {
   const t = mkTmpFile('original');
   try {
     const client = new FakeClient({
@@ -275,9 +275,9 @@ await test('ssh_upload: required args validation (missing remote_path)', async (
   assert(parsed.error.includes('required'));
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_download
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 await test('ssh_download: happy path calls fastGet(remote,local) in that order', async () => {
   const content = 'downloaded content';
   const expectedHash = crypto.createHash('sha256').update(content).digest('hex');
@@ -307,7 +307,7 @@ await test('ssh_download: happy path calls fastGet(remote,local) in that order',
   } finally { cleanupPath(dir); }
 });
 
-await test('ssh_download: sha256 mismatch → isError with diagnostic', async () => {
+await test('ssh_download: sha256 mismatch -> isError with diagnostic', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sshdl-'));
   const localDest = path.join(dir, 'out');
   try {
@@ -366,7 +366,7 @@ await test('ssh_download: verify=false skips sha256 entirely', async () => {
   } finally { cleanupPath(dir); }
 });
 
-await test('ssh_download: fastGet error → isError', async () => {
+await test('ssh_download: fastGet error -> isError', async () => {
   const sftp = new FakeSftp();
   sftp.fastGetImpl = (remote, local, cb) => cb(new Error('remote missing'));
   const client = new FakeClient({ sftp, script: () => ({ stdout: 'hash', code: 0 }) });
@@ -379,9 +379,9 @@ await test('ssh_download: fastGet error → isError', async () => {
   assert(parsed.error.includes('download failed') || parsed.error.includes('remote missing'));
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_sync
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 await test('buildRsyncArgv: keypath auth yields direct rsync with -i key', () => {
   const argv = buildRsyncArgv({
     serverConfig: { user: 'u', host: 'h', keypath: '/k' },
@@ -487,7 +487,7 @@ await test('ssh_sync: spawn called with rsync + parsed stats on success', async 
   assert.strictEqual(parsed.data.direction, 'push');
 });
 
-await test('ssh_sync: non-zero exit → structured failure', async () => {
+await test('ssh_sync: non-zero exit -> structured failure', async () => {
   const fakeSpawn = () => {
     const proc = new EventEmitter();
     proc.stdout = new EventEmitter();
@@ -548,9 +548,9 @@ await test('ssh_sync: password config drives sshpass command', async () => {
   assert.strictEqual(spawnCalls[0].args[2], 'rsync');
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_diff
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 await test('ssh_diff: same-server builds `diff -u A B` with quoted paths', async () => {
   const client = new FakeClient({
     script: () => ({ stdout: '--- a\n+++ b\n@@\n-old\n+new\n', code: 1 }),
@@ -566,7 +566,7 @@ await test('ssh_diff: same-server builds `diff -u A B` with quoted paths', async
   assert(client.commands[0].startsWith("diff -u '/etc/a.conf' '/etc/b.conf'"));
 });
 
-await test('ssh_diff: identical files → identical:true on exit 0', async () => {
+await test('ssh_diff: identical files -> identical:true on exit 0', async () => {
   const client = new FakeClient({ script: () => ({ stdout: '', code: 0 }) });
   const r = await handleSshDiff({
     getConnection: async () => client,
@@ -618,7 +618,7 @@ await test('ssh_diff: preview returns plan without connecting', async () => {
   assert.strictEqual(parsed.data.plan.action, 'diff');
 });
 
-await test('ssh_diff: missing path_b → structured failure', async () => {
+await test('ssh_diff: missing path_b -> structured failure', async () => {
   const r = await handleSshDiff({
     getConnection: async () => ({}),
     args: { server: 's', path_a: '/a', format: 'json' },
@@ -628,9 +628,9 @@ await test('ssh_diff: missing path_b → structured failure', async () => {
   assert(parsed.error.includes('required'));
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_edit
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 await test('ssh_edit: preview shows plan + stat + bytes, never mutates', async () => {
   const client = new FakeClient({
     script: (cmd) => cmd.startsWith('stat ')
@@ -676,7 +676,7 @@ await test('ssh_edit: full-replace flow writes tmp via base64, cp backup, then m
   const parsed = JSON.parse(r.content[0].text);
   assert.strictEqual(parsed.success, true, parsed.error);
 
-  // Order: cat → base64-write → cp -p backup && mv tmp orig → diff
+  // Order: cat -> base64-write -> cp -p backup && mv tmp orig -> diff
   const writeIdx = client.commands.findIndex(c => c.includes('base64 -d >'));
   const swapIdx = client.commands.findIndex(c => c.startsWith('set -e; cp -p '));
   assert(writeIdx >= 0, 'expected base64 write');
@@ -719,7 +719,7 @@ await test('ssh_edit: json path triggers python3 json syntax check; failure abor
       server: 's', path: '/etc/app.json',
       new_content: 'not-json-at-all',
       format: 'json',
-      // syntax_check default 'auto' → json checker
+      // syntax_check default 'auto' -> json checker
     },
   });
   assert.strictEqual(r.isError, true);
@@ -782,7 +782,7 @@ await test('ssh_edit: patch-mode regex rules applied and base64-encoded new cont
   assert.strictEqual(decoded, 'version: 2.0\nname: beta\n');
 });
 
-await test('ssh_edit: missing new_content AND patch → structured failure', async () => {
+await test('ssh_edit: missing new_content AND patch -> structured failure', async () => {
   const r = await handleSshEdit({
     getConnection: async () => ({}),
     args: { server: 's', path: '/etc/x', format: 'json' },
@@ -812,7 +812,7 @@ await test('ssh_edit: path with shell metachars is single-quoted in every remote
   // quote expanded to the POSIX-safe sequence '\'' (end-quote, literal, reopen).
   // Every remote reference to the evil path must contain the quoted prefix
   // "'/etc/my'\\''cfg; rm -rf /.conf" (possibly with a suffix like .mcp.tmp.XXX
-  // before the closing quote). The NAKED unescaped form must never appear —
+  // before the closing quote). The NAKED unescaped form must never appear --
   // if it did, the embedded single quote would terminate the shell literal
   // and the trailing `; rm -rf /` would parse as a new command.
   const quotedPrefix = "'/etc/my'\\''cfg; rm -rf /.conf";
@@ -827,7 +827,7 @@ await test('ssh_edit: path with shell metachars is single-quoted in every remote
   }
 });
 
-await test('ssh_edit: cat failure (file missing) → structured fail, no tmp write', async () => {
+await test('ssh_edit: cat failure (file missing) -> structured fail, no tmp write', async () => {
   const client = new FakeClient({
     script: (cmd) => cmd.startsWith('cat ')
       ? { stdout: '', stderr: 'No such file', code: 1 }
@@ -868,11 +868,11 @@ await test('ssh_edit: non-json/yaml extension auto-skips syntax check', async ()
   assert.strictEqual(parsed.data.syntax_check, null);
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Summary
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
-  for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`);
+  for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`);
   process.exit(1);
 }

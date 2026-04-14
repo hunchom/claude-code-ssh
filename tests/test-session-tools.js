@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Tests for src/tools/session-tools.js — the marker-prompt session family.
+ * Tests for src/tools/session-tools.js -- the marker-prompt session family.
  *
  * We mock the shell stream entirely. The FakeShellStream is an EventEmitter
  * that records `.write()` calls, supports `.end()`, and lets the test harness
@@ -33,14 +33,14 @@ import {
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
-  try { await fn(); passed++; console.log(`✅ ${name}`); }
-  catch (e) { failed++; fails.push({ name, err: e }); console.error(`❌ ${name}: ${e.message}`); }
+  try { await fn(); passed++; console.log(`[ok] ${name}`); }
+  catch (e) { failed++; fails.push({ name, err: e }); console.error(`[err] ${name}: ${e.message}`); }
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// ──────────────────────────────────────────────────────────────────────────
-// FakeShellStream — scriptable bidirectional shell
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// FakeShellStream -- scriptable bidirectional shell
+// --------------------------------------------------------------------------
 class FakeShellStream extends EventEmitter {
   constructor({ scriptFor = null, delayMs = 0 } = {}) {
     super();
@@ -60,7 +60,7 @@ class FakeShellStream extends EventEmitter {
     // Parse the wrapped command: `{ USER_CMD\n} ; __rc=$?; printf '%s %s\n' 'MARKER' "$__rc"\n`
     const match = s.match(/^\{ ([\s\S]*?)\n\} ; __rc=\$\?; printf '%s %s\\n' '(__MCP_EOC_[0-9a-f]{16})' "\$__rc"\n$/);
     if (!match) {
-      // Not a wrapped command — maybe plain `exit\n` on close. Ignore.
+      // Not a wrapped command -- maybe plain `exit\n` on close. Ignore.
       return true;
     }
     const userCmd = match[1];
@@ -76,7 +76,7 @@ class FakeShellStream extends EventEmitter {
       // Emit any scripted stdout.
       if (script.stdout) this.emit('data', Buffer.from(script.stdout));
       if (script.stderr) this.stderr.emit('data', Buffer.from(script.stderr));
-      // Emit the sentinel line last — unless the script wants to misbehave.
+      // Emit the sentinel line last -- unless the script wants to misbehave.
       if (!script.skipMarker) {
         this.emit('data', Buffer.from(`${marker} ${script.exit ?? 0}\n`));
       }
@@ -119,11 +119,11 @@ async function cleanupAllSessions() {
   }
 }
 
-console.log('🧪 Testing session-tools (marker-prompt protocol)\n');
+console.log('[test] Testing session-tools (marker-prompt protocol)\n');
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Pure-function tests: marker / wrap / parse
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 await test('makeMarker: produces unique 16-hex marker each call', () => {
   const a = makeMarker();
@@ -177,7 +177,7 @@ await test('parseMarkerOutput: strips ANSI color codes around marker line', () =
 
 await test('parseMarkerOutput: output containing literal "$" before marker does NOT trigger false match', () => {
   const marker = '__MCP_EOC_feedfacefeedface';
-  // Output contains `$` and `#` as regular text — the old regex prompt
+  // Output contains `$` and `#` as regular text -- the old regex prompt
   // detector would have fired here. The marker protocol does not.
   const raw = `here is a $ literal\nroot# fake prompt in stdout\n${marker} 0\n`;
   const { output, exitCode } = parseMarkerOutput(raw, marker);
@@ -217,9 +217,9 @@ await test('buildMarkerRegex: matches only exact marker (random suffix is ungues
   assert(regex.test(`output\n${a} 7\n`), 'regex matches own marker');
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Stream-level: SSHSessionV2 with FakeShellStream
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 await test('runCommand: writes wrapped command to stream (marker preamble present)', async () => {
   const stream = new FakeShellStream({ scriptFor: () => ({ stdout: 'ok\n', exit: 0 }) });
@@ -248,7 +248,7 @@ await test('runCommand: exit code 42 is extracted from sentinel line', async () 
 await test('runCommand: PS1 containing $ or # in output does NOT trigger premature resolve', async () => {
   const stream = new FakeShellStream({
     scriptFor: () => ({
-      // Output with $ and # characters — the old regex-based detector would
+      // Output with $ and # characters -- the old regex-based detector would
       // have erroneously matched `> ` at end of line. Marker ignores them.
       stdout: 'user@host$ echo something\n' +
               'root# su succeeded\n' +
@@ -335,9 +335,9 @@ await test('runCommand: timeout cancels and rejects', async () => {
   await sess.close();
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Handler-level integration
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 function makeSeedingStream({ pwdOut = '/home/foo\n', userOut = 'foo\n', homeOut = '/home/foo\n' } = {}) {
   return new FakeShellStream({
@@ -372,7 +372,7 @@ await test('session_start: markdown render shows session_id + cwd + user', async
     args: { server: 'dev', format: 'markdown' },
   });
   const md = r.content[0].text;
-  assert(md.startsWith('▶ **ssh_session_start**'), `got: ${md.slice(0, 80)}`);
+  assert(md.startsWith('[ok] **ssh_session_start**'), `got: ${md.slice(0, 80)}`);
   assert(md.includes('session_id'));
   assert(md.includes('/opt/app'));
   assert(md.includes('bob'));
@@ -432,7 +432,7 @@ await test('session_send: updates command_history (replay sees it)', async () =>
 });
 
 await test('session_send: timeout cancels and returns structured error', async () => {
-  // Stream that never emits the marker for user commands → forces timeout.
+  // Stream that never emits the marker for user commands -> forces timeout.
   const stream = new FakeShellStream({
     scriptFor: (cmd) => {
       if (cmd === 'pwd') return { stdout: '/home/foo\n', exit: 0 };
@@ -484,7 +484,7 @@ await test('session_list: all active sessions shown with last_activity', async (
   await cleanupAllSessions();
 });
 
-await test('session_close: idempotent — second call is success with already_closed', async () => {
+await test('session_close: idempotent -- second call is success with already_closed', async () => {
   const started = await handleSshSessionStart({
     getConnection: async () => makeFakeClient(makeSeedingStream()),
     args: { server: 's', format: 'json' },
@@ -640,13 +640,13 @@ await test('output containing coincidental "__MCP_EOC_" prefix does NOT trigger 
   await handleSshSessionClose({ args: { session_id } });
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Summary
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 await cleanupAllSessions();
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
-  for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`);
+  for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`);
   process.exit(1);
 }

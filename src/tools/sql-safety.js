@@ -4,8 +4,8 @@
  * Strategy (token-level, not substring-level):
  *   1. Strip all SQL comments: line `-- ...` and block `/ *  ... * /` (nested-aware).
  *   2. Strip all string literals: '...' (with '' escape), "..." (with "" escape), `...`
- *      (MySQL backtick identifier — also stripped so backtick-wrapped reserved names
- *      don't trip the check). Also strips E'...' / $$…$$ / $tag$…$tag$ (Postgres).
+ *      (MySQL backtick identifier -- also stripped so backtick-wrapped reserved names
+ *      don't trip the check). Also strips E'...' / $$...$$ / $tag$...$tag$ (Postgres).
  *   3. Tokenize the residue on whitespace and SQL punctuation.
  *   4. First token (case-insensitive) must be one of: SELECT, WITH, EXPLAIN, VALUES, TABLE, SHOW, DESC, DESCRIBE.
  *      (SHOW/DESC/DESCRIBE are metadata-only and read-only.)
@@ -26,8 +26,8 @@
  *   - Backtick-quoted identifiers (MySQL) like `` `delete` `` as a column name
  *     are stripped (backticks are tokenized as string-like), so they no longer
  *     false-positive.
- *   - `INTO` blocks both `SELECT … INTO OUTFILE` (MySQL file write) and
- *     `SELECT … INTO new_table` (Postgres table create). Both are writes.
+ *   - `INTO` blocks both `SELECT ... INTO OUTFILE` (MySQL file write) and
+ *     `SELECT ... INTO new_table` (Postgres table create). Both are writes.
  */
 
 const DANGEROUS = new Set([
@@ -85,10 +85,10 @@ function stripComments(sql) {
  *
  * Handles:
  *   '...'     (SQL single-quote; '' escape inside)
- *   "..."     (SQL double-quote; "" escape inside — also Postgres identifier quote)
+ *   "..."     (SQL double-quote; "" escape inside -- also Postgres identifier quote)
  *   `...`     (MySQL backtick identifier; `` escape inside)
  *   E'...'    (Postgres escape string; \' escape inside)
- *   $$…$$     (Postgres dollar-quoted, optionally tagged $tag$…$tag$)
+ *   $$...$$     (Postgres dollar-quoted, optionally tagged $tag$...$tag$)
  */
 function stripStrings(sql) {
   let out = '';
@@ -109,7 +109,7 @@ function stripStrings(sql) {
       continue;
     }
 
-    // Postgres dollar-quoted string ($tag$…$tag$ or $$…$$)
+    // Postgres dollar-quoted string ($tag$...$tag$ or $$...$$)
     if (c === '$') {
       // Extract tag: $tag$ where tag is [a-zA-Z_][a-zA-Z0-9_]*  (possibly empty)
       let j = i + 1;

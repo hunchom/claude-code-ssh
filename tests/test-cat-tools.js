@@ -6,8 +6,8 @@ import { handleSshCat, buildCatCommand } from '../src/tools/cat-tools.js';
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
-  try { await fn(); passed++; console.log(`✅ ${name}`); }
-  catch (e) { failed++; fails.push({ name, err: e }); console.error(`❌ ${name}: ${e.message}`); }
+  try { await fn(); passed++; console.log(`[ok] ${name}`); }
+  catch (e) { failed++; fails.push({ name, err: e }); console.error(`[err] ${name}: ${e.message}`); }
 }
 
 class FakeStream extends EventEmitter {
@@ -31,10 +31,10 @@ class FakeClient {
   }
 }
 
-console.log('🧪 Testing cat-tools\n');
+console.log('[test] Testing cat-tools\n');
 
-// ─── buildCatCommand ─────────────────────────────────────────────────────
-await test('buildCatCommand: default → plain cat with quoted path', () => {
+// --- buildCatCommand -----------------------------------------------------
+await test('buildCatCommand: default -> plain cat with quoted path', () => {
   assert.strictEqual(buildCatCommand({ file: '/var/log/app.log' }), "cat '/var/log/app.log'");
 });
 
@@ -74,7 +74,7 @@ await test('buildCatCommand: offset+limit uses dd', () => {
 await test('buildCatCommand: injection in numbers is neutralized by Number() coercion', () => {
   // Pass an injection attempt through head=...
   const cmd = buildCatCommand({ file: '/f', head: '10; rm -rf /' });
-  // Number('10; rm -rf /') → NaN → floor(NaN) || 10 = 10
+  // Number('10; rm -rf /') -> NaN -> floor(NaN) || 10 = 10
   assert.strictEqual(cmd, "head -n 10 '/f'");
 });
 
@@ -107,8 +107,8 @@ await test('buildCatCommand: line_start 0 or negative clamps to 1', () => {
   );
 });
 
-// ─── handleSshCat ────────────────────────────────────────────────────────
-await test('handleSshCat: missing file → structured failure', async () => {
+// --- handleSshCat --------------------------------------------------------
+await test('handleSshCat: missing file -> structured failure', async () => {
   const r = await handleSshCat({
     getConnection: async () => { throw new Error('should not call'); },
     args: { server: 's' },
@@ -140,7 +140,7 @@ await test('handleSshCat: JSON format round-trips through wire schema', async ()
   assert.strictEqual(parsed.success, true);
 });
 
-await test('handleSshCat: connection failure → isError:true with diagnostic', async () => {
+await test('handleSshCat: connection failure -> isError:true with diagnostic', async () => {
   const r = await handleSshCat({
     getConnection: async () => { throw new Error('ssh refused'); },
     args: { server: 's', file: '/f' },
@@ -150,4 +150,4 @@ await test('handleSshCat: connection failure → isError:true with diagnostic', 
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
-if (failed > 0) { for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`); process.exit(1); }
+if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }

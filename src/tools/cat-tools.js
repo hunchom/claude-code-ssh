@@ -1,15 +1,15 @@
 /**
- * ssh_cat — partial remote read without downloading the whole file.
+ * ssh_cat -- partial remote read without downloading the whole file.
  *
  * Modes (evaluated in this order, first match wins):
- *   1. line_start + line_end → `sed -n 'S,Ep'`
- *   2. head (N lines)        → `head -n N`
- *   3. tail (N lines)        → `tail -n N`
- *   4. offset + limit (bytes)→ `dd bs=1 skip=OFF count=LIM`
- *   5. grep                  → `grep -E PATTERN`
- *   6. default               → `cat`  (still capped by maxLen via formatter)
+ *   1. line_start + line_end -> `sed -n 'S,Ep'`
+ *   2. head (N lines)        -> `head -n N`
+ *   3. tail (N lines)        -> `tail -n N`
+ *   4. offset + limit (bytes)-> `dd bs=1 skip=OFF count=LIM`
+ *   5. grep                  -> `grep -E PATTERN`
+ *   6. default               -> `cat`  (still capped by maxLen via formatter)
  *
- * All numeric args coerce through Number() — injection-safe. File + grep
+ * All numeric args coerce through Number() -- injection-safe. File + grep
  * pattern are shell-quoted.
  */
 

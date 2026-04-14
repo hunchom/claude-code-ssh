@@ -10,8 +10,8 @@ import {
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
-  try { await fn(); passed++; console.log(`✅ ${name}`); }
-  catch (e) { failed++; fails.push({ name, err: e }); console.error(`❌ ${name}: ${e.message}`); }
+  try { await fn(); passed++; console.log(`[ok] ${name}`); }
+  catch (e) { failed++; fails.push({ name, err: e }); console.error(`[err] ${name}: ${e.message}`); }
 }
 
 class FakeStream extends EventEmitter {
@@ -35,9 +35,9 @@ class FakeClient {
   }
 }
 
-console.log('🧪 Testing port-test-tools\n');
+console.log('[test] Testing port-test-tools\n');
 
-// ─── parseDnsOutput ──────────────────────────────────────────────────────
+// --- parseDnsOutput ------------------------------------------------------
 await test('parseDnsOutput: getent IPv4 format', () => {
   const r = parseDnsOutput('93.184.216.34   example.com');
   assert.strictEqual(r.resolved_ip, '93.184.216.34');
@@ -53,24 +53,24 @@ await test('parseDnsOutput: nslookup format extracts last Address', () => {
   assert.strictEqual(r.resolved_ip, '93.184.216.34');
 });
 
-await test('parseDnsOutput: empty input → null', () => {
+await test('parseDnsOutput: empty input -> null', () => {
   assert.strictEqual(parseDnsOutput('').resolved_ip, null);
 });
 
-// ─── parseTcpOutput ──────────────────────────────────────────────────────
-await test('parseTcpOutput: exit 0 + latency marker → tcp_open:true', () => {
+// --- parseTcpOutput ------------------------------------------------------
+await test('parseTcpOutput: exit 0 + latency marker -> tcp_open:true', () => {
   const r = parseTcpOutput('TCP_LATENCY_MS=42\n', '', 0);
   assert.strictEqual(r.tcp_open, true);
   assert.strictEqual(r.latency_ms, 42);
 });
 
-await test('parseTcpOutput: non-zero exit → tcp_open:false + error', () => {
+await test('parseTcpOutput: non-zero exit -> tcp_open:false + error', () => {
   const r = parseTcpOutput('', 'nc: connect failed', 1);
   assert.strictEqual(r.tcp_open, false);
   assert(r.error.includes('nc: connect failed'));
 });
 
-// ─── parseTlsOutput ──────────────────────────────────────────────────────
+// --- parseTlsOutput ------------------------------------------------------
 await test('parseTlsOutput: extracts subject, dates, fingerprint', () => {
   const input = [
     'subject=CN = example.com',
@@ -85,11 +85,11 @@ await test('parseTlsOutput: extracts subject, dates, fingerprint', () => {
   assert.strictEqual(r.sha256_fp, 'AB:CD:EF:12:34');
 });
 
-await test('parseTlsOutput: empty → null', () => {
+await test('parseTlsOutput: empty -> null', () => {
   assert.strictEqual(parseTlsOutput(''), null);
 });
 
-// ─── parseHttpOutput ─────────────────────────────────────────────────────
+// --- parseHttpOutput -----------------------------------------------------
 await test('parseHttpOutput: "200 0.145" parsed', () => {
   const r = parseHttpOutput('200 0.145');
   assert.strictEqual(r.http_status, 200);
@@ -100,7 +100,7 @@ await test('parseHttpOutput: malformed returns null', () => {
   assert.strictEqual(parseHttpOutput('garbage'), null);
 });
 
-// ─── buildXxxCommand: shQuote / injection safety ─────────────────────────
+// --- buildXxxCommand: shQuote / injection safety -------------------------
 await test('buildDnsCommand: host is shell-quoted', () => {
   const cmd = buildDnsCommand('evil.com; rm -rf /');
   assert(cmd.includes("'evil.com; rm -rf /'"));
@@ -112,16 +112,16 @@ await test('buildTlsCommand: defaults to port 443', () => {
   assert(cmd.includes(':443'));
 });
 
-await test('buildHttpCommand: port 443 → https scheme', () => {
+await test('buildHttpCommand: port 443 -> https scheme', () => {
   assert(buildHttpCommand('example.com', 443, 5000).includes('https://'));
 });
 
-await test('buildHttpCommand: other port → http scheme', () => {
+await test('buildHttpCommand: other port -> http scheme', () => {
   assert(buildHttpCommand('example.com', 8080, 5000).includes('http://'));
 });
 
-// ─── handleSshPortTest ───────────────────────────────────────────────────
-await test('handleSshPortTest: missing target_host → structured fail', async () => {
+// --- handleSshPortTest ---------------------------------------------------
+await test('handleSshPortTest: missing target_host -> structured fail', async () => {
   const r = await handleSshPortTest({
     getConnection: async () => { throw new Error('should not call'); },
     args: { server: 's' },
@@ -184,4 +184,4 @@ await test('handleSshPortTest: continue_on_fail runs all probes', async () => {
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
-if (failed > 0) { for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`); process.exit(1); }
+if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }

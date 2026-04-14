@@ -11,13 +11,13 @@ import {
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
-  try { await fn(); passed++; console.log(`✅ ${name}`); }
-  catch (e) { failed++; fails.push({ name, err: e }); console.error(`❌ ${name}: ${e.message}`); }
+  try { await fn(); passed++; console.log(`[ok] ${name}`); }
+  catch (e) { failed++; fails.push({ name, err: e }); console.error(`[err] ${name}: ${e.message}`); }
 }
 
-console.log('🧪 Testing key-tools\n');
+console.log('[test] Testing key-tools\n');
 
-// ─── sha256Fingerprint ──────────────────────────────────────────────────
+// --- sha256Fingerprint --------------------------------------------------
 await test('sha256Fingerprint: known vector (empty buffer)', () => {
   const fp = sha256Fingerprint(Buffer.alloc(0));
   // SHA256("") = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
@@ -39,7 +39,7 @@ await test('sha256Fingerprint: throws on null input', () => {
   assert.throws(() => sha256Fingerprint(null));
 });
 
-// ─── compareFingerprints ────────────────────────────────────────────────
+// --- compareFingerprints ------------------------------------------------
 await test('compareFingerprints: exact match', () => {
   const r = compareFingerprints('SHA256:abc', 'SHA256:abc');
   assert.strictEqual(r.match, true);
@@ -66,12 +66,12 @@ await test('compareFingerprints: no_stored_key when stored is null', () => {
   assert.strictEqual(r.mismatch_details.reason, 'no_stored_key');
 });
 
-await test('compareFingerprints: both null → vacuous match', () => {
+await test('compareFingerprints: both null -> vacuous match', () => {
   const r = compareFingerprints(null, null);
   assert.strictEqual(r.match, true);
 });
 
-// ─── parseKnownHostLine ─────────────────────────────────────────────────
+// --- parseKnownHostLine -------------------------------------------------
 await test('parseKnownHostLine: typical line', () => {
   // ssh-rsa fake key is base64 of any bytes; use "AAAA"+something
   const fakeKey = Buffer.from('dummy-pubkey').toString('base64');
@@ -112,7 +112,7 @@ await test('parseKnownHostLine: blank returns null', () => {
   assert.strictEqual(parseKnownHostLine(''), null);
 });
 
-// ─── parseKnownHostsContent ─────────────────────────────────────────────
+// --- parseKnownHostsContent ---------------------------------------------
 await test('parseKnownHostsContent: multiple entries + skips comments', () => {
   const fakeKey = Buffer.from('x').toString('base64');
   const content = [
@@ -128,15 +128,15 @@ await test('parseKnownHostsContent: multiple entries + skips comments', () => {
   assert.strictEqual(r[1].host, 'host2');
 });
 
-// ─── parseKeyscanOutput ─────────────────────────────────────────────────
+// --- parseKeyscanOutput -------------------------------------------------
 await test('parseKeyscanOutput: returns same shape as known_hosts parser', () => {
   const fakeKey = Buffer.from('x').toString('base64');
   const r = parseKeyscanOutput(`host1 ssh-rsa ${fakeKey}`);
   assert.strictEqual(r.length, 1);
 });
 
-// ─── handleSshKeyManage ────────────────────────────────────────────────
-await test('handleSshKeyManage: missing action → fail', async () => {
+// --- handleSshKeyManage ------------------------------------------------
+await test('handleSshKeyManage: missing action -> fail', async () => {
   const r = await handleSshKeyManage({ args: {} });
   assert.strictEqual(r.isError, true);
 });
@@ -183,7 +183,7 @@ await test('handleSshKeyManage: verify mismatch flagged', async () => {
   assert(parsed.data.mismatch_details);
 });
 
-await test('handleSshKeyManage: show with no stored key → no_stored_key', async () => {
+await test('handleSshKeyManage: show with no stored key -> no_stored_key', async () => {
   __resetInternalStore();
   const r = await handleSshKeyManage({
     fsReadKnownHosts: () => '',
@@ -195,7 +195,7 @@ await test('handleSshKeyManage: show with no stored key → no_stored_key', asyn
   assert.strictEqual(parsed.data.mismatch_details.reason, 'no_stored_key');
 });
 
-await test('handleSshKeyManage: keyscan error → isError', async () => {
+await test('handleSshKeyManage: keyscan error -> isError', async () => {
   __resetInternalStore();
   const r = await handleSshKeyManage({
     fsReadKnownHosts: () => '',
@@ -205,7 +205,7 @@ await test('handleSshKeyManage: keyscan error → isError', async () => {
   assert.strictEqual(r.isError, true);
 });
 
-// ─── fetchLiveKeys (with stub) ──────────────────────────────────────────
+// --- fetchLiveKeys (with stub) ------------------------------------------
 await test('fetchLiveKeys: uses injected runKeyscan', async () => {
   const fakeKey = Buffer.from('x').toString('base64');
   const keys = await fetchLiveKeys('example.com', 22, {
@@ -216,4 +216,4 @@ await test('fetchLiveKeys: uses injected runKeyscan', async () => {
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
-if (failed > 0) { for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`); process.exit(1); }
+if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }

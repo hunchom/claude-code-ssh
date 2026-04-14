@@ -1,5 +1,5 @@
 /**
- * Upgraded SSH tunnel tools — typed, preview-aware, idempotent close.
+ * Upgraded SSH tunnel tools -- typed, preview-aware, idempotent close.
  *
  * Handlers:
  *   - handleSshTunnelCreate  create local/remote/dynamic forward; preview shows plan + reachability probe
@@ -12,11 +12,11 @@
  *     started_at, closed_at?, closed?, probe?,
  *     // transport references (present while open)
  *     listener?: net.Server,   // local/dynamic
- *     unforwarder?: () => void // remote — cancels client.forwardIn
+ *     unforwarder?: () => void // remote -- cancels client.forwardIn
  *   }
  *
  * We use ssh2's client.forwardOut / client.forwardIn exclusively.  We do NOT
- * require the ssh2 package at module load — we duck-type the client so that
+ * require the ssh2 package at module load -- we duck-type the client so that
  * tests using FakeClient work without installing dependencies.
  */
 
@@ -44,10 +44,10 @@ export function __resetTunnelStore() {
   idCounter = 0;
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Reachability probe (DNS + TCP)
-// Used only in preview — never blocks create if unavailable.
-// ──────────────────────────────────────────────────────────────────────────
+// Used only in preview -- never blocks create if unavailable.
+// --------------------------------------------------------------------------
 
 export async function probeReachability(host, port, { timeoutMs = 3000, resolver, tcpDialer } = {}) {
   const probe = { host, port, dns: { ok: false }, tcp: { ok: false } };
@@ -86,9 +86,9 @@ export async function probeReachability(host, port, { timeoutMs = 3000, resolver
   return probe;
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // create
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 export async function handleSshTunnelCreate(ctx = {}) {
   const { getConnection, args = {}, probeImpl = probeReachability } = ctx;
@@ -117,7 +117,7 @@ export async function handleSshTunnelCreate(ctx = {}) {
     }
   }
 
-  // ── preview ───────────────────────────────────────────────────────
+  // -- preview -------------------------------------------------------
   if (isPreview) {
     let probe = null;
     if (type !== 'dynamic' && remote_host && remote_port) {
@@ -148,7 +148,7 @@ export async function handleSshTunnelCreate(ctx = {}) {
     return toMcp(preview('ssh_tunnel_create', plan, { server: server ?? null }), { format });
   }
 
-  // ── execute ───────────────────────────────────────────────────────
+  // -- execute -------------------------------------------------------
   let client;
   try { client = await getConnection(server); }
   catch (e) { return toMcp(fail('ssh_tunnel_create', e, { server: server ?? null }), { format }); }
@@ -169,7 +169,7 @@ export async function handleSshTunnelCreate(ctx = {}) {
         const srcPort = sock.remotePort || 0;
         const dstHost = type === 'local' ? remote_host : null;
         const dstPort = type === 'local' ? Number(remote_port) : null;
-        if (type !== 'local') { // dynamic: no remote handler — hook left as future work
+        if (type !== 'local') { // dynamic: no remote handler -- hook left as future work
           sock.destroy();
           return;
         }
@@ -216,9 +216,9 @@ export async function handleSshTunnelCreate(ctx = {}) {
   return toMcp(ok('ssh_tunnel_create', data, { server: server ?? null }), { format });
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // list
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 export async function handleSshTunnelList(ctx = {}) {
   const { args = {} } = ctx;
@@ -242,9 +242,9 @@ export async function handleSshTunnelList(ctx = {}) {
   return toMcp(ok('ssh_tunnel_list', { tunnels: out, total: out.length }), { format });
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // close (idempotent)
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 export async function handleSshTunnelClose(ctx = {}) {
   const { args = {} } = ctx;

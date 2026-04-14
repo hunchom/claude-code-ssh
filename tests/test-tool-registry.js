@@ -29,10 +29,10 @@ let failedTests = 0;
 function test(name, fn) {
   try {
     fn();
-    console.log(`${GREEN}✓${NC} ${name}`);
+    console.log(`${GREEN}[ok]${NC} ${name}`);
     passedTests++;
   } catch (error) {
-    console.log(`${RED}✗${NC} ${name}`);
+    console.log(`${RED}[err]${NC} ${name}`);
     console.log(`  ${RED}Error: ${error.message}${NC}`);
     failedTests++;
   }

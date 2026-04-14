@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * Tests for src/tools/sql-safety.js — the replacement for the buggy
+ * Tests for src/tools/sql-safety.js -- the replacement for the buggy
  * `isSafeQuery` in database-manager.js.
  *
  * Goals (per the task spec):
  *   - No false positives on common column names: deleted_at, update_count, drop_box.
  *   - CTEs allowed: WITH cte AS (SELECT ...) SELECT ...
  *   - EXPLAIN SELECT allowed.
- *   - SELECT … INTO OUTFILE blocked (MySQL file write).
+ *   - SELECT ... INTO OUTFILE blocked (MySQL file write).
  *   - Stacked queries blocked: `SELECT 1; DROP TABLE x`.
- *   - Comment-hidden mutations blocked: `/* safe *\/ DROP TABLE x` —
+ *   - Comment-hidden mutations blocked: `/* safe *\/ DROP TABLE x` --
  *     after strip the first token is DROP.
  *   - Multi-line SELECTs, case variations, empty string, nullish input.
  */
@@ -19,15 +19,15 @@ import { isSafeSelect, __internals } from '../src/tools/sql-safety.js';
 
 let passed = 0, failed = 0; const fails = [];
 function test(name, fn) {
-  try { fn(); passed++; console.log(`✅ ${name}`); }
-  catch (e) { failed++; fails.push({ name, err: e }); console.error(`❌ ${name}: ${e.message}`); }
+  try { fn(); passed++; console.log(`[ok] ${name}`); }
+  catch (e) { failed++; fails.push({ name, err: e }); console.error(`[err] ${name}: ${e.message}`); }
 }
 
-console.log('🧪 Testing sql-safety\n');
+console.log('[test] Testing sql-safety\n');
 
-// ──────────────────────────────────────────────────────────────────────────
-// False-positives the old impl had — MUST now pass
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// False-positives the old impl had -- MUST now pass
+// --------------------------------------------------------------------------
 test('accepts column named `deleted_at` (old impl falsely rejected)', () => {
   const r = isSafeSelect('SELECT deleted_at FROM audit_log');
   assert.strictEqual(r.ok, true, JSON.stringify(r));
@@ -55,9 +55,9 @@ test('accepts table name `user_creates`', () => {
   assert.strictEqual(r.ok, true);
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Valid query forms
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 test('accepts plain SELECT', () => {
   assert.deepStrictEqual(isSafeSelect('SELECT 1'), { ok: true });
 });
@@ -133,7 +133,7 @@ test('accepts SELECT with block comment inside', () => {
 });
 
 test('accepts string literal that contains dangerous keywords', () => {
-  // The string `'DROP TABLE users'` is data, not code — must not false-positive.
+  // The string `'DROP TABLE users'` is data, not code -- must not false-positive.
   const r = isSafeSelect("SELECT 'DROP TABLE users' AS msg");
   assert.strictEqual(r.ok, true);
 });
@@ -149,9 +149,9 @@ test('accepts double-quoted identifier `"delete"` (Postgres)', () => {
   assert.strictEqual(r.ok, true);
 });
 
-// ──────────────────────────────────────────────────────────────────────────
-// Rejections — dangerous queries
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// Rejections -- dangerous queries
+// --------------------------------------------------------------------------
 test('rejects INSERT', () => {
   const r = isSafeSelect('INSERT INTO t VALUES (1)');
   assert.strictEqual(r.ok, false);
@@ -190,8 +190,8 @@ test('rejects stacked queries masked by block comment', () => {
   assert.strictEqual(r.ok, false);
 });
 
-test('rejects comment-hidden DROP — the comment is stripped, DROP is first token', () => {
-  // After strip: "  DROP TABLE x" → first token DROP → reject.
+test('rejects comment-hidden DROP -- the comment is stripped, DROP is first token', () => {
+  // After strip: "  DROP TABLE x" -> first token DROP -> reject.
   const r = isSafeSelect('/* safe */ DROP TABLE x');
   assert.strictEqual(r.ok, false);
   // Should specifically fail at the first-token check.
@@ -269,9 +269,9 @@ test('rejects PRAGMA (SQLite escape hatch)', () => {
   assert.strictEqual(r.ok, false);
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Nullish / empty
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 test('rejects null input with reason', () => {
   const r = isSafeSelect(null);
   assert.strictEqual(r.ok, false);
@@ -305,9 +305,9 @@ test('rejects all-comments input (no actual SQL)', () => {
   assert.strictEqual(r.ok, false);
 });
 
-// ──────────────────────────────────────────────────────────────────────────
-// Pipeline internals — spot-check intermediate stages
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// Pipeline internals -- spot-check intermediate stages
+// --------------------------------------------------------------------------
 test('internal: stripComments removes line and block comments', () => {
   const out = __internals.stripComments('SELECT /* c */ 1 -- trailing\nFROM t');
   assert(!out.includes('/*'));
@@ -318,7 +318,7 @@ test('internal: stripComments removes line and block comments', () => {
 
 test('internal: stripComments handles nested block comments', () => {
   const out = __internals.stripComments('SELECT /* outer /* inner */ still-in-outer */ 1');
-  // Nested: both levels should be stripped — the "still-in-outer" text is inside.
+  // Nested: both levels should be stripped -- the "still-in-outer" text is inside.
   assert(!out.includes('still-in-outer'));
   assert(out.includes('SELECT'));
   assert(out.includes('1'));
@@ -361,8 +361,8 @@ test('internal: hasStackedStatements tolerates trailing semicolon', () => {
   assert.strictEqual(__internals.hasStackedStatements('SELECT 1;\n'), false);
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Summary
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);
-if (failed > 0) { for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`); process.exit(1); }
+if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }

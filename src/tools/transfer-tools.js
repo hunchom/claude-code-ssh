@@ -1,21 +1,21 @@
 /**
  * Transfer & edit tools: ssh_upload, ssh_download, ssh_sync, ssh_diff, ssh_edit.
  *
- * All handlers are pure: `async ({getConnection, [getServerConfig,] args}) → {content, isError?}`.
+ * All handlers are pure: `async ({getConnection, [getServerConfig,] args}) -> {content, isError?}`.
  *
  * Design notes:
  *   - ssh_upload/ssh_download go through ssh2 SFTP (fastPut/fastGet). Optional sha256
  *     verification hashes the remote file post-transfer and the local file and
  *     returns a structured {verified: bool} in addition to the bytes transferred.
  *   - ssh_sync shells out to rsync via child_process.spawn, streaming progress
- *     through onChunk. It does not try to reimplement rsync — just translates
+ *     through onChunk. It does not try to reimplement rsync -- just translates
  *     args into a safe argv.
  *   - ssh_diff runs `diff -u A B` remotely when both paths live on the same server.
  *     For the cross-server case, both remote files are fetched to tmp locally and
  *     diffed locally via child_process.spawn('diff').
  *   - ssh_edit performs a fully atomic in-place edit:
- *         tmp write (base64-decoded)  →  optional syntax check  →  cp -p backup  →
- *         mv tmp original  →  diff -u backup original.
+ *         tmp write (base64-decoded)  ->  optional syntax check  ->  cp -p backup  ->
+ *         mv tmp original  ->  diff -u backup original.
  *     If the syntax check fails the tmp file is deleted and nothing else touches
  *     the original. The backup path is always returned so the user can roll back
  *     with a single mv.
@@ -37,12 +37,12 @@ import { formatBytes, formatDuration } from '../output-formatter.js';
 
 const DEFAULT_EXEC_TIMEOUT_MS = 120_000;
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Helpers
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 /**
- * Promisified ssh2 sftp() — resolves with the sftp subsystem handle.
+ * Promisified ssh2 sftp() -- resolves with the sftp subsystem handle.
  */
 function getSftpChannel(client) {
   return new Promise((resolve, reject) => {
@@ -95,7 +95,7 @@ async function remoteSha256(client, remotePath) {
 }
 
 /**
- * Stat a remote path — returns a human line or "new file" if stat fails.
+ * Stat a remote path -- returns a human line or "new file" if stat fails.
  */
 async function remoteStatLine(client, remotePath) {
   const cmd = `stat -c '%s %Y' ${shQuote(remotePath)} 2>/dev/null || echo "new file"`;
@@ -119,7 +119,7 @@ function encodeBase64(content) {
 function pickSyntaxChecker(filePath, override) {
   if (override === 'none' || override === false) return null;
   if (override && typeof override === 'string' && override !== 'auto') {
-    // explicit override — return as-is, command must accept the tmp path as $1
+    // explicit override -- return as-is, command must accept the tmp path as $1
     return { kind: override, build: (tmp) => `${override} ${shQuote(tmp)}` };
   }
   const lower = String(filePath || '').toLowerCase();
@@ -158,9 +158,9 @@ function applyPatches(current, patches) {
   return out;
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_upload
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 export async function handleSshUpload({ getConnection, args }) {
   const {
     server,
@@ -182,7 +182,7 @@ export async function handleSshUpload({ getConnection, args }) {
     try {
       const st = fs.statSync(local_path);
       localSize = st.size;
-    } catch (_) { /* local may not exist — still preview */ }
+    } catch (_) { /* local may not exist -- still preview */ }
 
     try {
       const client = await getConnection(server);
@@ -195,7 +195,7 @@ export async function handleSshUpload({ getConnection, args }) {
       action: 'upload',
       target: `${server}:${remote_path}`,
       effects: [
-        `uploads \`${local_path}\` → \`${remote_path}\``,
+        `uploads \`${local_path}\` -> \`${remote_path}\``,
         `remote stat: ${stat}`,
         verify ? 'post-transfer sha256 verification enabled' : 'no verification',
       ],
@@ -271,9 +271,9 @@ export async function handleSshUpload({ getConnection, args }) {
   );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_download
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 export async function handleSshDownload({ getConnection, args }) {
   const {
     server,
@@ -301,7 +301,7 @@ export async function handleSshDownload({ getConnection, args }) {
       action: 'download',
       target: `${server}:${remote_path}`,
       effects: [
-        `downloads \`${remote_path}\` → \`${local_path}\``,
+        `downloads \`${remote_path}\` -> \`${local_path}\``,
         `remote stat: ${stat}`,
         verify ? 'post-transfer sha256 verification enabled' : 'no verification',
       ],
@@ -384,14 +384,14 @@ function renderTransferMarkdown(tool) {
     const d = result.data;
     const meta = result.meta || {};
     const lines = [];
-    const duration = meta.duration_ms != null ? `  ·  \`${formatDuration(meta.duration_ms)}\`` : '';
-    lines.push(`▶ **${tool}**  ·  \`${result.server || '?'}\`${duration}`);
+    const duration = meta.duration_ms != null ? `  |  \`${formatDuration(meta.duration_ms)}\`` : '';
+    lines.push(`[ok] **${tool}**  |  \`${result.server || '?'}\`${duration}`);
     if (tool === 'ssh_upload') {
-      lines.push(`\`${d.local_path}\` → \`${d.remote_path}\``);
-      lines.push(`bytes: **${formatBytes(d.uploaded_bytes)}**${d.verified ? '  ·  **verified**' : ''}`);
+      lines.push(`\`${d.local_path}\` -> \`${d.remote_path}\``);
+      lines.push(`bytes: **${formatBytes(d.uploaded_bytes)}**${d.verified ? '  |  **verified**' : ''}`);
     } else {
-      lines.push(`\`${d.remote_path}\` → \`${d.local_path}\``);
-      lines.push(`bytes: **${formatBytes(d.downloaded_bytes)}**${d.verified ? '  ·  **verified**' : ''}`);
+      lines.push(`\`${d.remote_path}\` -> \`${d.local_path}\``);
+      lines.push(`bytes: **${formatBytes(d.downloaded_bytes)}**${d.verified ? '  |  **verified**' : ''}`);
     }
     if (d.local_sha256) lines.push(`local sha256: \`${d.local_sha256}\``);
     if (d.remote_sha256) lines.push(`remote sha256: \`${d.remote_sha256}\``);
@@ -399,9 +399,9 @@ function renderTransferMarkdown(tool) {
   };
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// ssh_sync — rsync via spawn
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// ssh_sync -- rsync via spawn
+// --------------------------------------------------------------------------
 
 /**
  * Build argv for rsync based on args + resolved server config.
@@ -480,7 +480,7 @@ export async function handleSshSync({ getConnection, getServerConfig, args }) {
       action: 'sync',
       target: `${server}:${remotePath} (${direction})`,
       effects: [
-        `rsync ${direction === 'push' ? 'local→remote' : 'remote→local'}`,
+        `rsync ${direction === 'push' ? 'local->remote' : 'remote->local'}`,
         `local: \`${localPath}\``,
         `remote: \`${remotePath}\``,
         exclude.length ? `exclude: ${exclude.join(', ')}` : 'no exclude',
@@ -582,16 +582,16 @@ function renderSyncMarkdown(result) {
   const d = result.data;
   const meta = result.meta || {};
   const lines = [];
-  const duration = meta.duration_ms != null ? `  ·  \`${formatDuration(meta.duration_ms)}\`` : '';
-  lines.push(`▶ **ssh_sync**  ·  \`${result.server || '?'}\`  ·  \`${d.direction}\`${duration}`);
-  lines.push(`\`${d.local_path}\` ${d.direction === 'push' ? '→' : '←'} \`${d.remote_path}\``);
-  lines.push(`files: **${d.files_transferred}**  ·  bytes: **${formatBytes(d.bytes_transferred)}**${d.dry_run ? '  ·  **dry run**' : ''}`);
+  const duration = meta.duration_ms != null ? `  |  \`${formatDuration(meta.duration_ms)}\`` : '';
+  lines.push(`[ok] **ssh_sync**  |  \`${result.server || '?'}\`  |  \`${d.direction}\`${duration}`);
+  lines.push(`\`${d.local_path}\` ${d.direction === 'push' ? '->' : '<-'} \`${d.remote_path}\``);
+  lines.push(`files: **${d.files_transferred}**  |  bytes: **${formatBytes(d.bytes_transferred)}**${d.dry_run ? '  |  **dry run**' : ''}`);
   return lines.join('\n');
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_diff
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 export async function handleSshDiff({ getConnection, args }) {
   const {
     server,
@@ -656,7 +656,7 @@ export async function handleSshDiff({ getConnection, args }) {
       stdout: diffOut.stdout,
       stderr: diffOut.stderr,
       exit_code: diffOut.code,
-      // exit 0 → identical; exit 1 → differ; exit ≥2 → error
+      // exit 0 -> identical; exit 1 -> differ; exit >=2 -> error
       identical: diffOut.code === 0,
     };
     return toMcp(
@@ -708,8 +708,8 @@ function renderDiffMarkdown(result) {
   if (!result.success) return defaultRender(result);
   const d = result.data;
   const lines = [];
-  const marker = d.identical ? '▶' : '•';
-  lines.push(`${marker} **ssh_diff**  ·  \`${d.path_a}\`  vs  \`${d.path_b}\`  ·  ${d.identical ? '**identical**' : '**differ**'}`);
+  const marker = d.identical ? '[ok]' : '*';
+  lines.push(`${marker} **ssh_diff**  |  \`${d.path_a}\`  vs  \`${d.path_b}\`  |  ${d.identical ? '**identical**' : '**differ**'}`);
   if (d.stdout) {
     lines.push('');
     lines.push('```diff');
@@ -726,9 +726,9 @@ function renderDiffMarkdown(result) {
   return lines.join('\n');
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// ssh_edit — atomic remote file edit with optional syntax gate
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// ssh_edit -- atomic remote file edit with optional syntax gate
+// --------------------------------------------------------------------------
 export async function handleSshEdit({ getConnection, args }) {
   const {
     server,
@@ -805,7 +805,7 @@ export async function handleSshEdit({ getConnection, args }) {
   const tmpPath = `${filePath}.mcp.tmp.${rand}`;
   const backupPath = `${filePath}.mcp.bak.${ts}`;
 
-  // 4. Write tmp via base64 pipe — echoes no raw bytes into the shell.
+  // 4. Write tmp via base64 pipe -- echoes no raw bytes into the shell.
   //    We stream the base64 blob through `base64 -d` on the remote.
   //    Even for huge files this is safe: argv holds the shell line, stdin
   //    carries the blob. Single fire-and-forget exec keeps things atomic.
@@ -883,10 +883,10 @@ function renderEditMarkdown(result) {
   if (!result.success) return defaultRender(result);
   const d = result.data;
   const meta = result.meta || {};
-  const duration = meta.duration_ms != null ? `  ·  \`${formatDuration(meta.duration_ms)}\`` : '';
+  const duration = meta.duration_ms != null ? `  |  \`${formatDuration(meta.duration_ms)}\`` : '';
   const lines = [];
-  lines.push(`▶ **ssh_edit**  ·  \`${result.server || '?'}\`  ·  \`${d.mode}\`${duration}`);
-  lines.push(`\`${d.path}\`  ·  backup: \`${d.backup_path}\`  ·  ${formatBytes(d.bytes_written)}${d.syntax_check ? `  ·  syntax: **${d.syntax_check}** ok` : ''}`);
+  lines.push(`[ok] **ssh_edit**  |  \`${result.server || '?'}\`  |  \`${d.mode}\`${duration}`);
+  lines.push(`\`${d.path}\`  |  backup: \`${d.backup_path}\`  |  ${formatBytes(d.bytes_written)}${d.syntax_check ? `  |  syntax: **${d.syntax_check}** ok` : ''}`);
   if (d.diff) {
     lines.push('');
     lines.push('```diff');

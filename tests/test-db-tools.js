@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Tests for src/tools/db-tools.js. Uses the same FakeClient pattern as the
- * other tool tests — exec is intercepted so we can assert on the exact
+ * other tool tests -- exec is intercepted so we can assert on the exact
  * command that would run without ever touching a real database.
  */
 
@@ -19,11 +19,11 @@ import {
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
-  try { await fn(); passed++; console.log(`✅ ${name}`); }
-  catch (e) { failed++; fails.push({ name, err: e }); console.error(`❌ ${name}: ${e.message}`); }
+  try { await fn(); passed++; console.log(`[ok] ${name}`); }
+  catch (e) { failed++; fails.push({ name, err: e }); console.error(`[err] ${name}: ${e.message}`); }
 }
 
-// ─── Fake ssh2 client ────────────────────────────────────────────────────
+// --- Fake ssh2 client ----------------------------------------------------
 class FakeStream extends EventEmitter {
   constructor() { super(); this.stderr = new EventEmitter(); this.writes = []; this.endCalls = 0; }
   write(d) { this.writes.push(String(d)); return true; }
@@ -54,11 +54,11 @@ class FakeClient {
   get lastCommand() { return this.commands[this.commands.length - 1]; }
 }
 
-console.log('🧪 Testing db-tools\n');
+console.log('[test] Testing db-tools\n');
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Command-builder unit tests (no I/O)
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 await test('buildMySqlQueryCommand: uses MYSQL_PWD env, NOT -p argv', () => {
   const cmd = buildMySqlQueryCommand({ database: 'app', query: 'SELECT 1', user: 'alice' });
   assert(cmd.startsWith('MYSQL_PWD='), `expected MYSQL_PWD prefix, got: ${cmd}`);
@@ -72,7 +72,7 @@ await test('buildPostgresQueryCommand: uses PGPASSWORD env, NOT password in argv
   const cmd = buildPostgresQueryCommand({ database: 'app', query: 'SELECT 1', user: 'alice' });
   assert(cmd.startsWith('PGPASSWORD='));
   assert(cmd.includes('psql'));
-  // psql password arg `-W` would trigger a prompt; `-w` means no-password — neither should appear with a value.
+  // psql password arg `-W` would trigger a prompt; `-w` means no-password -- neither should appear with a value.
   // But we should not have any flag that carries a literal password.
   assert(!/--password\s*=?\s*\S/.test(cmd), 'psql --password flag must NOT carry a value');
   assert(cmd.includes("-U 'alice'"));
@@ -90,10 +90,10 @@ await test('buildMongoQueryCommand: escapes eval snippet', () => {
   assert(cmd.includes("'\\''"), 'single-quote inside eval must be POSIX-escaped');
 });
 
-// ──────────────────────────────────────────────────────────────────────────
-// handleSshDbQuery — safety
-// ──────────────────────────────────────────────────────────────────────────
-await test('ssh_db_query: isSafeSelect rejection → structured fail, NO remote call', async () => {
+// --------------------------------------------------------------------------
+// handleSshDbQuery -- safety
+// --------------------------------------------------------------------------
+await test('ssh_db_query: isSafeSelect rejection -> structured fail, NO remote call', async () => {
   let called = false;
   const r = await handleSshDbQuery({
     getConnection: async () => { called = true; throw new Error('must not connect'); },
@@ -127,9 +127,9 @@ await test('ssh_db_query: `SELECT deleted_at FROM t` is accepted (old impl would
   assert.strictEqual(parsed.data.row_count, 1);
 });
 
-// ──────────────────────────────────────────────────────────────────────────
-// handleSshDbQuery — credential handling
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// handleSshDbQuery -- credential handling
+// --------------------------------------------------------------------------
 await test('ssh_db_query: MySQL password goes via MYSQL_PWD env, never argv', async () => {
   const secret = "pw-with-'quotes-and-$chars";
   const client = new FakeClient({ script: () => ({ stdout: 'id\n1\n', code: 0 }) });
@@ -203,9 +203,9 @@ await test('ssh_db_query: Mongo eval rejects obvious mutations', async () => {
   assert(parsed.error.includes('unsafe mongo eval'));
 });
 
-// ──────────────────────────────────────────────────────────────────────────
-// handleSshDbQuery — LIMIT behaviour
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// handleSshDbQuery -- LIMIT behaviour
+// --------------------------------------------------------------------------
 await test('ssh_db_query: auto-appends LIMIT when absent', async () => {
   const client = new FakeClient({ script: () => ({ stdout: 'id\n1\n', code: 0 }) });
   await handleSshDbQuery({
@@ -254,9 +254,9 @@ await test('ssh_db_query: rejects when declared LIMIT exceeds cap', async () => 
   assert(parsed.error.includes('exceeds cap'));
 });
 
-// ──────────────────────────────────────────────────────────────────────────
-// handleSshDbQuery — result parsing
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// handleSshDbQuery -- result parsing
+// --------------------------------------------------------------------------
 await test('ssh_db_query: TSV result parses into {columns, rows}', async () => {
   const tsv = 'id\tname\tactive\n1\talice\t1\n2\tbob\t0\n';
   const client = new FakeClient({ script: () => ({ stdout: tsv, code: 0 }) });
@@ -275,9 +275,9 @@ await test('ssh_db_query: TSV result parses into {columns, rows}', async () => {
   assert.deepStrictEqual(parsed.data.rows[1], ['2', 'bob', '0']);
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // handleSshDbList
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 await test('ssh_db_list: MySQL lists databases (filters system dbs)', async () => {
   const stdout = 'information_schema\nmysql\nperformance_schema\nsys\napp\nanalytics\n';
   const client = new FakeClient({ script: () => ({ stdout, code: 0 }) });
@@ -310,9 +310,9 @@ await test('ssh_db_list: MongoDB lists collections when database given', async (
   assert.strictEqual(parsed.data.db_type, 'mongodb');
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // handleSshDbDump
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 await test('ssh_db_dump: preview shows estimated size + target path', async () => {
   const client = new FakeClient({
     script: (cmd) => {
@@ -390,9 +390,9 @@ await test('ssh_db_dump: gzip:false omits compression', async () => {
   assert(!dumpCmd.includes('gzip'), `gzip should be absent: ${dumpCmd}`);
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // handleSshDbImport
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 await test('ssh_db_import: preview warns about overwrite when tables exist', async () => {
   const client = new FakeClient({
     script: (cmd) => {
@@ -444,10 +444,10 @@ await test('ssh_db_import: preview handles empty database (no overwrite warning)
   assert(!warning, 'no overwrite warning expected for empty db');
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Error paths
-// ──────────────────────────────────────────────────────────────────────────
-await test('ssh_db_query: connection failure → isError', async () => {
+// --------------------------------------------------------------------------
+await test('ssh_db_query: connection failure -> isError', async () => {
   const r = await handleSshDbQuery({
     getConnection: async () => { throw new Error('ssh host unreachable'); },
     args: {
@@ -459,7 +459,7 @@ await test('ssh_db_query: connection failure → isError', async () => {
   assert(r.content[0].text.includes('ssh host unreachable'));
 });
 
-await test('ssh_db_list: connection failure → isError', async () => {
+await test('ssh_db_list: connection failure -> isError', async () => {
   const r = await handleSshDbList({
     getConnection: async () => { throw new Error('ECONNREFUSED'); },
     args: { server: 's', db_type: 'mysql' },
@@ -468,7 +468,7 @@ await test('ssh_db_list: connection failure → isError', async () => {
   assert(r.content[0].text.includes('ECONNREFUSED'));
 });
 
-await test('ssh_db_dump: connection failure → isError', async () => {
+await test('ssh_db_dump: connection failure -> isError', async () => {
   const r = await handleSshDbDump({
     getConnection: async () => { throw new Error('timeout'); },
     args: { server: 's', db_type: 'mysql', database: 'app' },
@@ -477,7 +477,7 @@ await test('ssh_db_dump: connection failure → isError', async () => {
   assert(r.content[0].text.includes('timeout'));
 });
 
-await test('ssh_db_import: connection failure → isError', async () => {
+await test('ssh_db_import: connection failure -> isError', async () => {
   const r = await handleSshDbImport({
     getConnection: async () => { throw new Error('no route to host'); },
     args: { server: 's', db_type: 'mysql', database: 'app', input_path: '/tmp/x.sql' },
@@ -486,7 +486,7 @@ await test('ssh_db_import: connection failure → isError', async () => {
   assert(r.content[0].text.includes('no route to host'));
 });
 
-await test('ssh_db_query: non-zero exit → isError with stderr', async () => {
+await test('ssh_db_query: non-zero exit -> isError with stderr', async () => {
   const client = new FakeClient({
     script: () => ({ stdout: '', stderr: 'ERROR 1045: Access denied', code: 1 }),
   });
@@ -503,8 +503,8 @@ await test('ssh_db_query: non-zero exit → isError with stderr', async () => {
   assert(parsed.error.includes('Access denied'));
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Summary
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);
-if (failed > 0) { for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`); process.exit(1); }
+if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }

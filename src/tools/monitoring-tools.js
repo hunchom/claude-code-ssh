@@ -1,5 +1,5 @@
 /**
- * Typed monitoring tools — every handler returns structured JSON data that
+ * Typed monitoring tools -- every handler returns structured JSON data that
  * Claude can reason about programmatically. Markdown renderers per tool
  * present compact, scannable cards.
  *
@@ -17,9 +17,9 @@ import { formatBytes, formatDuration } from '../output-formatter.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Shared helpers
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 /** Safe positive integer coerce with fallback. */
 function toInt(x, fallback) {
@@ -33,9 +33,9 @@ function toFloat(x) {
   return Number.isFinite(n) ? n : null;
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// Parsers — exported for unit testing.
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// Parsers -- exported for unit testing.
+// --------------------------------------------------------------------------
 
 /**
  * Parse `top -bn1 | head -5` output. Looks for a line matching:
@@ -310,7 +310,7 @@ export function parseSystemctlShow(text) {
 
 /**
  * Normalize a numeric systemctl property value like "123456", "[not set]",
- * "infinity", "" → number or null.
+ * "infinity", "" -> number or null.
  */
 export function sdNum(val) {
   if (val == null) return null;
@@ -342,15 +342,15 @@ export function shapeServiceRecord(service, props, recentLogs) {
   };
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Renderers
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 function statusBadge(status) {
-  if (status === 'healthy') return '▶ **healthy**';
-  if (status === 'degraded') return '⚠ **degraded**';
-  if (status === 'critical') return '✕ **critical**';
-  return `· ${status || 'unknown'}`;
+  if (status === 'healthy') return '[ok] **healthy**';
+  if (status === 'degraded') return '[warn] **degraded**';
+  if (status === 'critical') return '[err] **critical**';
+  return `| ${status || 'unknown'}`;
 }
 
 function renderKV(rows) {
@@ -360,13 +360,13 @@ function renderKV(rows) {
 }
 
 export function renderHealthCheck(result) {
-  if (!result.success) return `✕ **ssh_health_check** — ${result.error || 'failed'}`;
+  if (!result.success) return `[err] **ssh_health_check** -- ${result.error || 'failed'}`;
   const d = result.data;
   if (d && d.preview) return defaultPreviewRender(result);
   const lines = [];
-  const dur = result.meta?.duration_ms != null ? `  ·  \`${formatDuration(result.meta.duration_ms)}\`` : '';
-  const srv = result.server ? `  ·  \`${result.server}\`` : '';
-  lines.push(`${statusBadge(d.status)}  ·  **ssh_health_check**${srv}${dur}`);
+  const dur = result.meta?.duration_ms != null ? `  |  \`${formatDuration(result.meta.duration_ms)}\`` : '';
+  const srv = result.server ? `  |  \`${result.server}\`` : '';
+  lines.push(`${statusBadge(d.status)}  |  **ssh_health_check**${srv}${dur}`);
   lines.push('');
   if (d.cpu) {
     lines.push('**CPU**');
@@ -391,10 +391,10 @@ export function renderHealthCheck(result) {
   if (d.load) {
     lines.push('**Load**');
     lines.push(renderKV([
-      ['1m', d.load.load_1m ?? '—'],
-      ['5m', d.load.load_5m ?? '—'],
-      ['15m', d.load.load_15m ?? '—'],
-      ['procs', `${d.load.running ?? '—'}/${d.load.total_procs ?? '—'}`],
+      ['1m', d.load.load_1m ?? '--'],
+      ['5m', d.load.load_5m ?? '--'],
+      ['15m', d.load.load_15m ?? '--'],
+      ['procs', `${d.load.running ?? '--'}/${d.load.total_procs ?? '--'}`],
     ]));
     lines.push('');
   }
@@ -414,12 +414,12 @@ export function renderHealthCheck(result) {
 }
 
 export function renderMonitor(result) {
-  if (!result.success) return `✕ **ssh_monitor** — ${result.error || 'failed'}`;
+  if (!result.success) return `[err] **ssh_monitor** -- ${result.error || 'failed'}`;
   const d = result.data;
   if (d && d.preview) return defaultPreviewRender(result);
   const type = d.type;
-  const srv = result.server ? `  ·  \`${result.server}\`` : '';
-  const lines = [`▶ **ssh_monitor**  ·  \`${type}\`${srv}`];
+  const srv = result.server ? `  |  \`${result.server}\`` : '';
+  const lines = [`[ok] **ssh_monitor**  |  \`${type}\`${srv}`];
   lines.push('');
   if (type === 'cpu' && d.cpu) {
     lines.push(renderKV([
@@ -458,28 +458,28 @@ export function renderMonitor(result) {
 }
 
 export function renderServiceStatus(result) {
-  if (!result.success) return `✕ **ssh_service_status** — ${result.error || 'failed'}`;
+  if (!result.success) return `[err] **ssh_service_status** -- ${result.error || 'failed'}`;
   const d = result.data;
   if (d && d.preview) return defaultPreviewRender(result);
-  const srv = result.server ? `  ·  \`${result.server}\`` : '';
+  const srv = result.server ? `  |  \`${result.server}\`` : '';
   const active = d.active_state || 'unknown';
   const badge =
-    active === 'active' ? '▶ **active**' :
-    active === 'failed' ? '✕ **failed**' :
-    active === 'inactive' ? '⚠ **inactive**' :
-    `· \`${active}\``;
+    active === 'active' ? '[ok] **active**' :
+    active === 'failed' ? '[err] **failed**' :
+    active === 'inactive' ? '[warn] **inactive**' :
+    `| \`${active}\``;
   const lines = [];
-  lines.push(`${badge}  ·  **ssh_service_status**  ·  \`${d.service}\`${srv}`);
+  lines.push(`${badge}  |  **ssh_service_status**  |  \`${d.service}\`${srv}`);
   lines.push('');
   lines.push(renderKV([
-    ['active', d.active_state ?? '—'],
-    ['sub', d.sub_state ?? '—'],
-    ['load', d.load_state ?? '—'],
-    ['unit_file', d.unit_file_state ?? '—'],
-    ['main_pid', d.main_pid ?? '—'],
-    ['memory', d.memory_bytes != null ? formatBytes(d.memory_bytes) : '—'],
-    ['cpu_time', d.cpu_ns != null ? formatDuration(d.cpu_ns / 1e6) : '—'],
-    ['description', d.description ?? '—'],
+    ['active', d.active_state ?? '--'],
+    ['sub', d.sub_state ?? '--'],
+    ['load', d.load_state ?? '--'],
+    ['unit_file', d.unit_file_state ?? '--'],
+    ['main_pid', d.main_pid ?? '--'],
+    ['memory', d.memory_bytes != null ? formatBytes(d.memory_bytes) : '--'],
+    ['cpu_time', d.cpu_ns != null ? formatDuration(d.cpu_ns / 1e6) : '--'],
+    ['description', d.description ?? '--'],
   ]));
   if (Array.isArray(d.recent_logs) && d.recent_logs.length) {
     lines.push('');
@@ -495,46 +495,46 @@ function renderProcTable(rows) {
   const lines = ['| PID | USER | CPU% | MEM% | CMD |', '| --- | --- | --- | --- | --- |'];
   for (const p of rows) {
     const cmd = (p.cmd || p.comm || '').slice(0, 80).replace(/\|/g, '\\|');
-    lines.push(`| ${p.pid} | ${p.user ?? '—'} | ${fmtPct(p.cpu_pct)} | ${fmtPct(p.mem_pct)} | \`${cmd}\` |`);
+    lines.push(`| ${p.pid} | ${p.user ?? '--'} | ${fmtPct(p.cpu_pct)} | ${fmtPct(p.mem_pct)} | \`${cmd}\` |`);
   }
   return lines.join('\n');
 }
 
 export function renderProcessManager(result) {
-  if (!result.success) return `✕ **ssh_process_manager** — ${result.error || 'failed'}`;
+  if (!result.success) return `[err] **ssh_process_manager** -- ${result.error || 'failed'}`;
   const d = result.data;
   if (d && d.preview) return defaultPreviewRender(result);
-  const srv = result.server ? `  ·  \`${result.server}\`` : '';
+  const srv = result.server ? `  |  \`${result.server}\`` : '';
   if (d.action === 'list') {
-    const lines = [`▶ **ssh_process_manager**  ·  \`list\`${srv}`];
+    const lines = [`[ok] **ssh_process_manager**  |  \`list\`${srv}`];
     lines.push('');
     lines.push(renderProcTable(d.processes || []));
     return lines.join('\n');
   }
   if (d.action === 'info') {
     const p = d.process || {};
-    const lines = [`▶ **ssh_process_manager**  ·  \`info\`  ·  pid \`${p.pid ?? '?'}\`${srv}`];
+    const lines = [`[ok] **ssh_process_manager**  |  \`info\`  |  pid \`${p.pid ?? '?'}\`${srv}`];
     lines.push('');
     lines.push(renderKV([
-      ['pid', p.pid ?? '—'],
-      ['user', p.user ?? '—'],
-      ['stat', p.stat ?? '—'],
+      ['pid', p.pid ?? '--'],
+      ['user', p.user ?? '--'],
+      ['stat', p.stat ?? '--'],
       ['cpu', fmtPct(p.cpu_pct)],
       ['mem', fmtPct(p.mem_pct)],
-      ['comm', p.comm ?? '—'],
-      ['cmd', p.cmd ?? '—'],
-      ['start', p.start ?? '—'],
-      ['etime', p.etime ?? '—'],
+      ['comm', p.comm ?? '--'],
+      ['cmd', p.cmd ?? '--'],
+      ['start', p.start ?? '--'],
+      ['etime', p.etime ?? '--'],
     ]));
     return lines.join('\n');
   }
   if (d.action === 'kill') {
-    const lines = [`▶ **ssh_process_manager**  ·  \`kill\`${srv}`];
+    const lines = [`[ok] **ssh_process_manager**  |  \`kill\`${srv}`];
     lines.push('');
     lines.push(renderKV([
       ['pid', d.pid],
       ['signal', d.sent_signal],
-      ['exit', d.exit_code ?? '—'],
+      ['exit', d.exit_code ?? '--'],
     ]));
     if (d.stderr) {
       lines.push('');
@@ -545,13 +545,13 @@ export function renderProcessManager(result) {
     }
     return lines.join('\n');
   }
-  return `▶ **ssh_process_manager**${srv}`;
+  return `[ok] **ssh_process_manager**${srv}`;
 }
 
 function defaultPreviewRender(result) {
   const d = result.data;
   const lines = [];
-  lines.push(`▶ **${result.tool}** — dry run`);
+  lines.push(`[ok] **${result.tool}** -- dry run`);
   lines.push('');
   lines.push('```json');
   lines.push(JSON.stringify(d.plan, null, 2));
@@ -560,15 +560,15 @@ function defaultPreviewRender(result) {
 }
 
 function fmtPct(x) {
-  if (x == null) return '—';
+  if (x == null) return '--';
   const n = Number(x);
-  if (!Number.isFinite(n)) return '—';
+  if (!Number.isFinite(n)) return '--';
   return `${n.toFixed(1)}%`;
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// handleSshHealthCheck — one aggregated remote call
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// handleSshHealthCheck -- one aggregated remote call
+// --------------------------------------------------------------------------
 
 /**
  * One-shot health aggregator. Runs a single remote bash command that emits
@@ -622,9 +622,9 @@ export async function handleSshHealthCheck({ getConnection, args }) {
   }), { format, renderer: renderHealthCheck });
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// handleSshMonitor — type-scoped slice
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// handleSshMonitor -- type-scoped slice
+// --------------------------------------------------------------------------
 
 export async function handleSshMonitor({ getConnection, args }) {
   const { server, type = 'overview', format = 'markdown' } = args || {};
@@ -698,9 +698,9 @@ export async function handleSshMonitor({ getConnection, args }) {
   }), { format, renderer: renderMonitor });
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // handleSshServiceStatus
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 export async function handleSshServiceStatus({ getConnection, args }) {
   const { server, service, format = 'markdown' } = args || {};
@@ -761,9 +761,9 @@ export async function handleSshServiceStatus({ getConnection, args }) {
 export function extractJournalLines(text, maxLines = 10) {
   if (!text) return [];
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  // Drop the unit-header block: lines starting with "●" or "Loaded:", "Active:",
+  // Drop the unit-header block: lines starting with "*" or "Loaded:", "Active:",
   // "Main PID:", "Tasks:", "Memory:", "CGroup:" etc.
-  const headerPat = /^(●|Loaded:|Active:|Main PID:|Tasks:|Memory:|CPU:|CGroup:|Docs?:|Process:|Drop-In:|Status:|TriggeredBy:|Triggers:|Unit:|●\s)/;
+  const headerPat = /^(\*|Loaded:|Active:|Main PID:|Tasks:|Memory:|CPU:|CGroup:|Docs?:|Process:|Drop-In:|Status:|TriggeredBy:|Triggers:|Unit:|\*\s)/;
   const journal = [];
   for (const l of lines) {
     if (headerPat.test(l)) { journal.length = 0; continue; }
@@ -772,9 +772,9 @@ export function extractJournalLines(text, maxLines = 10) {
   return journal.slice(-maxLines);
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // handleSshProcessManager
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 const ALLOWED_SIGNALS = new Set([
   'TERM', 'KILL', 'HUP', 'INT', 'QUIT', 'USR1', 'USR2', 'STOP', 'CONT',

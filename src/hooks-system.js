@@ -144,7 +144,7 @@ export async function executeHook(hookName, context = {}) {
     return { success: true, skipped: true };
   }
 
-  console.error(`🎣 Executing hook: ${hookName}`);
+  console.error(`[hook] executing: ${hookName}`);
   const results = [];
 
   for (const action of hook.actions) {
@@ -156,7 +156,7 @@ export async function executeHook(hookName, context = {}) {
           if (!action.optional) {
             throw new Error(`Missing required environment variables: ${missingEnv.join(', ')}`);
           }
-          console.error(`  ⚠️  Skipping ${action.name}: missing env vars`);
+          console.error(`  [warn] skipping ${action.name}: missing env vars`);
           continue;
         }
       }
@@ -177,11 +177,11 @@ export async function executeHook(hookName, context = {}) {
         throw new Error(errorMsg);
       }
 
-      console.error(`  ✅ ${action.name}: completed`);
+      console.error(`  [ok]   ${action.name}: completed`);
 
     } catch (error) {
       if (!action.optional) {
-        console.error(`  ❌ ${action.name}: ${error.message}`);
+        console.error(`  [err]  ${action.name}: ${error.message}`);
         return {
           success: false,
           hook: hookName,
@@ -190,7 +190,7 @@ export async function executeHook(hookName, context = {}) {
           results
         };
       }
-      console.error(`  ⚠️  ${action.name}: ${error.message} (optional, continuing)`);
+      console.error(`  [warn] ${action.name}: ${error.message} (optional, continuing)`);
     }
   }
 

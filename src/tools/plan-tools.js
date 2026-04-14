@@ -1,14 +1,14 @@
 /**
- * ssh_plan — declarative multi-step operation runner.
+ * ssh_plan -- declarative multi-step operation runner.
  *
  * Modes:
- *   1. preview   — build a "plan card" describing every step. No dispatch calls.
- *   2. dry_run   — call each dispatched handler with `preview:true` merged in.
+ *   1. preview   -- build a "plan card" describing every step. No dispatch calls.
+ *   2. dry_run   -- call each dispatched handler with `preview:true` merged in.
  *                  Each underlying tool reports what it would do. No mutation.
- *   3. run       — execute each step sequentially. On failure, walk completed
+ *   3. run       -- execute each step sequentially. On failure, walk completed
  *                  steps in reverse and invoke their rollback (if present).
  *
- * ── Step contract ──────────────────────────────────────────────────────────
+ * -- Step contract ----------------------------------------------------------
  * A step is a plain object:
  *   {
  *     step_id?: string,              // auto-assigned `step_<N>` if missing
@@ -23,32 +23,32 @@
  *     },
  *   }
  *
- * ── Rollback contract ──────────────────────────────────────────────────────
+ * -- Rollback contract ------------------------------------------------------
  *   - A step's `rollback` is a SINGLE step (not a nested plan). It has the same
  *     shape as a forward step but MUST NOT itself carry a nested `rollback`
- *     (ignored if present — rollbacks don't cascade).
+ *     (ignored if present -- rollbacks don't cascade).
  *   - When a forward step fails AND rollback_on_fail === true, we walk all
  *     forward steps that COMPLETED SUCCESSFULLY in reverse order and invoke
  *     each one's rollback (if it has one). The failing step's own rollback is
- *     NOT invoked — it never completed, so there's nothing to undo.
+ *     NOT invoked -- it never completed, so there's nothing to undo.
  *   - Rollback dispatches are best-effort. If a rollback itself fails, we
  *     capture the error on its entry in `rollback_steps[]` but continue with
  *     the remaining rollback walk. The primary (forward) failure is preserved.
  *   - Rollbacks inherit the plan-level default server just like forward steps.
  *
- * ── Result parsing contract ────────────────────────────────────────────────
+ * -- Result parsing contract ------------------------------------------------
  *   Every dispatched handler returns an MCP content object: `{content, isError?}`.
  *   We classify success by:
- *     1. If `isError === true` → failure.
+ *     1. If `isError === true` -> failure.
  *     2. Else if format === 'json'/'both' and content[0].text parses as JSON
- *        with `success === false` → failure.
- *     3. Otherwise → success.
+ *        with `success === false` -> failure.
+ *     3. Otherwise -> success.
  *   The first content[0].text is captured as `result_summary` (truncated to
  *   400 chars for the per-step record).
  *
- * ── Risk classification ────────────────────────────────────────────────────
+ * -- Risk classification ----------------------------------------------------
  *   Every step has a risk of 'low' | 'medium' | 'high' derived from its action
- *   via stepRisk(). The action table below is EXPLICIT — no regex heuristics
+ *   via stepRisk(). The action table below is EXPLICIT -- no regex heuristics
  *   at the plan level. If a step has action 'exec' but the command looks risky
  *   (e.g. `rm -rf`), the caller may pass an explicit `risk: 'high'` override on
  *   the step and we'll honor it.
@@ -58,7 +58,7 @@
  *   | health_check   | low    | read-only                                    |
  *   | wait           | low    | local-only sleep                             |
  *   | assert         | low    | read-only check                              |
- *   | download       | low    | pulls remote → local, no mutation             |
+ *   | download       | low    | pulls remote -> local, no mutation             |
  *   | exec           | medium | arbitrary command, caller may override up     |
  *   | upload         | medium | writes remote file                           |
  *   | edit           | high   | in-place config edit                         |
@@ -66,10 +66,10 @@
  *   | backup         | high   | data operation (restore can be destructive)  |
  *   | exec_sudo      | high   | privileged command                           |
  *
- * ── Approve-token gate ─────────────────────────────────────────────────────
+ * -- Approve-token gate -----------------------------------------------------
  *   In `run` mode, if ANY step resolves to risk 'high' AND no `approve_token`
  *   arg is present, we refuse: structured `fail()` listing risky step_ids,
- *   dispatch is never called. The token value is not validated — it's a
+ *   dispatch is never called. The token value is not validated -- it's a
  *   two-call pattern: inspect the preview, then re-invoke with any non-empty
  *   approve_token to confirm.
  */
@@ -77,9 +77,9 @@
 import { ok, fail, preview, toMcp, defaultRender } from '../structured-result.js';
 import { formatDuration } from '../output-formatter.js';
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Step-action metadata
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 const ACTION_RISK = Object.freeze({
   health_check: 'low',
@@ -126,7 +126,7 @@ const RISK_FROM_RANK = ['low', 'medium', 'high'];
 /**
  * Classify a step's risk. Honors an explicit `risk:` override on the step.
  * @param {string} action
- * @param {string} [override] — 'low' | 'medium' | 'high'
+ * @param {string} [override] -- 'low' | 'medium' | 'high'
  * @returns {'low'|'medium'|'high'}
  */
 export function stepRisk(action, override) {
@@ -134,9 +134,9 @@ export function stepRisk(action, override) {
   return ACTION_RISK[action] || 'medium';
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Plan preparation (shared by all modes)
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 /**
  * Normalize an input plan array into a standardized shape. Non-mutating.
@@ -145,7 +145,7 @@ export function stepRisk(action, override) {
  *   - Leaves all other params untouched.
  * @param {Array} steps
  * @param {Object} [opts]
- * @param {string} [opts.defaultServer] — plan-level default
+ * @param {string} [opts.defaultServer] -- plan-level default
  * @returns {Array<Object>} normalized steps
  */
 export function normalizePlan(steps, { defaultServer } = {}) {
@@ -158,7 +158,7 @@ export function normalizePlan(steps, { defaultServer } = {}) {
 }
 
 /**
- * Build the per-step preview entry (plan card row). Pure function — no dispatch.
+ * Build the per-step preview entry (plan card row). Pure function -- no dispatch.
  */
 function describeStep(step) {
   const { step_id, action, server } = step;
@@ -177,10 +177,10 @@ function describeStep(step) {
       effects.push(`runs \`sudo ${truncate(step.command || '', 80)}\` on ${server || '(unknown)'}`);
       break;
     case 'upload':
-      effects.push(`uploads ${step.local_path || '?'} → ${server || '?'}:${step.remote_path || '?'}`);
+      effects.push(`uploads ${step.local_path || '?'} -> ${server || '?'}:${step.remote_path || '?'}`);
       break;
     case 'download':
-      effects.push(`downloads ${server || '?'}:${step.remote_path || '?'} → ${step.local_path || '?'}`);
+      effects.push(`downloads ${server || '?'}:${step.remote_path || '?'} -> ${step.local_path || '?'}`);
       break;
     case 'edit':
       effects.push(`edits ${server || '?'}:${step.remote_path || step.file || '?'}`);
@@ -225,7 +225,7 @@ function describeStep(step) {
 
 function truncate(s, n) {
   const str = String(s ?? '');
-  return str.length > n ? str.slice(0, n - 1) + '…' : str;
+  return str.length > n ? str.slice(0, n - 1) + '...' : str;
 }
 
 /**
@@ -240,9 +240,9 @@ function highestRisk(described) {
   return RISK_FROM_RANK[rank];
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// Dispatch → preview / run
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// Dispatch -> preview / run
+// --------------------------------------------------------------------------
 
 /**
  * Build the arg object passed to a dispatched handler from a step.
@@ -299,7 +299,7 @@ function parseHandlerResponse(resp) {
 
 /**
  * Invoke one step via the dispatch table. Returns { ok, durationMs, summary, error }.
- * Never throws — wraps exceptions into a structured failure record.
+ * Never throws -- wraps exceptions into a structured failure record.
  */
 async function invokeStep(dispatch, step, extraArgs = {}) {
   const handler = dispatch && dispatch[step.action];
@@ -335,18 +335,18 @@ async function invokeStep(dispatch, step, extraArgs = {}) {
   };
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// handleSshPlan — main entry point
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
+// handleSshPlan -- main entry point
+// --------------------------------------------------------------------------
 
 /**
  * @param {Object} opts
- * @param {Object} opts.dispatch — map of action → handler({args}) → MCP response
+ * @param {Object} opts.dispatch -- map of action -> handler({args}) -> MCP response
  * @param {Object} opts.args
  * @param {Array}  opts.args.plan
  * @param {'preview'|'dry_run'|'run'} [opts.args.mode='preview']
  * @param {boolean} [opts.args.rollback_on_fail=true]
- * @param {string}  [opts.args.server] — plan-level default server
+ * @param {string}  [opts.args.server] -- plan-level default server
  * @param {string}  [opts.args.format='markdown']
  * @param {string}  [opts.args.approve_token]
  */
@@ -373,7 +373,7 @@ export async function handleSshPlan({ dispatch = {}, args = {} } = {}) {
   const est_duration_ms = described.reduce((a, s) => a + (s.estimated_duration_ms || 0), 0);
   const highest_risk = highestRisk(described);
 
-  // ── preview mode ────────────────────────────────────────────────────────
+  // -- preview mode --------------------------------------------------------
   if (mode === 'preview') {
     const card = {
       mode: 'preview',
@@ -388,7 +388,7 @@ export async function handleSshPlan({ dispatch = {}, args = {} } = {}) {
     );
   }
 
-  // ── dry_run mode ────────────────────────────────────────────────────────
+  // -- dry_run mode --------------------------------------------------------
   if (mode === 'dry_run') {
     const t0 = Date.now();
     const dryResults = [];
@@ -450,7 +450,7 @@ export async function handleSshPlan({ dispatch = {}, args = {} } = {}) {
     return toMcp(ok('ssh_plan', out, { duration_ms: out.duration_ms }), { format });
   }
 
-  // ── run mode ────────────────────────────────────────────────────────────
+  // -- run mode ------------------------------------------------------------
   if (mode !== 'run') {
     return toMcp(fail('ssh_plan', `unknown mode: ${mode}`), { format });
   }
@@ -519,7 +519,7 @@ export async function handleSshPlan({ dispatch = {}, args = {} } = {}) {
         server: step.rollback.server ?? step.server ?? defaultServer ?? null,
         ...step.rollback,
       };
-      // Strip any accidental nested rollback — they don't cascade.
+      // Strip any accidental nested rollback -- they don't cascade.
       delete rb.rollback;
       const r = await invokeStep(dispatch, rb);
       rolled_back = true;
@@ -549,7 +549,7 @@ export async function handleSshPlan({ dispatch = {}, args = {} } = {}) {
   };
 
   // success if nothing failed. If any step failed, the tool-level result is
-  // still "ok" from a plumbing perspective — the payload says what happened.
+  // still "ok" from a plumbing perspective -- the payload says what happened.
   // Surface an isError only when EVERY step failed hard (keeps the caller in
   // control of semantics). We choose: failed iff steps_failed > 0.
   const wrapper = steps_failed > 0
@@ -570,22 +570,22 @@ export async function handleSshPlanPreview({ dispatch = {}, args = {} } = {}) {
   return handleSshPlan({ dispatch, args: { ...args, mode: 'preview' } });
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Markdown renderers
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 function renderPlanCardPreview(result) {
   if (!result.success) return defaultRender(result);
   const card = result.data && result.data.plan;
   if (!card) return defaultRender(result);
   const lines = [];
-  lines.push(`▶ **ssh_plan** · preview · ${card.total_steps} steps · risk **${card.highest_risk}**`);
+  lines.push(`[ok] **ssh_plan** | preview | ${card.total_steps} steps | risk **${card.highest_risk}**`);
   lines.push('');
-  lines.push(`> **dry run** — nothing executed · est \`${formatDuration(card.est_duration_ms)}\``);
+  lines.push(`> **dry run** -- nothing executed | est \`${formatDuration(card.est_duration_ms)}\``);
   lines.push('');
   for (const s of card.steps) {
-    const rb = s.has_rollback ? ' ↩︎' : '';
-    lines.push(`- \`${s.step_id}\` · **${s.action}** · ${s.target} · risk \`${s.risk}\`${rb}`);
+    const rb = s.has_rollback ? ' <-' : '';
+    lines.push(`- \`${s.step_id}\` | **${s.action}** | ${s.target} | risk \`${s.risk}\`${rb}`);
     for (const eff of s.effects) lines.push(`    - ${eff}`);
   }
   return lines.join('\n');
@@ -594,24 +594,24 @@ function renderPlanCardPreview(result) {
 function renderPlanRun(result) {
   const d = result.data;
   if (!d) return defaultRender(result);
-  const marker = result.success ? '▶' : '✕';
+  const marker = result.success ? '[ok]' : '[err]';
   const lines = [];
   lines.push(
-    `${marker} **ssh_plan** · run · ${d.steps_executed}/${d.total_steps} executed · ${d.steps_failed} failed` +
-    (d.rolled_back ? ' · **rolled back**' : '')
+    `${marker} **ssh_plan** | run | ${d.steps_executed}/${d.total_steps} executed | ${d.steps_failed} failed` +
+    (d.rolled_back ? ' | **rolled back**' : '')
   );
   lines.push('');
   for (const s of d.steps) {
-    const m = s.ok ? '▶' : '✕';
-    lines.push(`${m} \`${s.step_id}\` · **${s.action}** · \`${formatDuration(s.duration_ms)}\``);
+    const m = s.ok ? '[ok]' : '[err]';
+    lines.push(`${m} \`${s.step_id}\` | **${s.action}** | \`${formatDuration(s.duration_ms)}\``);
     if (!s.ok) lines.push(`    - error: ${s.error}`);
   }
   if (d.rollback_steps && d.rollback_steps.length) {
     lines.push('');
     lines.push('**rollback:**');
     for (const r of d.rollback_steps) {
-      const m = r.ok ? '▶' : '✕';
-      lines.push(`${m} \`${r.step_id}\` · **${r.action}** · \`${formatDuration(r.duration_ms)}\``);
+      const m = r.ok ? '[ok]' : '[err]';
+      lines.push(`${m} \`${r.step_id}\` | **${r.action}** | \`${formatDuration(r.duration_ms)}\``);
       if (!r.ok) lines.push(`    - error: ${r.error}`);
     }
   }

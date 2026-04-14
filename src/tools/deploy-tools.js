@@ -1,5 +1,5 @@
 /**
- * ssh_deploy — declarative, atomic-ish deploy with optional rollback.
+ * ssh_deploy -- declarative, atomic-ish deploy with optional rollback.
  *
  * Single tool: handleSshDeploy({ getConnection, getSftp, args }).
  *
@@ -19,17 +19,17 @@
  * Execution order:
  *   1. stat target_path (record exists/new, size)
  *   2. if exists: cp -p target_path target_path.mcp.deploy.prev    (snapshot)
- *   3. sftp fastPut artifact_local_path → target_path              (atomic-ish)
+ *   3. sftp fastPut artifact_local_path -> target_path              (atomic-ish)
  *   4. for each post_hook (in order): execute; abort on first failure
- *   5. if health_check given: execute; non-zero → unhealthy
+ *   5. if health_check given: execute; non-zero -> unhealthy
  *   6. on any post-upload failure and rollback_on_fail:true:
- *        mv target_path.mcp.deploy.prev → target_path             (restore)
+ *        mv target_path.mcp.deploy.prev -> target_path             (restore)
  *        run rollback_hook if provided
  *
  * Rollback semantics (important design notes):
  *   - We take a LOCAL SNAPSHOT on the remote host (cp -p, preserves mode/mtime).
  *     Path: `${target_path}.mcp.deploy.prev`. The previous snapshot is
- *     overwritten on each deploy — only the immediately-previous version is
+ *     overwritten on each deploy -- only the immediately-previous version is
  *     retained. Callers who need history should take their own backup first.
  *   - If target_path didn't exist before the deploy (new file), rollback
  *     deletes target_path instead of restoring a snapshot that doesn't exist.
@@ -37,7 +37,7 @@
  *     rollback_on_fail is true. This matches operator expectation: "if anything
  *     went wrong after I put the new bytes down, put the old bytes back."
  *   - `rollback_on_fail: false` deliberately leaves the broken deploy in place
- *     for forensics — the snapshot is still kept at `.mcp.deploy.prev`.
+ *     for forensics -- the snapshot is still kept at `.mcp.deploy.prev`.
  *   - Returns `rolled_back: true` when we actually moved the snapshot back.
  *
  * The returned wire payload is deterministic so callers can automate:
@@ -67,9 +67,9 @@ const DEFAULT_UPLOAD_TIMEOUT_MS = 600_000;
 
 const SNAPSHOT_SUFFIX = '.mcp.deploy.prev';
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Helpers
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 function sha256File(localPath) {
   return new Promise((resolve, reject) => {
@@ -86,7 +86,7 @@ function localSize(p) {
 }
 
 function promisifyGetSftp(client, getSftp) {
-  // Support either an injected getSftp(client)→Promise<sftp> or the raw
+  // Support either an injected getSftp(client)->Promise<sftp> or the raw
   // ssh2 Client with client.sftp(cb).
   if (typeof getSftp === 'function') return getSftp(client);
   return new Promise((resolve, reject) => {
@@ -104,7 +104,7 @@ function sftpFastPut(sftp, local, remote) {
 }
 
 /**
- * stat remote path → { exists, size, mtime } or { exists: false }.
+ * stat remote path -> { exists, size, mtime } or { exists: false }.
  */
 async function remoteStat(client, path) {
   const cmd = `stat -c '%s %Y' ${shQuote(path)} 2>/dev/null || echo MISSING`;
@@ -115,9 +115,9 @@ async function remoteStat(client, path) {
   return { exists: true, size: Number(s), mtime: Number(m) };
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_deploy
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 export async function handleSshDeploy({ getConnection, getSftp, args }) {
   const {
     server,
@@ -143,7 +143,7 @@ export async function handleSshDeploy({ getConnection, getSftp, args }) {
 
   const snapshotPath = `${target_path}${SNAPSHOT_SUFFIX}`;
 
-  // Local artifact must exist up front — fail fast.
+  // Local artifact must exist up front -- fail fast.
   let artifactBytes = null;
   try {
     const st = fs.statSync(artifact_local_path);
@@ -155,25 +155,25 @@ export async function handleSshDeploy({ getConnection, getSftp, args }) {
     }
   }
 
-  // ─── PREVIEW ─────────────────────────────────────────────────────────
+  // --- PREVIEW ---------------------------------------------------------
   if (isPreview) {
     // Best-effort remote stat
     let stat = { exists: false, size: null };
     try {
       const client = await getConnection(server);
       stat = await remoteStat(client, target_path);
-    } catch (_) { /* ignore — preview never fails on connection */ }
+    } catch (_) { /* ignore -- preview never fails on connection */ }
 
     const effects = [
-      `uploads \`${artifact_local_path}\` → \`${target_path}\``,
+      `uploads \`${artifact_local_path}\` -> \`${target_path}\``,
       `artifact size: ${artifactBytes != null ? formatBytes(artifactBytes) : 'unknown'}`,
       stat.exists
-        ? `target exists (${formatBytes(stat.size || 0)}) — snapshot to \`${snapshotPath}\``
-        : `target does not exist — new file`,
+        ? `target exists (${formatBytes(stat.size || 0)}) -- snapshot to \`${snapshotPath}\``
+        : `target does not exist -- new file`,
     ];
     if (post_hooks.length) {
       effects.push(`post_hooks (${post_hooks.length}, sequential):`);
-      for (const h of post_hooks) effects.push(`  • \`${h}\``);
+      for (const h of post_hooks) effects.push(`  * \`${h}\``);
     } else {
       effects.push('no post_hooks');
     }
@@ -194,7 +194,7 @@ export async function handleSshDeploy({ getConnection, getSftp, args }) {
     return toMcp(preview('ssh_deploy', plan, { server }), { format });
   }
 
-  // ─── ACTUAL DEPLOY ───────────────────────────────────────────────────
+  // --- ACTUAL DEPLOY ---------------------------------------------------
   const startedAt = Date.now();
 
   let client;
@@ -255,7 +255,7 @@ export async function handleSshDeploy({ getConnection, getSftp, args }) {
 
   const artifactSha256 = await sha256Promise.catch(() => null);
 
-  // 4. Post-hooks — sequential, abort on first failure.
+  // 4. Post-hooks -- sequential, abort on first failure.
   const hookResults = [];
   let firstFailure = null; // { phase, reason }
   for (const hook of post_hooks) {
@@ -282,7 +282,7 @@ export async function handleSshDeploy({ getConnection, getSftp, args }) {
     }
   }
 
-  // 5. Health check — only if all post-hooks passed.
+  // 5. Health check -- only if all post-hooks passed.
   let healthCheckExit = null;
   let healthStderr = '';
   if (!firstFailure && health_check) {
@@ -362,7 +362,7 @@ export async function handleSshDeploy({ getConnection, getSftp, args }) {
 
   if (firstFailure) {
     // We keep `data` on the failure payload so callers can inspect hook_results,
-    // rolled_back, snapshot path, etc. — fail() nulls `data`, so we build the
+    // rolled_back, snapshot path, etc. -- fail() nulls `data`, so we build the
     // result by hand.
     const failureResult = {
       success: false,
@@ -395,10 +395,10 @@ function withTimeout(promise, ms, label) {
 function renderDeploy(result) {
   const d = result.data || result.meta || {};
   const meta = result.meta || {};
-  const dur = meta.duration_ms != null ? `  ·  \`${formatDuration(meta.duration_ms)}\`` : '';
-  const marker = result.success ? '▶' : '✕';
+  const dur = meta.duration_ms != null ? `  |  \`${formatDuration(meta.duration_ms)}\`` : '';
+  const marker = result.success ? '[ok]' : '[err]';
   const lines = [];
-  lines.push(`${marker} **ssh_deploy**  ·  \`${result.server || '?'}\`${dur}`);
+  lines.push(`${marker} **ssh_deploy**  |  \`${result.server || '?'}\`${dur}`);
 
   if (!result.success) {
     lines.push(`**failed**: ${result.error || 'unknown'}`);
@@ -407,16 +407,16 @@ function renderDeploy(result) {
   const targetPath = d.target_path || meta.target_path;
   if (targetPath) lines.push(`target: \`${targetPath}\``);
   if (d.artifact_sha256) {
-    lines.push(`artifact: ${formatBytes(d.artifact_bytes || 0)}  ·  sha256 \`${String(d.artifact_sha256).slice(0, 16)}…\``);
+    lines.push(`artifact: ${formatBytes(d.artifact_bytes || 0)}  |  sha256 \`${String(d.artifact_sha256).slice(0, 16)}...\``);
   }
-  lines.push(`deployed: **${d.deployed ? 'yes' : 'no'}**  ·  rolled_back: **${d.rolled_back ? 'yes' : 'no'}**`);
+  lines.push(`deployed: **${d.deployed ? 'yes' : 'no'}**  |  rolled_back: **${d.rolled_back ? 'yes' : 'no'}**`);
   if (d.prev_snapshot_path) lines.push(`snapshot: \`${d.prev_snapshot_path}\``);
   if (Array.isArray(d.hook_results) && d.hook_results.length) {
     lines.push('');
     lines.push('**post_hooks:**');
     for (const h of d.hook_results) {
-      const m = h.exit_code === 0 ? '▶' : '✕';
-      lines.push(`${m} \`${h.command}\` — exit ${h.exit_code}  ·  \`${formatDuration(h.duration_ms)}\``);
+      const m = h.exit_code === 0 ? '[ok]' : '[err]';
+      lines.push(`${m} \`${h.command}\` -- exit ${h.exit_code}  |  \`${formatDuration(h.duration_ms)}\``);
     }
   }
   if (d.health_check_exit_code != null) {
@@ -424,7 +424,7 @@ function renderDeploy(result) {
     lines.push(`health_check exit: **${d.health_check_exit_code}**`);
   }
   if (d.rollback_hook_result) {
-    lines.push(`rollback_hook: \`${d.rollback_hook_result.command}\` — exit ${d.rollback_hook_result.exit_code}`);
+    lines.push(`rollback_hook: \`${d.rollback_hook_result.command}\` -- exit ${d.rollback_hook_result.exit_code}`);
   }
   if (d.rollback_error) {
     lines.push(`> rollback error: ${d.rollback_error}`);

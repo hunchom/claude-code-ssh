@@ -5,14 +5,14 @@
  *   - Route through streamExecCommand for clean UTF-8 / timeout / abort.
  *   - Shell-quote every interpolated value via shQuote().
  *   - Pass credentials via ENVIRONMENT VARIABLES (MYSQL_PWD / PGPASSWORD /
- *     MongoDB connection-string URI). NEVER as argv — so `ps auxf` on the
+ *     MongoDB connection-string URI). NEVER as argv -- so `ps auxf` on the
  *     remote host can never show the password. We construct the command as
  *     `MYSQL_PWD=... mysql ...` which is inherited by the child process.
  *   - Support format: 'markdown' | 'json' | 'both'.
  *
  * Mutating tools (dump, import) support preview: true (dry-run, never touches remote).
  *
- * Query is validated by isSafeSelect() — same validator rejects multi-statement,
+ * Query is validated by isSafeSelect() -- same validator rejects multi-statement,
  * comment-hidden, backtick-hidden, and INTO OUTFILE smuggling.
  */
 
@@ -26,9 +26,9 @@ const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_LIMIT = 1000;
 const MAX_ALLOWED_LIMIT = 100_000;
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Helpers
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 /**
  * Coerce to a safe integer in [min, max] with a fallback.
@@ -48,7 +48,7 @@ function safeInt(value, { min = 0, max = Number.MAX_SAFE_INTEGER, fallback = 0 }
  */
 function detectLimit(sql) {
   // Reuse sql-safety's internals indirectly: strip then look for LIMIT N pattern.
-  // To avoid re-exposing internals, we do a simple scan here — good enough because
+  // To avoid re-exposing internals, we do a simple scan here -- good enough because
   // isSafeSelect has already vetted the query.
   const stripped = sql
     .replace(/--[^\n]*/g, ' ')
@@ -84,9 +84,9 @@ function parseTsv(raw) {
  * when we want rows, OR with a header when we omit -N. We'll include the header.
  */
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Query-command builders (exported for tests)
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 /**
  * Build the MySQL query command. Password via MYSQL_PWD env, NEVER argv.
@@ -128,9 +128,9 @@ export function buildMongoQueryCommand({ database, query, user }) {
   return parts.join(' ');
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // List-command builders
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 export function buildMySqlListCommand({ database, user }) {
   if (database) {
     const q = `SHOW TABLES FROM ${shQuote(database)}`;
@@ -141,7 +141,7 @@ export function buildMySqlListCommand({ database, user }) {
 
 export function buildPostgresListCommand({ database, user }) {
   if (database) {
-    // \dt outputs schema.table rows — we use a proper SELECT for consistent output.
+    // \dt outputs schema.table rows -- we use a proper SELECT for consistent output.
     const q = "SELECT tablename FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema')";
     return `PGPASSWORD="$SSH_MGR_DB_PASS" psql -A -t${user ? ' -U ' + shQuote(user) : ''} -d ${shQuote(database)} -c ${shQuote(q)}`;
   }
@@ -157,9 +157,9 @@ export function buildMongoListCommand({ database, user }) {
   return `mongosh --quiet${userArgs} --eval 'db.adminCommand("listDatabases").databases.forEach(d => print(d.name))'`;
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // Dump / import command builders
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 /**
  * Estimate DB size command (returns bytes).
@@ -245,9 +245,9 @@ export function buildFileSizeCommand(path) {
   return `stat -c '%s' ${p} 2>/dev/null || stat -f '%z' ${p} 2>/dev/null || echo 0`;
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_db_query
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 export async function handleSshDbQuery({ getConnection, args }) {
   const {
     server, db_type, database, query, user, password = '',
@@ -267,7 +267,7 @@ export async function handleSshDbQuery({ getConnection, args }) {
 
   const cappedLimit = safeInt(limit, { min: 1, max: MAX_ALLOWED_LIMIT, fallback: DEFAULT_LIMIT });
 
-  // Mongo uses a JS eval, not SQL — skip isSafeSelect but do a minimal check:
+  // Mongo uses a JS eval, not SQL -- skip isSafeSelect but do a minimal check:
   // reject statements that look like they'd write.
   let finalQuery = query;
   if (db_type !== 'mongodb') {
@@ -288,7 +288,7 @@ export async function handleSshDbQuery({ getConnection, args }) {
         );
       }
     } else {
-      // Append LIMIT — strip trailing semicolon first.
+      // Append LIMIT -- strip trailing semicolon first.
       finalQuery = query.replace(/;\s*$/, '') + ` LIMIT ${cappedLimit}`;
     }
   } else {
@@ -364,10 +364,10 @@ function renderDbQuery(result) {
   if (!result.success) return defaultRender(result);
   const d = result.data;
   const lines = [];
-  const dur = result.meta?.duration_ms != null ? `  ·  \`${formatDuration(result.meta.duration_ms)}\`` : '';
-  lines.push(`▶ **ssh_db_query**  ·  \`${result.server}\`  ·  \`${d.db_type}\`${dur}`);
+  const dur = result.meta?.duration_ms != null ? `  |  \`${formatDuration(result.meta.duration_ms)}\`` : '';
+  lines.push(`[ok] **ssh_db_query**  |  \`${result.server}\`  |  \`${d.db_type}\`${dur}`);
   if (d.columns) {
-    lines.push(`${d.row_count} row${d.row_count === 1 ? '' : 's'}  ·  ${d.columns.length} column${d.columns.length === 1 ? '' : 's'}`);
+    lines.push(`${d.row_count} row${d.row_count === 1 ? '' : 's'}  |  ${d.columns.length} column${d.columns.length === 1 ? '' : 's'}`);
     if (d.columns.length > 0) {
       lines.push('');
       lines.push('| ' + d.columns.join(' | ') + ' |');
@@ -377,7 +377,7 @@ function renderDbQuery(result) {
       }
       if (d.rows.length > 50) {
         lines.push('');
-        lines.push(`> … ${d.rows.length - 50} more rows elided`);
+        lines.push(`> ... ${d.rows.length - 50} more rows elided`);
       }
     }
   } else if (d.raw) {
@@ -389,9 +389,9 @@ function renderDbQuery(result) {
   return lines.join('\n');
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_db_list
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 export async function handleSshDbList({ getConnection, args }) {
   const {
     server, db_type, database, user, password = '',
@@ -457,9 +457,9 @@ function filterSystemDbs(names, db_type) {
   return names.filter(n => !s.has(n.toLowerCase()));
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_db_dump
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 export async function handleSshDbDump({ getConnection, args }) {
   const {
     server, db_type, database, user, password = '',
@@ -494,7 +494,7 @@ export async function handleSshDbDump({ getConnection, args }) {
 
     const plan = buildPlan({
       action: 'db-dump',
-      target: `${server}:${database} → ${outPath}`,
+      target: `${server}:${database} -> ${outPath}`,
       effects: [
         `dumps ${db_type} database \`${database}\``,
         gzip ? 'output compressed with gzip' : 'output uncompressed',
@@ -551,9 +551,9 @@ export async function handleSshDbDump({ getConnection, args }) {
   );
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 // ssh_db_import
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 export async function handleSshDbImport({ getConnection, args }) {
   const {
     server, db_type, database, user, password = '',
@@ -597,7 +597,7 @@ export async function handleSshDbImport({ getConnection, args }) {
 
     const plan = buildPlan({
       action: 'db-import',
-      target: `${server}:${database} ← ${input_path}`,
+      target: `${server}:${database} <- ${input_path}`,
       effects,
       reversibility: 'manual',
       risk: 'high',

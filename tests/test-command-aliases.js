@@ -20,7 +20,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-console.log('🧪 Testing Command Aliases...\n');
+console.log('[test] Testing Command Aliases...\n');
 
 const CUSTOM_ALIASES_FILE = path.join(__dirname, '..', '.command-aliases.json');
 const backupFile = CUSTOM_ALIASES_FILE + '.backup';
@@ -28,7 +28,7 @@ const backupFile = CUSTOM_ALIASES_FILE + '.backup';
 // Backup existing custom aliases if they exist
 if (fs.existsSync(CUSTOM_ALIASES_FILE)) {
   fs.copyFileSync(CUSTOM_ALIASES_FILE, backupFile);
-  console.log('📦 Backed up existing custom aliases\n');
+  console.log('[pkg] Backed up existing custom aliases\n');
 }
 
 // Test 1: Load command aliases
@@ -37,9 +37,9 @@ try {
   const aliases = loadCommandAliases();
   assert(typeof aliases === 'object', 'loadCommandAliases should return an object');
   assert(Object.keys(aliases).length > 0, 'Should have at least some aliases from profile');
-  console.log(`✅ Loaded ${Object.keys(aliases).length} aliases\n`);
+  console.log(`[ok] Loaded ${Object.keys(aliases).length} aliases\n`);
 } catch (error) {
-  console.error(`❌ Failed to load aliases: ${error.message}\n`);
+  console.error(`[err] Failed to load aliases: ${error.message}\n`);
   process.exit(1);
 }
 
@@ -53,15 +53,15 @@ try {
     const expanded = expandCommandAlias('check-memory');
     assert(expanded === aliases['check-memory'], 
       'Should expand check-memory to its full command');
-    console.log(`✅ Expanded 'check-memory' to '${expanded}'`);
+    console.log(`[ok] Expanded 'check-memory' to '${expanded}'`);
   }
   
   // Test with non-alias command
   const nonAlias = expandCommandAlias('ls -la');
   assert(nonAlias === 'ls -la', 'Non-alias commands should remain unchanged');
-  console.log('✅ Non-alias commands remain unchanged\n');
+  console.log('[ok] Non-alias commands remain unchanged\n');
 } catch (error) {
-  console.error(`❌ Failed to expand aliases: ${error.message}\n`);
+  console.error(`[err] Failed to expand aliases: ${error.message}\n`);
   process.exit(1);
 }
 
@@ -79,12 +79,12 @@ try {
   const expanded = expandCommandAlias(testAlias);
   assert(expanded === testCommand, 'Custom alias should expand correctly');
   
-  console.log(`✅ Added custom alias: ${testAlias}\n`);
+  console.log(`[ok] Added custom alias: ${testAlias}\n`);
   
   // Cleanup
   removeCommandAlias(testAlias);
 } catch (error) {
-  console.error(`❌ Failed to add custom alias: ${error.message}\n`);
+  console.error(`[err] Failed to add custom alias: ${error.message}\n`);
   process.exit(1);
 }
 
@@ -101,9 +101,9 @@ try {
   const aliases = loadCommandAliases();
   assert(!aliases[testAlias], 'Alias should be removed');
   
-  console.log('✅ Successfully removed custom alias\n');
+  console.log('[ok] Successfully removed custom alias\n');
 } catch (error) {
-  console.error(`❌ Failed to remove alias: ${error.message}\n`);
+  console.error(`[err] Failed to remove alias: ${error.message}\n`);
   process.exit(1);
 }
 
@@ -123,7 +123,7 @@ try {
       'Each alias should have isCustom boolean');
   }
   
-  console.log(`✅ Listed ${list.length} aliases`);
+  console.log(`[ok] Listed ${list.length} aliases`);
   
   // Show some examples
   const profileAliases = list.filter(a => a.isFromProfile).slice(0, 3);
@@ -137,7 +137,7 @@ try {
   }
   console.log();
 } catch (error) {
-  console.error(`❌ Failed to list aliases: ${error.message}\n`);
+  console.error(`[err] Failed to list aliases: ${error.message}\n`);
   process.exit(1);
 }
 
@@ -153,7 +153,7 @@ try {
   const testSuggestion = suggestions.find(s => s.alias === 'test-suggest');
   assert(testSuggestion, 'Should find the test alias in suggestions');
   
-  console.log(`✅ Found ${suggestions.length} suggestions for 'test'`);
+  console.log(`[ok] Found ${suggestions.length} suggestions for 'test'`);
   if (suggestions.length > 0) {
     console.log(`   Examples: ${suggestions.slice(0, 3).map(s => s.alias).join(', ')}`);
   }
@@ -162,7 +162,7 @@ try {
   // Cleanup
   removeCommandAlias('test-suggest');
 } catch (error) {
-  console.error(`❌ Failed to suggest aliases: ${error.message}\n`);
+  console.error(`[err] Failed to suggest aliases: ${error.message}\n`);
   process.exit(1);
 }
 
@@ -182,10 +182,10 @@ try {
     assert(newAliases[profileAlias] === originalCommand, 
       'Profile aliases should be reset, not removed');
     
-    console.log(`✅ Profile alias '${profileAlias}' is protected from removal\n`);
+    console.log(`[ok] Profile alias '${profileAlias}' is protected from removal\n`);
   }
 } catch (error) {
-  console.error(`❌ Failed profile alias protection test: ${error.message}\n`);
+  console.error(`[err] Failed profile alias protection test: ${error.message}\n`);
   process.exit(1);
 }
 
@@ -193,9 +193,9 @@ try {
 if (fs.existsSync(backupFile)) {
   fs.copyFileSync(backupFile, CUSTOM_ALIASES_FILE);
   fs.unlinkSync(backupFile);
-  console.log('📦 Restored original custom aliases\n');
+  console.log('[pkg] Restored original custom aliases\n');
 } else if (fs.existsSync(CUSTOM_ALIASES_FILE)) {
   fs.unlinkSync(CUSTOM_ALIASES_FILE);
 }
 
-console.log('🎉 All command alias tests passed!');
+console.log('[*] All command alias tests passed!');

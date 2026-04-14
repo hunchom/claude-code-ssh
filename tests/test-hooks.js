@@ -21,7 +21,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-console.log('🧪 Testing Hooks System...\n');
+console.log('[test] Testing Hooks System...\n');
 
 const HOOKS_CONFIG_FILE = path.join(__dirname, '..', '.hooks-config.json');
 const backupFile = HOOKS_CONFIG_FILE + '.backup';
@@ -29,7 +29,7 @@ const backupFile = HOOKS_CONFIG_FILE + '.backup';
 // Backup existing hooks config if it exists
 if (fs.existsSync(HOOKS_CONFIG_FILE)) {
   fs.copyFileSync(HOOKS_CONFIG_FILE, backupFile);
-  console.log('📦 Backed up existing hooks configuration\n');
+  console.log('[pkg] Backed up existing hooks configuration\n');
 }
 
 // Test 1: Initialize hooks
@@ -38,9 +38,9 @@ try {
   await initializeHooks();
   assert(fs.existsSync(path.join(__dirname, '..', 'hooks')), 
     'Hooks directory should be created');
-  console.log('✅ Hooks system initialized\n');
+  console.log('[ok] Hooks system initialized\n');
 } catch (error) {
-  console.error(`❌ Failed to initialize hooks: ${error.message}\n`);
+  console.error(`[err] Failed to initialize hooks: ${error.message}\n`);
   process.exit(1);
 }
 
@@ -53,10 +53,10 @@ try {
   // Should have at least on-error hook from default
   assert(hooks['on-error'], 'Should have on-error hook');
   
-  console.log(`✅ Loaded ${Object.keys(hooks).length} hooks`);
+  console.log(`[ok] Loaded ${Object.keys(hooks).length} hooks`);
   console.log(`   Hooks: ${Object.keys(hooks).join(', ')}\n`);
 } catch (error) {
-  console.error(`❌ Failed to load hooks: ${error.message}\n`);
+  console.error(`[err] Failed to load hooks: ${error.message}\n`);
   process.exit(1);
 }
 
@@ -74,13 +74,13 @@ try {
     assert(typeof firstHook.actionCount === 'number', 'Each hook should have actionCount');
   }
   
-  console.log(`✅ Listed ${hooksList.length} hooks`);
+  console.log(`[ok] Listed ${hooksList.length} hooks`);
   hooksList.forEach(h => {
-    console.log(`   ${h.enabled ? '✓' : '✗'} ${h.name}: ${h.actionCount} actions`);
+    console.log(`   ${h.enabled ? '[ok]' : '[err]'} ${h.name}: ${h.actionCount} actions`);
   });
   console.log();
 } catch (error) {
-  console.error(`❌ Failed to list hooks: ${error.message}\n`);
+  console.error(`[err] Failed to list hooks: ${error.message}\n`);
   process.exit(1);
 }
 
@@ -106,12 +106,12 @@ try {
   assert(hooks['test-hook'].description === testHook.description, 
     'Test hook should have correct description');
   
-  console.log('✅ Successfully added custom hook\n');
+  console.log('[ok] Successfully added custom hook\n');
   
   // Cleanup
   removeHook('test-hook');
 } catch (error) {
-  console.error(`❌ Failed to add hook: ${error.message}\n`);
+  console.error(`[err] Failed to add hook: ${error.message}\n`);
   process.exit(1);
 }
 
@@ -135,12 +135,12 @@ try {
   hooks = loadHooksConfig();
   assert(hooks['toggle-test'].enabled === true, 'Hook should be enabled');
   
-  console.log('✅ Successfully toggled hook state\n');
+  console.log('[ok] Successfully toggled hook state\n');
   
   // Cleanup
   removeHook('toggle-test');
 } catch (error) {
-  console.error(`❌ Failed to toggle hook: ${error.message}\n`);
+  console.error(`[err] Failed to toggle hook: ${error.message}\n`);
   process.exit(1);
 }
 
@@ -170,16 +170,16 @@ try {
   // Verify file was created
   assert(fs.existsSync(testFile), 'Hook should have created test file');
   
-  console.log('✅ Hook executed successfully');
+  console.log('[ok] Hook executed successfully');
   
   // Cleanup
   if (fs.existsSync(testFile)) {
     fs.unlinkSync(testFile);
   }
   removeHook('execution-test');
-  console.log('✅ Cleaned up test artifacts\n');
+  console.log('[ok] Cleaned up test artifacts\n');
 } catch (error) {
-  console.error(`❌ Failed to execute hook: ${error.message}\n`);
+  console.error(`[err] Failed to execute hook: ${error.message}\n`);
   const testFile = path.join(__dirname, '..', 'test-hook-output.txt');
   if (fs.existsSync(testFile)) {
     fs.unlinkSync(testFile);
@@ -208,12 +208,12 @@ try {
   assert(result.success === true, 'Should return success');
   assert(result.skipped === true, 'Should indicate hook was skipped');
   
-  console.log('✅ Disabled hook was correctly skipped\n');
+  console.log('[ok] Disabled hook was correctly skipped\n');
   
   // Cleanup
   removeHook('disabled-test');
 } catch (error) {
-  console.error(`❌ Failed disabled hook test: ${error.message}\n`);
+  console.error(`[err] Failed disabled hook test: ${error.message}\n`);
   process.exit(1);
 }
 
@@ -243,7 +243,7 @@ try {
     const content = fs.readFileSync(testFile, 'utf8');
     assert(content.includes('production'), 'Should replace {server} with context value');
     assert(content.includes('test-error'), 'Should replace {error} with context value');
-    console.log('✅ Context replacement works correctly');
+    console.log('[ok] Context replacement works correctly');
     fs.unlinkSync(testFile);
   }
   
@@ -251,7 +251,7 @@ try {
   removeHook('context-test');
   console.log();
 } catch (error) {
-  console.error(`❌ Failed context replacement test: ${error.message}\n`);
+  console.error(`[err] Failed context replacement test: ${error.message}\n`);
   const testFile = path.join(__dirname, '..', 'context-test.txt');
   if (fs.existsSync(testFile)) {
     fs.unlinkSync(testFile);
@@ -263,10 +263,10 @@ try {
 if (fs.existsSync(backupFile)) {
   fs.copyFileSync(backupFile, HOOKS_CONFIG_FILE);
   fs.unlinkSync(backupFile);
-  console.log('📦 Restored original hooks configuration\n');
+  console.log('[pkg] Restored original hooks configuration\n');
 } else if (fs.existsSync(HOOKS_CONFIG_FILE)) {
   // If no backup but file exists, keep the current one
-  console.log('📦 Kept current hooks configuration\n');
+  console.log('[pkg] Kept current hooks configuration\n');
 }
 
-console.log('🎉 All hooks tests passed!');
+console.log('[*] All hooks tests passed!');

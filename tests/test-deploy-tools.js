@@ -9,11 +9,11 @@ import { handleSshDeploy } from '../src/tools/deploy-tools.js';
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
-  try { await fn(); passed++; console.log(`✅ ${name}`); }
-  catch (e) { failed++; fails.push({ name, err: e }); console.error(`❌ ${name}: ${e.message}`); }
+  try { await fn(); passed++; console.log(`[ok] ${name}`); }
+  catch (e) { failed++; fails.push({ name, err: e }); console.error(`[err] ${name}: ${e.message}`); }
 }
 
-// Shared fake SSH stream / client ─────────────────────────────────────────
+// Shared fake SSH stream / client -----------------------------------------
 class FakeStream extends EventEmitter {
   constructor() { super(); this.stderr = new EventEmitter(); }
   write() {} end() {} signal() {} close() { setImmediate(() => this.emit('close', null, 'TERM')); }
@@ -37,7 +37,7 @@ function makeClient(script) {
       });
     },
     sftp(cb) {
-      // Pass a mock sftp — fastPut always succeeds.
+      // Pass a mock sftp -- fastPut always succeeds.
       setImmediate(() => cb(null, {
         fastPut(local, remote, done) { setImmediate(() => done(null)); },
       }));
@@ -50,10 +50,10 @@ const artifactDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-deploy-test-'));
 const artifact = path.join(artifactDir, 'app.tar.gz');
 fs.writeFileSync(artifact, 'deploy artifact bytes');
 
-console.log('🧪 Testing deploy-tools\n');
+console.log('[test] Testing deploy-tools\n');
 
-// ─── Validation ─────────────────────────────────────────────────────────
-await test('missing server → fail', async () => {
+// --- Validation ---------------------------------------------------------
+await test('missing server -> fail', async () => {
   const r = await handleSshDeploy({
     getConnection: async () => { throw new Error('no'); },
     args: { artifact_local_path: artifact, target_path: '/opt/app.tar.gz' },
@@ -61,7 +61,7 @@ await test('missing server → fail', async () => {
   assert.strictEqual(r.isError, true);
 });
 
-await test('missing artifact_local_path → fail', async () => {
+await test('missing artifact_local_path -> fail', async () => {
   const r = await handleSshDeploy({
     getConnection: async () => { throw new Error('no'); },
     args: { server: 's', target_path: '/opt/app.tar.gz' },
@@ -69,7 +69,7 @@ await test('missing artifact_local_path → fail', async () => {
   assert.strictEqual(r.isError, true);
 });
 
-await test('missing target_path → fail', async () => {
+await test('missing target_path -> fail', async () => {
   const r = await handleSshDeploy({
     getConnection: async () => { throw new Error('no'); },
     args: { server: 's', artifact_local_path: artifact },
@@ -77,7 +77,7 @@ await test('missing target_path → fail', async () => {
   assert.strictEqual(r.isError, true);
 });
 
-await test('artifact file does not exist → fail', async () => {
+await test('artifact file does not exist -> fail', async () => {
   const r = await handleSshDeploy({
     getConnection: async () => { throw new Error('no'); },
     args: { server: 's', artifact_local_path: '/nonexistent/thing', target_path: '/opt/x' },
@@ -85,7 +85,7 @@ await test('artifact file does not exist → fail', async () => {
   assert.strictEqual(r.isError, true);
 });
 
-// ─── Preview ────────────────────────────────────────────────────────────
+// --- Preview ------------------------------------------------------------
 await test('preview: shows plan with target stat + effects', async () => {
   const client = makeClient((cmd) => {
     if (cmd.includes('stat -c')) return { stdout: '5120 1700000000\n', code: 0 };
@@ -124,7 +124,7 @@ await test('preview: new file target shows "does not exist"', async () => {
   assert(parsed.data.plan.effects.some(e => e.includes('does not exist')));
 });
 
-await test('preview: rollback_on_fail:true → reversibility auto', async () => {
+await test('preview: rollback_on_fail:true -> reversibility auto', async () => {
   const client = makeClient(() => ({ stdout: '1 1\n', code: 0 }));
   const r = await handleSshDeploy({
     getConnection: async () => client,
@@ -134,7 +134,7 @@ await test('preview: rollback_on_fail:true → reversibility auto', async () => 
   assert.strictEqual(parsed.data.plan.reversibility, 'auto');
 });
 
-await test('preview: rollback_on_fail:false → reversibility manual', async () => {
+await test('preview: rollback_on_fail:false -> reversibility manual', async () => {
   const client = makeClient(() => ({ stdout: '1 1\n', code: 0 }));
   const r = await handleSshDeploy({
     getConnection: async () => client,
@@ -147,8 +147,8 @@ await test('preview: rollback_on_fail:false → reversibility manual', async () 
   assert.strictEqual(parsed.data.plan.reversibility, 'manual');
 });
 
-// ─── Happy path ─────────────────────────────────────────────────────────
-await test('happy path: snapshot → upload → post_hook → health_check all ok', async () => {
+// --- Happy path ---------------------------------------------------------
+await test('happy path: snapshot -> upload -> post_hook -> health_check all ok', async () => {
   const runs = [];
   const client = makeClient((cmd) => {
     runs.push(cmd);
@@ -176,8 +176,8 @@ await test('happy path: snapshot → upload → post_hook → health_check all o
   assert(parsed.data.artifact_sha256);
 });
 
-// ─── Rollback ───────────────────────────────────────────────────────────
-await test('health_check failure + rollback_on_fail:true → mv snapshot back', async () => {
+// --- Rollback -----------------------------------------------------------
+await test('health_check failure + rollback_on_fail:true -> mv snapshot back', async () => {
   const seen = [];
   const client = makeClient((cmd) => {
     seen.push(cmd);
@@ -201,7 +201,7 @@ await test('health_check failure + rollback_on_fail:true → mv snapshot back', 
   assert(seen.some(c => c.startsWith('mv -f')), 'snapshot mv happened');
 });
 
-await test('post_hook failure → short-circuit + rollback', async () => {
+await test('post_hook failure -> short-circuit + rollback', async () => {
   const client = makeClient((cmd) => {
     if (cmd.includes('stat -c')) return { stdout: '1 1\n', code: 0 };
     if (cmd.startsWith('cp -pf')) return { stdout: '', code: 0 };
@@ -269,4 +269,4 @@ await test('new-file rollback: deletes uploaded artifact, not mv', async () => {
 try { fs.rmSync(artifactDir, { recursive: true, force: true }); } catch (_) {}
 
 console.log(`\n${passed} passed, ${failed} failed`);
-if (failed > 0) { for (const f of fails) console.error(`  ✗ ${f.name}\n    ${f.err.stack}`); process.exit(1); }
+if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }
