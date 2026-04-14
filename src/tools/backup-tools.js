@@ -328,11 +328,11 @@ function renderBackupCreate(result) {
   if (!result.success) return defaultRender(result);
   const d = result.data;
   const meta = result.meta || {};
-  const dur = meta.duration_ms != null ? `  |  \`${formatDuration(meta.duration_ms)}\`` : '';
+  const dur = meta.duration_ms != null ? ` | \`${formatDuration(meta.duration_ms)}\`` : '';
   const lines = [];
-  lines.push(`[ok] **ssh_backup_create**  |  \`${result.server}\`  |  \`${d.backup_type}\`${dur}`);
+  lines.push(`[ok] **ssh_backup_create** | \`${result.server}\` | \`${d.backup_type}\`${dur}`);
   lines.push(`\`${d.output_path}\``);
-  lines.push(`size: **${formatBytes(d.size_bytes || 0)}**${d.verified ? '  |  **verified**' : ''}${d.compressed ? '  |  gzip' : ''}`);
+  lines.push(`size: **${formatBytes(d.size_bytes || 0)}**${d.verified ? ' | **verified**' : ''}${d.compressed ? ' | gzip' : ''}`);
   if (d.sha256) lines.push(`sha256: \`${d.sha256}\``);
   lines.push(`backup_id: \`${d.backup_id}\``);
   return lines.join('\n');
@@ -410,7 +410,7 @@ function renderBackupList(result) {
   if (!result.success) return defaultRender(result);
   const d = result.data;
   const lines = [];
-  lines.push(`[ok] **ssh_backup_list**  |  \`${result.server}\`  |  **${d.count}** backup${d.count === 1 ? '' : 's'}`);
+  lines.push(`[ok] **ssh_backup_list** | \`${result.server}\` | **${d.count}** backup${d.count === 1 ? '' : 's'}`);
   lines.push(`dir: \`${d.backup_dir}\``);
   if (d.count === 0) {
     lines.push('');
@@ -420,7 +420,7 @@ function renderBackupList(result) {
   lines.push('');
   for (const b of d.backups.slice(0, 25)) {
     const verified = b.verified ? ' [ok]' : '';
-    lines.push(`- \`${b.backup_id}\`${verified}  |  \`${b.backup_type}\`  |  ${formatBytes(b.size_bytes || 0)}  |  ${b.created_at || '?'}`);
+    lines.push(`- \`${b.backup_id}\`${verified} | \`${b.backup_type}\` | ${formatBytes(b.size_bytes || 0)} | ${b.created_at || '?'}`);
     lines.push(`  \`${b.output_path}\``);
   }
   if (d.backups.length > 25) {
@@ -601,9 +601,9 @@ function renderBackupRestore(result) {
   if (!result.success) return defaultRender(result);
   const d = result.data;
   const meta = result.meta || {};
-  const dur = meta.duration_ms != null ? `  |  \`${formatDuration(meta.duration_ms)}\`` : '';
+  const dur = meta.duration_ms != null ? ` | \`${formatDuration(meta.duration_ms)}\`` : '';
   const lines = [];
-  lines.push(`[ok] **ssh_backup_restore**  |  \`${result.server}\`  |  \`${d.backup_type}\`${dur}`);
+  lines.push(`[ok] **ssh_backup_restore** | \`${result.server}\` | \`${d.backup_type}\`${dur}`);
   lines.push(`from: \`${d.restored_from}\``);
   if (d.target_path) lines.push(`target: \`${d.target_path}\``);
   if (d.database) lines.push(`database: \`${d.database}\``);
@@ -730,9 +730,9 @@ function renderBackupSchedule(result) {
   if (!result.success) return defaultRender(result);
   const d = result.data;
   const meta = result.meta || {};
-  const dur = meta.duration_ms != null ? `  |  \`${formatDuration(meta.duration_ms)}\`` : '';
+  const dur = meta.duration_ms != null ? ` | \`${formatDuration(meta.duration_ms)}\`` : '';
   const lines = [];
-  lines.push(`[ok] **ssh_backup_schedule**  |  \`${result.server}\`  |  \`${d.backup_type}\`${dur}`);
+  lines.push(`[ok] **ssh_backup_schedule** | \`${result.server}\` | \`${d.backup_type}\`${dur}`);
   lines.push(`cron: \`${d.cron}\``);
   lines.push(`output template: \`${d.output_template}\``);
   lines.push(`marker: \`${d.marker}\``);

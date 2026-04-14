@@ -27,10 +27,10 @@ const COLORS = {
   RESET: '\x1b[0m'
 };
 
-// Level tags
+// Level tags — 6-char fixed-width for column alignment
 const ICONS = {
   DEBUG: '[dbg] ',
-  INFO:  '[ok]  ',
+  INFO:  '[info]',
   WARN:  '[warn]',
   ERROR: '[err] '
 };
@@ -103,10 +103,11 @@ class Logger {
     const timestamp = new Date().toISOString();
     const levelName = Object.keys(LOG_LEVELS).find(key => LOG_LEVELS[key] === level) || 'INFO';
 
-    // Console format with colors
-    const consoleFormat = `${COLORS[levelName]}${ICONS[levelName]} [${timestamp}] [${levelName}]${COLORS.RESET} ${message}`;
+    // Console format with colors: "[info] 05:04:18  message"
+    const time = timestamp.slice(11, 19); // HH:MM:SS
+    const consoleFormat = `${COLORS[levelName]}${ICONS[levelName]}${COLORS.RESET} ${time}  ${message}`;
 
-    // File format without colors
+    // File format without colors (retains full ISO timestamp + level)
     const fileFormat = `[${timestamp}] [${levelName}] ${message}`;
 
     // Add data if present

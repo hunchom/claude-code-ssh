@@ -252,10 +252,7 @@ let toolConfig = null;
 try {
   toolConfig = await loadToolConfig();
   const summary = toolConfig.getSummary();
-  logger.info(`Tool configuration loaded: ${summary.mode} mode, ${summary.enabledCount}/${summary.totalTools} tools enabled`);
-  if (summary.mode === 'all') {
-    logger.info('[tip] Tip: Run "ssh-manager tools configure" to reduce context usage in Claude Code');
-  }
+  logger.info(`tools: ${summary.enabledCount}/${summary.totalTools} enabled (${summary.mode})`);
 } catch (error) {
   logger.error('Failed to load tool configuration', { error: error.message });
   logger.info('Using default configuration (all tools enabled)');
@@ -2516,11 +2513,21 @@ async function main() {
   const serverList = Object.keys(servers);
   const activeProfile = getActiveProfileName();
 
-  console.error('[run] MCP SSH Manager Server started');
-  console.error(`[pkg] Profile: ${activeProfile}`);
-  console.error(`[host]  Available servers: ${serverList.length > 0 ? serverList.join(', ') : 'none configured'}`);
-  console.error('[tip] Use server-manager.py to configure servers');
-  console.error('[sync] Connection management: Auto-reconnect enabled, 30min timeout');
+  const servers_str = serverList.length > 0 ? serverList.join(', ') : 'none configured';
+  const tools_summary = toolConfig ? (() => {
+    const s = toolConfig.getSummary();
+    return `${s.enabledCount} of ${s.totalTools} enabled (${s.mode})`;
+  })() : '37 of 37 enabled';
+
+  console.error('');
+  console.error('  mcp-ssh-manager 1.2.0');
+  console.error('  -----------------------------------------------');
+  console.error(`  profile   ${activeProfile}`);
+  console.error(`  servers   ${servers_str}`);
+  console.error(`  tools     ${tools_summary}`);
+  console.error('  pooling   auto-reconnect, 30m idle timeout');
+  console.error('  -----------------------------------------------');
+  console.error('');
 
   // Set up periodic cleanup of old connections (every 10 minutes)
   setInterval(() => {

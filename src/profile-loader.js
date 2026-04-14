@@ -50,10 +50,10 @@ export function loadProfile(profileName = null) {
       const profileData = fs.readFileSync(profilePath, 'utf8');
       const profile = JSON.parse(profileData);
 
-      console.error(`[ok]   profile loaded: ${profile.name} - ${profile.description}`);
+      console.error(`[info] profile loaded: ${profile.name} (${profile.description})`);
       return profile;
     } else {
-      console.error(`[warn] profile '${name}' not found, using default profile`);
+      console.error(`[warn] profile '${name}' not found, falling back to default`);
       return loadDefaultProfile();
     }
   } catch (error) {

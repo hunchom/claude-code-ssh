@@ -127,7 +127,7 @@ await test('parseDf: output=source,size,used,avail,pcent,target', () => {
 
 await test('parseNetDev: skips lo, extracts rx/tx bytes', () => {
   const sample = [
-    'Inter-|   Receive                                                |  Transmit',
+    'Inter-|   Receive                                               | Transmit',
     ' face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed',
     '    lo:  12345      56    0    0    0     0          0         0 12345      56    0    0    0     0       0          0',
     '  eth0: 1000000    100    0    0    0     0          0         0 2000000    200    1    0    0     0       0          0',
@@ -415,7 +415,7 @@ await test('ssh_monitor disk: typed disk array', async () => {
 
 await test('ssh_monitor network: typed network array', async () => {
   const stdout = [
-    'Inter-|   Receive                                                |  Transmit',
+    'Inter-|   Receive                                               | Transmit',
     ' face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed',
     '  eth0: 100    10    0    0    0     0          0         0 200    20    0    0    0     0       0          0',
   ].join('\n');

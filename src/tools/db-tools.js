@@ -364,10 +364,10 @@ function renderDbQuery(result) {
   if (!result.success) return defaultRender(result);
   const d = result.data;
   const lines = [];
-  const dur = result.meta?.duration_ms != null ? `  |  \`${formatDuration(result.meta.duration_ms)}\`` : '';
-  lines.push(`[ok] **ssh_db_query**  |  \`${result.server}\`  |  \`${d.db_type}\`${dur}`);
+  const dur = result.meta?.duration_ms != null ? ` | \`${formatDuration(result.meta.duration_ms)}\`` : '';
+  lines.push(`[ok] **ssh_db_query** | \`${result.server}\` | \`${d.db_type}\`${dur}`);
   if (d.columns) {
-    lines.push(`${d.row_count} row${d.row_count === 1 ? '' : 's'}  |  ${d.columns.length} column${d.columns.length === 1 ? '' : 's'}`);
+    lines.push(`${d.row_count} row${d.row_count === 1 ? '' : 's'} | ${d.columns.length} column${d.columns.length === 1 ? '' : 's'}`);
     if (d.columns.length > 0) {
       lines.push('');
       lines.push('| ' + d.columns.join(' | ') + ' |');

@@ -223,11 +223,11 @@ export function renderSystemctl(result) {
     lines.push('```');
     return lines.join('\n');
   }
-  const srv = result.server ? `  |  \`${result.server}\`` : '';
+  const srv = result.server ? ` | \`${result.server}\`` : '';
 
   if (d.action === 'status' && d.unit) {
     const lines = [];
-    lines.push(`${fmtBadge(d.active_state)}  |  **ssh_systemctl status**  |  \`${d.unit}\`${srv}`);
+    lines.push(`${fmtBadge(d.active_state)} | **ssh_systemctl status** | \`${d.unit}\`${srv}`);
     lines.push('');
     lines.push(renderKV([
       ['active', d.active_state ?? '--'],
@@ -250,7 +250,7 @@ export function renderSystemctl(result) {
   }
 
   if (d.action === 'list-units') {
-    const lines = [`[ok] **ssh_systemctl list-units**${srv}  |  ${d.units.length} units`];
+    const lines = [`[ok] **ssh_systemctl list-units**${srv} | ${d.units.length} units`];
     if (d.units.length) {
       lines.push('');
       lines.push('| unit | load | active | sub | description |');
@@ -264,7 +264,7 @@ export function renderSystemctl(result) {
   }
 
   if (d.action === 'list-unit-files') {
-    const lines = [`[ok] **ssh_systemctl list-unit-files**${srv}  |  ${d.units.length} files`];
+    const lines = [`[ok] **ssh_systemctl list-unit-files**${srv} | ${d.units.length} files`];
     if (d.units.length) {
       lines.push('');
       lines.push('| unit | state | vendor_preset |');
@@ -279,8 +279,8 @@ export function renderSystemctl(result) {
   // Mutation result
   const badge = d.exit_code === 0 ? '[ok]' : '[err]';
   const lines = [];
-  const target = d.unit ? `  |  \`${d.unit}\`` : '';
-  lines.push(`${badge} **ssh_systemctl ${d.action}**${target}${srv}  |  exit ${d.exit_code}`);
+  const target = d.unit ? ` | \`${d.unit}\`` : '';
+  lines.push(`${badge} **ssh_systemctl ${d.action}**${target}${srv} | exit ${d.exit_code}`);
   if (d.result) {
     lines.push('');
     lines.push('```text');

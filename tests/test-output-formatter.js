@@ -212,12 +212,12 @@ test('renderMarkdown: success header uses [ok] marker and bold exit 0', () => {
   const firstLine = md.split('\n')[0];
   assert(firstLine.startsWith('[ok] **ssh_execute**'), `expected [ok] marker, got: ${firstLine}`);
   assert(firstLine.includes('`prod01`'), 'server in backticks');
-  assert(firstLine.includes('**exit 0**'), 'exit 0 bolded');
-  assert(firstLine.includes('`2.34 s`'), 'duration in backticks with unit');
+  assert(firstLine.includes('exit 0'), 'exit 0 present');
+  assert(firstLine.includes('2.34 s'), 'duration with unit');
   assert(md.includes('`$ x`'), 'command shown with $ prefix in backticks');
 });
 
-test('renderMarkdown: failure header uses [err] marker and bold exit N', () => {
+test('renderMarkdown: failure header uses [err] marker', () => {
   const md = renderMarkdown({
     server: 's', command: 'false', cwd: null, exit_code: 127, success: false,
     duration_ms: 0, stdout: '', stderr: 'not found',
@@ -225,7 +225,7 @@ test('renderMarkdown: failure header uses [err] marker and bold exit N', () => {
   });
   const firstLine = md.split('\n')[0];
   assert(firstLine.startsWith('[err] **ssh_execute**'), 'failure marker');
-  assert(firstLine.includes('**exit 127**'), 'exit 127 bolded');
+  assert(firstLine.includes('exit 127'), 'exit 127 present');
   assert(md.includes('**stderr**'), 'stderr label');
   assert(md.includes('not found'));
 });
@@ -339,7 +339,7 @@ test('integration: 100KB log with ANSI + error at tail round-trips through all h
   assert(r.truncated.stdout_bytes > 0);
 
   const md = renderMarkdown(r);
-  assert(md.includes('**exit 139**'), 'failure exit badge');
+  assert(md.includes('exit 139'), 'failure exit badge');
   assert(md.includes('elided'), 'truncation marker present');
   assert(md.startsWith('[err]'), 'failure marker leads the header');
 

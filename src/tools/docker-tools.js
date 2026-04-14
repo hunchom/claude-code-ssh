@@ -165,11 +165,11 @@ export function renderDocker(result) {
     lines.push('```');
     return lines.join('\n');
   }
-  const srv = result.server ? `  |  \`${result.server}\`` : '';
-  const dur = result.meta?.duration_ms != null ? `  |  \`${formatDuration(result.meta.duration_ms)}\`` : '';
+  const srv = result.server ? ` | \`${result.server}\`` : '';
+  const dur = result.meta?.duration_ms != null ? ` | \`${formatDuration(result.meta.duration_ms)}\`` : '';
 
   if (d.action === 'ps') {
-    const lines = [`[ok] **ssh_docker ps**${srv}  |  ${d.containers.length} containers${dur}`];
+    const lines = [`[ok] **ssh_docker ps**${srv} | ${d.containers.length} containers${dur}`];
     if (d.containers.length) {
       lines.push('');
       lines.push('| id | name | image | status | ports |');
@@ -184,7 +184,7 @@ export function renderDocker(result) {
   }
 
   if (d.action === 'logs') {
-    const lines = [`[ok] **ssh_docker logs**  |  \`${d.container}\`${srv}${dur}`];
+    const lines = [`[ok] **ssh_docker logs** | \`${d.container}\`${srv}${dur}`];
     if (d.output) {
       lines.push('');
       lines.push('```text');
@@ -196,7 +196,7 @@ export function renderDocker(result) {
 
   if (d.action === 'exec') {
     const badge = d.exit_code === 0 ? '[ok]' : '[err]';
-    const lines = [`${badge} **ssh_docker exec**  |  \`${d.container}\`${srv}  |  exit ${d.exit_code}${dur}`];
+    const lines = [`${badge} **ssh_docker exec** | \`${d.container}\`${srv} | exit ${d.exit_code}${dur}`];
     lines.push(`\`$ ${d.command}\``);
     if (d.stdout) {
       lines.push('');
@@ -215,7 +215,7 @@ export function renderDocker(result) {
   }
 
   if (d.action === 'inspect') {
-    const lines = [`[ok] **ssh_docker inspect**  |  \`${d.container}\`${srv}${dur}`];
+    const lines = [`[ok] **ssh_docker inspect** | \`${d.container}\`${srv}${dur}`];
     lines.push('');
     lines.push('```json');
     lines.push(JSON.stringify(d.inspect, null, 2));
@@ -226,7 +226,7 @@ export function renderDocker(result) {
   // stop/start/restart/rm/pull
   const badge = d.exit_code === 0 ? '[ok]' : '[err]';
   const target = d.container || d.image || '';
-  const lines = [`${badge} **ssh_docker ${d.action}**  |  \`${target}\`${srv}  |  exit ${d.exit_code}${dur}`];
+  const lines = [`${badge} **ssh_docker ${d.action}** | \`${target}\`${srv} | exit ${d.exit_code}${dur}`];
   if (d.output) {
     lines.push('');
     lines.push('```text');

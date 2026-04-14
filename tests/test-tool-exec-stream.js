@@ -71,7 +71,7 @@ await test('success returns markdown content with [ok] marker and exit 0 badge',
   const md = r.content[0].text;
   assert(md.startsWith('[ok] **ssh_execute**'), 'success marker');
   assert(md.includes('`prod01`'));
-  assert(md.includes('**exit 0**'));
+  assert(md.includes('exit 0'));
   assert(md.includes('*(in `/var/app`)*'));
   assert(md.includes('hi'));
 });
@@ -84,7 +84,7 @@ await test('non-zero exit is NOT isError (command ran, just failed)', async () =
   s.emit('close', 1);
   const r = await p;
   assert.strictEqual(r.isError, undefined);
-  assert(r.content[0].text.includes('**exit 1**'));
+  assert(r.content[0].text.includes('exit 1'));
   assert(r.content[0].text.startsWith('[err] **ssh_execute**'));
 });
 
@@ -93,7 +93,7 @@ await test('exec error -> isError:true with stderr populated', async () => {
   const r = await runStreamedExec({ client, server: 's', command: 'anything' });
   assert.strictEqual(r.isError, true);
   assert(r.content[0].text.includes('connection refused'));
-  assert(r.content[0].text.includes('**exit -1**'));
+  assert(r.content[0].text.includes('exit -1'));
 });
 
 await test('timeout bubbles up as isError:true with timeout message', async () => {

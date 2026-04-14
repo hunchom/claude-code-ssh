@@ -395,10 +395,10 @@ function withTimeout(promise, ms, label) {
 function renderDeploy(result) {
   const d = result.data || result.meta || {};
   const meta = result.meta || {};
-  const dur = meta.duration_ms != null ? `  |  \`${formatDuration(meta.duration_ms)}\`` : '';
+  const dur = meta.duration_ms != null ? ` | \`${formatDuration(meta.duration_ms)}\`` : '';
   const marker = result.success ? '[ok]' : '[err]';
   const lines = [];
-  lines.push(`${marker} **ssh_deploy**  |  \`${result.server || '?'}\`${dur}`);
+  lines.push(`${marker} **ssh_deploy** | \`${result.server || '?'}\`${dur}`);
 
   if (!result.success) {
     lines.push(`**failed**: ${result.error || 'unknown'}`);
@@ -407,16 +407,16 @@ function renderDeploy(result) {
   const targetPath = d.target_path || meta.target_path;
   if (targetPath) lines.push(`target: \`${targetPath}\``);
   if (d.artifact_sha256) {
-    lines.push(`artifact: ${formatBytes(d.artifact_bytes || 0)}  |  sha256 \`${String(d.artifact_sha256).slice(0, 16)}...\``);
+    lines.push(`artifact: ${formatBytes(d.artifact_bytes || 0)} | sha256 \`${String(d.artifact_sha256).slice(0, 16)}...\``);
   }
-  lines.push(`deployed: **${d.deployed ? 'yes' : 'no'}**  |  rolled_back: **${d.rolled_back ? 'yes' : 'no'}**`);
+  lines.push(`deployed: **${d.deployed ? 'yes' : 'no'}** | rolled_back: **${d.rolled_back ? 'yes' : 'no'}**`);
   if (d.prev_snapshot_path) lines.push(`snapshot: \`${d.prev_snapshot_path}\``);
   if (Array.isArray(d.hook_results) && d.hook_results.length) {
     lines.push('');
     lines.push('**post_hooks:**');
     for (const h of d.hook_results) {
       const m = h.exit_code === 0 ? '[ok]' : '[err]';
-      lines.push(`${m} \`${h.command}\` -- exit ${h.exit_code}  |  \`${formatDuration(h.duration_ms)}\``);
+      lines.push(`${m} \`${h.command}\` -- exit ${h.exit_code} | \`${formatDuration(h.duration_ms)}\``);
     }
   }
   if (d.health_check_exit_code != null) {

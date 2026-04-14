@@ -259,7 +259,7 @@ export function parsePsInfo(text) {
 
 /**
  * Parse `cat /proc/net/dev`:
- *   Inter-|   Receive                                                |  Transmit
+ *   Inter-|   Receive                                               | Transmit
  *    face |bytes    packets errs ...
  *     eth0: 12345 67 0 0 0 0 0 0 54321 89 0 0 0 0 0 0
  */
@@ -364,9 +364,9 @@ export function renderHealthCheck(result) {
   const d = result.data;
   if (d && d.preview) return defaultPreviewRender(result);
   const lines = [];
-  const dur = result.meta?.duration_ms != null ? `  |  \`${formatDuration(result.meta.duration_ms)}\`` : '';
-  const srv = result.server ? `  |  \`${result.server}\`` : '';
-  lines.push(`${statusBadge(d.status)}  |  **ssh_health_check**${srv}${dur}`);
+  const dur = result.meta?.duration_ms != null ? ` | \`${formatDuration(result.meta.duration_ms)}\`` : '';
+  const srv = result.server ? ` | \`${result.server}\`` : '';
+  lines.push(`${statusBadge(d.status)} | **ssh_health_check**${srv}${dur}`);
   lines.push('');
   if (d.cpu) {
     lines.push('**CPU**');
@@ -418,8 +418,8 @@ export function renderMonitor(result) {
   const d = result.data;
   if (d && d.preview) return defaultPreviewRender(result);
   const type = d.type;
-  const srv = result.server ? `  |  \`${result.server}\`` : '';
-  const lines = [`[ok] **ssh_monitor**  |  \`${type}\`${srv}`];
+  const srv = result.server ? ` | \`${result.server}\`` : '';
+  const lines = [`[ok] **ssh_monitor** | \`${type}\`${srv}`];
   lines.push('');
   if (type === 'cpu' && d.cpu) {
     lines.push(renderKV([
@@ -461,7 +461,7 @@ export function renderServiceStatus(result) {
   if (!result.success) return `[err] **ssh_service_status** -- ${result.error || 'failed'}`;
   const d = result.data;
   if (d && d.preview) return defaultPreviewRender(result);
-  const srv = result.server ? `  |  \`${result.server}\`` : '';
+  const srv = result.server ? ` | \`${result.server}\`` : '';
   const active = d.active_state || 'unknown';
   const badge =
     active === 'active' ? '[ok] **active**' :
@@ -469,7 +469,7 @@ export function renderServiceStatus(result) {
     active === 'inactive' ? '[warn] **inactive**' :
     `| \`${active}\``;
   const lines = [];
-  lines.push(`${badge}  |  **ssh_service_status**  |  \`${d.service}\`${srv}`);
+  lines.push(`${badge} | **ssh_service_status** | \`${d.service}\`${srv}`);
   lines.push('');
   lines.push(renderKV([
     ['active', d.active_state ?? '--'],
@@ -504,16 +504,16 @@ export function renderProcessManager(result) {
   if (!result.success) return `[err] **ssh_process_manager** -- ${result.error || 'failed'}`;
   const d = result.data;
   if (d && d.preview) return defaultPreviewRender(result);
-  const srv = result.server ? `  |  \`${result.server}\`` : '';
+  const srv = result.server ? ` | \`${result.server}\`` : '';
   if (d.action === 'list') {
-    const lines = [`[ok] **ssh_process_manager**  |  \`list\`${srv}`];
+    const lines = [`[ok] **ssh_process_manager** | \`list\`${srv}`];
     lines.push('');
     lines.push(renderProcTable(d.processes || []));
     return lines.join('\n');
   }
   if (d.action === 'info') {
     const p = d.process || {};
-    const lines = [`[ok] **ssh_process_manager**  |  \`info\`  |  pid \`${p.pid ?? '?'}\`${srv}`];
+    const lines = [`[ok] **ssh_process_manager** | \`info\` | pid \`${p.pid ?? '?'}\`${srv}`];
     lines.push('');
     lines.push(renderKV([
       ['pid', p.pid ?? '--'],
@@ -529,7 +529,7 @@ export function renderProcessManager(result) {
     return lines.join('\n');
   }
   if (d.action === 'kill') {
-    const lines = [`[ok] **ssh_process_manager**  |  \`kill\`${srv}`];
+    const lines = [`[ok] **ssh_process_manager** | \`kill\`${srv}`];
     lines.push('');
     lines.push(renderKV([
       ['pid', d.pid],

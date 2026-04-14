@@ -47,8 +47,7 @@ export class ToolConfigManager {
         }
       } else {
         // No config file - default to all tools enabled
-        logger.info('No tool configuration found, enabling all tools (default)');
-        logger.info('Run "ssh-manager tools configure" to optimize and reduce context usage');
+        logger.info('no tool config found; enabling all tools');
         this.config = this.getDefaultConfig();
       }
     } catch (error) {

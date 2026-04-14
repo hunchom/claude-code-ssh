@@ -107,7 +107,7 @@ export function formatDuration(ms) {
  * Render an ExecResult as cool, scannable Claude Code markdown.
  *
  * Layout:
- *   [ok] **ssh_execute**  |  `server`  |  **exit 0**  |  `2.34 s`
+ *   [ok] **ssh_execute** | `server` | **exit 0** | `2.34 s`
  *   `$ <command>`   *(in /some/cwd)*
  *
  *   ```
@@ -128,13 +128,13 @@ export function formatDuration(ms) {
 export function renderMarkdown(r) {
   const ok = r.success;
   const marker = ok ? '[ok]' : '[err]';
-  const exitBadge = ok ? '**exit 0**' : `**exit ${r.exit_code}**`;
-  const duration = `\`${formatDuration(r.duration_ms)}\``;
+  const exitText = ok ? 'exit 0' : `exit ${r.exit_code}`;
+  const duration = formatDuration(r.duration_ms);
 
   const lines = [];
-  lines.push(`${marker} **ssh_execute**  |  \`${r.server}\`  |  ${exitBadge}  |  ${duration}`);
+  lines.push(`${marker} **ssh_execute** | \`${r.server}\` | ${exitText} | ${duration}`);
 
-  const cwdFragment = r.cwd ? `   *(in \`${r.cwd}\`)*` : '';
+  const cwdFragment = r.cwd ? `  *(in \`${r.cwd}\`)*` : '';
   lines.push(`\`$ ${r.command}\`${cwdFragment}`);
 
   if (r.stdout) {

@@ -89,18 +89,18 @@ export function toMcp(result, { format = 'markdown', renderer } = {}) {
 /**
  * Default markdown renderer. Tools override for richer cards.
  * Layout:
- *   [ok] **<tool>**  |  `server`  |  <duration?>
+ *   [ok] **<tool>** | `server` | <duration?>
  *   <data-as-compact-json>
  *   > elided: ... (if meta.truncated)
  */
 export function defaultRender(result) {
   const { success, tool, server, data, meta, error } = result;
   const marker = success ? '[ok]' : '[err]';
-  const badge = success ? '' : '  |  **failed**';
+  const badge = success ? '' : ' | **failed**';
   const duration = meta && meta.duration_ms != null
-    ? `  |  \`${formatDuration(meta.duration_ms)}\``
+    ? ` | \`${formatDuration(meta.duration_ms)}\``
     : '';
-  const srv = server ? `  |  \`${server}\`` : '';
+  const srv = server ? ` | \`${server}\`` : '';
   const header = `${marker} **${tool}**${srv}${duration}${badge}`;
 
   const lines = [header];

@@ -541,7 +541,7 @@ function renderSessionStart(result) {
   if (!result.success) return defaultRender(result);
   const d = result.data;
   const lines = [];
-  lines.push(`[ok] **ssh_session_start**  |  \`${d.server}\`  |  \`${result.meta?.duration_ms != null ? formatDuration(result.meta.duration_ms) : ''}\``);
+  lines.push(`[ok] **ssh_session_start** | \`${d.server}\` | \`${result.meta?.duration_ms != null ? formatDuration(result.meta.duration_ms) : ''}\``);
   lines.push('');
   lines.push(`- **session_id**: \`${d.session_id}\``);
   lines.push(`- **shell**: \`${d.shell}\``);
@@ -617,7 +617,7 @@ function renderSessionSend(result) {
   const marker = good ? '[ok]' : '[err]';
   const badge = good ? '**exit 0**' : `**exit ${d.exit_code}**`;
   const lines = [];
-  lines.push(`${marker} **ssh_session_send**  |  \`${result.server}\`  |  ${badge}  |  \`${formatDuration(d.duration_ms)}\``);
+  lines.push(`${marker} **ssh_session_send** | \`${result.server}\` | ${badge} | \`${formatDuration(d.duration_ms)}\``);
   lines.push(`\`$ ${d.command}\`   *(in \`${d.cwd_after}\`)*`);
   if (d.stdout && d.stdout.trim()) {
     lines.push('');

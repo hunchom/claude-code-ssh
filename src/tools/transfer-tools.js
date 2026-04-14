@@ -384,14 +384,14 @@ function renderTransferMarkdown(tool) {
     const d = result.data;
     const meta = result.meta || {};
     const lines = [];
-    const duration = meta.duration_ms != null ? `  |  \`${formatDuration(meta.duration_ms)}\`` : '';
-    lines.push(`[ok] **${tool}**  |  \`${result.server || '?'}\`${duration}`);
+    const duration = meta.duration_ms != null ? ` | \`${formatDuration(meta.duration_ms)}\`` : '';
+    lines.push(`[ok] **${tool}** | \`${result.server || '?'}\`${duration}`);
     if (tool === 'ssh_upload') {
       lines.push(`\`${d.local_path}\` -> \`${d.remote_path}\``);
-      lines.push(`bytes: **${formatBytes(d.uploaded_bytes)}**${d.verified ? '  |  **verified**' : ''}`);
+      lines.push(`bytes: **${formatBytes(d.uploaded_bytes)}**${d.verified ? ' | **verified**' : ''}`);
     } else {
       lines.push(`\`${d.remote_path}\` -> \`${d.local_path}\``);
-      lines.push(`bytes: **${formatBytes(d.downloaded_bytes)}**${d.verified ? '  |  **verified**' : ''}`);
+      lines.push(`bytes: **${formatBytes(d.downloaded_bytes)}**${d.verified ? ' | **verified**' : ''}`);
     }
     if (d.local_sha256) lines.push(`local sha256: \`${d.local_sha256}\``);
     if (d.remote_sha256) lines.push(`remote sha256: \`${d.remote_sha256}\``);
@@ -582,10 +582,10 @@ function renderSyncMarkdown(result) {
   const d = result.data;
   const meta = result.meta || {};
   const lines = [];
-  const duration = meta.duration_ms != null ? `  |  \`${formatDuration(meta.duration_ms)}\`` : '';
-  lines.push(`[ok] **ssh_sync**  |  \`${result.server || '?'}\`  |  \`${d.direction}\`${duration}`);
+  const duration = meta.duration_ms != null ? ` | \`${formatDuration(meta.duration_ms)}\`` : '';
+  lines.push(`[ok] **ssh_sync** | \`${result.server || '?'}\` | \`${d.direction}\`${duration}`);
   lines.push(`\`${d.local_path}\` ${d.direction === 'push' ? '->' : '<-'} \`${d.remote_path}\``);
-  lines.push(`files: **${d.files_transferred}**  |  bytes: **${formatBytes(d.bytes_transferred)}**${d.dry_run ? '  |  **dry run**' : ''}`);
+  lines.push(`files: **${d.files_transferred}** | bytes: **${formatBytes(d.bytes_transferred)}**${d.dry_run ? ' | **dry run**' : ''}`);
   return lines.join('\n');
 }
 
@@ -709,7 +709,7 @@ function renderDiffMarkdown(result) {
   const d = result.data;
   const lines = [];
   const marker = d.identical ? '[ok]' : '*';
-  lines.push(`${marker} **ssh_diff**  |  \`${d.path_a}\`  vs  \`${d.path_b}\`  |  ${d.identical ? '**identical**' : '**differ**'}`);
+  lines.push(`${marker} **ssh_diff** | \`${d.path_a}\`  vs  \`${d.path_b}\` | ${d.identical ? '**identical**' : '**differ**'}`);
   if (d.stdout) {
     lines.push('');
     lines.push('```diff');
@@ -883,10 +883,10 @@ function renderEditMarkdown(result) {
   if (!result.success) return defaultRender(result);
   const d = result.data;
   const meta = result.meta || {};
-  const duration = meta.duration_ms != null ? `  |  \`${formatDuration(meta.duration_ms)}\`` : '';
+  const duration = meta.duration_ms != null ? ` | \`${formatDuration(meta.duration_ms)}\`` : '';
   const lines = [];
-  lines.push(`[ok] **ssh_edit**  |  \`${result.server || '?'}\`  |  \`${d.mode}\`${duration}`);
-  lines.push(`\`${d.path}\`  |  backup: \`${d.backup_path}\`  |  ${formatBytes(d.bytes_written)}${d.syntax_check ? `  |  syntax: **${d.syntax_check}** ok` : ''}`);
+  lines.push(`[ok] **ssh_edit** | \`${result.server || '?'}\` | \`${d.mode}\`${duration}`);
+  lines.push(`\`${d.path}\` | backup: \`${d.backup_path}\` | ${formatBytes(d.bytes_written)}${d.syntax_check ? ` | syntax: **${d.syntax_check}** ok` : ''}`);
   if (d.diff) {
     lines.push('');
     lines.push('```diff');

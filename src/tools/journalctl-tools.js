@@ -171,10 +171,10 @@ export function parseJournalJsonl(text) {
 export function renderJournalctl(result) {
   if (!result.success) return `[err] **ssh_journalctl** -- ${result.error || 'failed'}`;
   const d = result.data;
-  const srv = result.server ? `  |  \`${result.server}\`` : '';
-  const dur = result.meta?.duration_ms != null ? `  |  \`${formatDuration(result.meta.duration_ms)}\`` : '';
+  const srv = result.server ? ` | \`${result.server}\`` : '';
+  const dur = result.meta?.duration_ms != null ? ` | \`${formatDuration(result.meta.duration_ms)}\`` : '';
   const lines = [];
-  lines.push(`[ok] **ssh_journalctl**${srv}  |  ${d.count} entries${dur}`);
+  lines.push(`[ok] **ssh_journalctl**${srv} | ${d.count} entries${dur}`);
 
   if (d.entries && d.entries.length) {
     lines.push('');

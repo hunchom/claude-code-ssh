@@ -68,7 +68,7 @@ await test('ssh_execute: success renders [ok] marker + exit 0', async () => {
   assert.strictEqual(r.isError, undefined);
   const md = r.content[0].text;
   assert(md.startsWith('[ok] **ssh_execute**'));
-  assert(md.includes('**exit 0**'));
+  assert(md.includes('exit 0'));
   assert(md.includes('hi'));
 });
 
@@ -89,7 +89,7 @@ await test('ssh_execute: non-zero exit renders [err] marker (not isError)', asyn
   });
   assert.strictEqual(r.isError, undefined, 'non-zero is not tool-level error');
   assert(r.content[0].text.startsWith('[err] **ssh_execute**'));
-  assert(r.content[0].text.includes('**exit 127**'));
+  assert(r.content[0].text.includes('exit 127'));
 });
 
 await test('ssh_execute: connection failure -> isError with stderr explanation', async () => {

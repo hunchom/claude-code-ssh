@@ -252,13 +252,13 @@ function renderGroupMarkdown(result) {
   const lines = [];
   const ok = d.failed === 0;
   const marker = ok ? '[ok]' : '[err]';
-  lines.push(`${marker} **ssh_execute_group**  |  \`${d.group}\`  |  ${d.succeeded}/${d.total} ok`);
+  lines.push(`${marker} **ssh_execute_group** | \`${d.group}\` | ${d.succeeded}/${d.total} ok`);
   lines.push(`\`$ ${d.command}\`${d.cwd ? `   *(in \`${d.cwd}\`)*` : ''}`);
   lines.push('');
   for (const r of d.results) {
     const m = r.success ? '[ok]' : '[err]';
     const exitBadge = r.success ? '**exit 0**' : `**exit ${r.exit_code ?? -1}**`;
-    lines.push(`${m} \`${r.server}\`  |  ${exitBadge}  |  \`${(r.duration_ms / 1000).toFixed(2)} s\``);
+    lines.push(`${m} \`${r.server}\` | ${exitBadge} | \`${(r.duration_ms / 1000).toFixed(2)} s\``);
     if (r.stdout && r.stdout.trim()) {
       lines.push('```text');
       lines.push(r.stdout);
