@@ -1,7 +1,7 @@
 {
-  "name": "mcp-ssh-manager",
+  "name": "claude-code-ssh",
   "version": "3.2.2",
-  "description": "MCP SSH Manager: Model Context Protocol server for SSH remote server management. Control SSH connections from Claude Code and OpenAI Codex - execute commands, transfer files, database operations, backups, health monitoring, and DevOps automation. NEW: Tool activation system reduces context usage by 92%",
+  "description": "claude-code-ssh: MCP server giving Claude Code fifty-one focused SSH tools across your entire server fleet. Execute, transfer, query, backup, monitor, deploy — connection-pooled, per-user gated, context-lean.",
   "main": "src/index.js",
   "bin": {
     "mcp-ssh-manager": "src/index.js",
@@ -66,12 +66,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bvisible/mcp-ssh-manager.git"
+    "url": "git+https://github.com/hunchom/claude-code-ssh.git"
   },
   "bugs": {
-    "url": "https://github.com/bvisible/mcp-ssh-manager/issues"
+    "url": "https://github.com/hunchom/claude-code-ssh/issues"
   },
-  "homepage": "https://github.com/bvisible/mcp-ssh-manager#readme",
+  "homepage": "https://github.com/hunchom/claude-code-ssh#readme",
   "dependencies": {
     "@iarna/toml": "^2.2.5",
     "@modelcontextprotocol/sdk": "^1.17.2",
