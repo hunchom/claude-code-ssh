@@ -46,6 +46,18 @@ const sftpCb = (err, sftp) => {};
 mgr.sftp(sftpCb);
 assert(captured?.sftpCb === sftpCb, 'sftp forwards callback to underlying client');
 
+// --- shell passthrough (used by session-tools.js for interactive PTY) ---
+mgr.client.shell = function (optsOrCb, maybeCb) { captured = { shellOpts: optsOrCb, shellCb: maybeCb }; };
+assert(typeof mgr.shell === 'function', 'SSHManager.shell is a function');
+captured = null;
+const shellCb = () => {};
+mgr.shell(shellCb);
+assert(captured?.shellOpts === shellCb && captured?.shellCb === undefined, 'shell(cb) forwards cb as 1st arg (no opts)');
+captured = null;
+const shellOpts = { term: 'xterm-256color' };
+mgr.shell(shellOpts, shellCb);
+assert(captured?.shellOpts === shellOpts && captured?.shellCb === shellCb, 'shell(opts, cb) forwards both');
+
 // --- forwardOut callback-style (used by tunnel-tools.js) ---
 captured = null;
 const fwdCb = () => {};

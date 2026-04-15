@@ -149,6 +149,13 @@ class SSHManager {
     return this.client.sftp(cb);
   }
 
+  shell(opts, cb) {
+    if (typeof opts === 'function') { cb = opts; opts = undefined; }
+    return opts !== undefined
+      ? this.client.shell(opts, cb)
+      : this.client.shell(cb);
+  }
+
   async execCommand(command, options = {}) {
     if (!this.connected) {
       throw new Error('Not connected to SSH server');

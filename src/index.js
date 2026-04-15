@@ -2262,9 +2262,11 @@ registerToolConditional(
     description: 'systemctl wrapper (whitelisted actions, unit-name validated)',
     inputSchema: {
       server: z.string().describe('Server name'),
-      action: z.enum(['status', 'start', 'stop', 'restart', 'reload', 'enable', 'disable', 'is-active', 'is-enabled', 'list-units', 'daemon-reload']).describe('Action'),
-      unit: z.string().optional().describe('Unit name (e.g., nginx.service)'),
-      preview: z.boolean().optional().describe('Preview for mutating actions'),
+      action: z.enum(['status', 'start', 'stop', 'restart', 'reload', 'enable', 'disable', 'list-units', 'list-unit-files', 'daemon-reload']).describe('Action (use status for is-active/is-enabled info)'),
+      unit: z.string().optional().describe('Unit name, e.g. "nginx.service" (not required for list-units, list-unit-files, daemon-reload)'),
+      pattern: z.string().optional().describe('Unit-name glob for list-units/list-unit-files'),
+      use_sudo: z.boolean().optional().describe('Force sudo on/off (defaults: on for mutating actions, off for read-only)'),
+      preview: z.boolean().optional().describe('Preview mutating actions without running them'),
       format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
