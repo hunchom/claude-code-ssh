@@ -1,22 +1,36 @@
 <p align="center">
-  <img src="assets/repo-image.png" alt="claude-code-ssh" width="600" />
-</p>
-
-<h1 align="center">claude-code-ssh</h1>
-
-<p align="center">
-Stop being the middleman between Claude and your servers.
+  <img src="assets/hero.svg" alt="claude-code-ssh" width="900" />
 </p>
 
 <p align="center">
+  <a href="https://github.com/hunchom/claude-code-ssh/actions/workflows/test.yml"><img src="https://github.com/hunchom/claude-code-ssh/actions/workflows/test.yml/badge.svg" alt="tests"/></a>
+  <a href="https://github.com/hunchom/claude-code-ssh/releases"><img src="https://img.shields.io/github/v/tag/hunchom/claude-code-ssh?label=version&style=flat-square" alt="version"/></a>
   <img src="https://img.shields.io/badge/tools-51-brightgreen?style=flat-square" alt="51 tools" />
-  <img src="https://img.shields.io/badge/tests-551%20passing-brightgreen?style=flat-square" alt="551 tests" />
-  <img src="https://img.shields.io/badge/mcp-server-orange?style=flat-square" alt="MCP server" />
   <img src="https://img.shields.io/badge/node-%E2%89%A518-339933?style=flat-square" alt="node 18+" />
-  <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT" />
+  <a href="https://github.com/hunchom/claude-code-ssh/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-informational?style=flat-square" alt="MIT"/></a>
+</p>
+
+<p align="center">
+  <a href="#why">Why</a>
+  &middot;
+  <a href="#install">Install</a>
+  &middot;
+  <a href="#configure">Configure</a>
+  &middot;
+  <a href="#safety">Safety</a>
+  &middot;
+  <a href="#limitations">Limitations</a>
+  &middot;
+  <a href="#vs-raw-ssh--bash">vs raw ssh</a>
+  &middot;
+  <a href="https://github.com/hunchom/claude-code-ssh/wiki">Wiki</a>
 </p>
 
 ## Why
+
+<p align="center">
+  <img src="assets/repo-image.png" alt="operator directs the machine" width="560" />
+</p>
 
 Without an MCP, fleet ops through Claude looks like this:
 

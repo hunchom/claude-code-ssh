@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-label="claude-code-ssh">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&amp;family=Inter:wght@400;500;600&amp;display=swap');
+      .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .sans { font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    </style>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#111827"/>
+      <stop offset="100%" stop-color="#0B0F18"/>
+    </linearGradient>
+    <linearGradient id="accentBar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#39D353"/>
+      <stop offset="100%" stop-color="#4ADE80"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="40%" r="70%">
+      <stop offset="0%"   stop-color="#39D353" stop-opacity="0.12"/>
+      <stop offset="60%"  stop-color="#39D353" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#glow)"/>
+
+  <!-- Card frame -->
+  <rect x="4" y="4" width="1272" height="632" rx="10" ry="10"
+        fill="none" stroke="#2A3348" stroke-width="2"/>
+
+  <!-- Left accent bar -->
+  <rect x="12" y="12" width="4" height="616" rx="2" fill="url(#accentBar)"/>
+
+  <!-- Dotted grid (very subtle, adds texture) -->
+  <g fill="#1F2937" opacity="0.55">
+    <circle cx="120" cy="100" r="1.2"/>
+    <circle cx="200" cy="100" r="1.2"/>
+    <circle cx="280" cy="100" r="1.2"/>
+    <circle cx="1100" cy="100" r="1.2"/>
+    <circle cx="1180" cy="100" r="1.2"/>
+    <circle cx="120" cy="540" r="1.2"/>
+    <circle cx="200" cy="540" r="1.2"/>
+    <circle cx="1100" cy="540" r="1.2"/>
+    <circle cx="1180" cy="540" r="1.2"/>
+  </g>
+
+  <!-- Top-right status pill -->
+  <g transform="translate(1040, 60)">
+    <rect x="0" y="0" width="150" height="30" rx="15" fill="#1A2030" stroke="#2A3348" stroke-width="1"/>
+    <circle cx="18" cy="15" r="4" fill="#4ADE80"/>
+    <text x="32" y="19" class="mono" font-size="11" fill="#9AA3AF" letter-spacing="1">v3.2.2 · 551 tests</text>
+  </g>
+
+  <!-- Top-left marker -->
+  <text x="80" y="75" class="mono" font-size="13" fill="#6B7686" letter-spacing="3">
+    ~/ CLAUDE-CODE-SSH
+  </text>
+
+  <!-- Hero title -->
+  <text x="80" y="218" class="mono" font-weight="700" font-size="92" fill="#F5F7FA" letter-spacing="-3">
+    claude-code
+  </text>
+  <text x="80" y="318" class="mono" font-weight="700" font-size="92" fill="#39D353" letter-spacing="-3">
+    -ssh
+  </text>
+
+  <!-- Accent underline -->
+  <rect x="80" y="336" width="180" height="4" rx="2" fill="url(#accentBar)"/>
+
+  <!-- Tagline -->
+  <text x="80" y="398" class="sans" font-size="26" fill="#C6CBD4" font-weight="500">
+    Fifty-one typed SSH tools.
+    <tspan fill="#9AA3AF" font-weight="400">Seven opt-in groups.</tspan>
+  </text>
+  <text x="80" y="436" class="sans" font-size="26" fill="#9AA3AF" font-weight="400">
+    Zero credentials on argv. Zero writes through query.
+  </text>
+
+  <!-- Tool group ladder with highlighted terminal -->
+  <g transform="translate(80, 540)">
+    <!-- leading core group, framed -->
+    <rect x="-8" y="-24" width="52" height="34" rx="4" fill="#1A2030" stroke="#2A3348" stroke-width="1"/>
+    <text x="18" y="-2" text-anchor="middle" class="mono" font-size="14" fill="#C6CBD4" font-weight="500">core</text>
+
+    <text x="60" y="0" class="mono" font-size="16" fill="#4B5568">→</text>
+    <text x="92" y="0" class="mono" font-size="14" fill="#9AA3AF">sessions</text>
+    <text x="178" y="0" class="mono" font-size="16" fill="#4B5568">→</text>
+    <text x="210" y="0" class="mono" font-size="14" fill="#9AA3AF">monitoring</text>
+    <text x="320" y="0" class="mono" font-size="16" fill="#4B5568">→</text>
+    <text x="352" y="0" class="mono" font-size="14" fill="#9AA3AF">backup</text>
+    <text x="430" y="0" class="mono" font-size="16" fill="#4B5568">→</text>
+    <text x="462" y="0" class="mono" font-size="14" fill="#9AA3AF">database</text>
+    <text x="552" y="0" class="mono" font-size="16" fill="#4B5568">→</text>
+    <text x="584" y="0" class="mono" font-size="14" fill="#9AA3AF">advanced</text>
+    <text x="680" y="0" class="mono" font-size="16" fill="#4B5568">→</text>
+
+    <!-- terminal gamechanger group, in accent -->
+    <rect x="710" y="-24" width="126" height="34" rx="4" fill="#39D353" opacity="0.12"/>
+    <rect x="710" y="-24" width="126" height="34" rx="4" fill="none" stroke="#39D353" stroke-width="2"/>
+    <text x="773" y="-2" text-anchor="middle" class="mono" font-size="14" fill="#39D353" font-weight="700">gamechanger</text>
+
+    <text x="860" y="0" class="mono" font-size="13" fill="#6B7686" letter-spacing="2">CLAUDE PICKS</text>
+  </g>
+
+  <!-- Bottom-right coordinates -->
+  <text x="1200" y="598" text-anchor="end" class="mono" font-size="12" fill="#4B5568">
+    hunchom/claude-code-ssh · MIT
+  </text>
+</svg>
