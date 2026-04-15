@@ -2252,17 +2252,19 @@ registerToolConditional(
 registerToolConditional(
   'ssh_cat',
   {
-    description: 'Read remote file slices (line-range, head/tail, grep, offset+limit) -- UTF-8 safe',
+    description: 'Read remote file slices (head/tail/grep/byte-offset+limit/line-range) -- UTF-8 safe',
     inputSchema: {
       server: z.string().describe('Server name'),
-      path: z.string().describe('Remote file path'),
-      mode: z.enum(['full', 'head', 'tail', 'range', 'offset', 'grep']).optional().describe('Slice mode'),
-      lines: z.number().optional().describe('Number of lines (head/tail)'),
-      start: z.number().optional().describe('Start line (range mode)'),
-      end: z.number().optional().describe('End line (range mode)'),
-      offset: z.number().optional().describe('Byte offset'),
-      limit: z.number().optional().describe('Byte limit'),
-      pattern: z.string().optional().describe('grep pattern'),
+      file: z.string().describe('Remote file path'),
+      head: z.number().optional().describe('Read first N lines'),
+      tail: z.number().optional().describe('Read last N lines'),
+      grep: z.string().optional().describe('Extended-regex filter (grep -E)'),
+      line_start: z.number().optional().describe('Start line (1-indexed) for line range mode'),
+      line_end: z.number().optional().describe('End line (1-indexed) for line range mode'),
+      offset: z.number().optional().describe('Byte offset for byte slice mode'),
+      limit: z.number().optional().describe('Byte limit for byte slice mode'),
+      timeout: z.number().optional().describe('Timeout in ms (default 15000)'),
+      maxLen: z.number().optional().describe('Output truncation cap (default 10000 chars)'),
       format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
@@ -2326,13 +2328,14 @@ registerToolConditional(
 registerToolConditional(
   'ssh_port_test',
   {
-    description: 'Port reachability probe (DNS -> TCP -> TLS -> HTTP chain)',
+    description: 'Port reachability probe (configurable DNS -> TCP -> TLS -> HTTP chain)',
     inputSchema: {
-      server: z.string().optional().describe('Server for outbound probe from'),
-      host: z.string().describe('Target host'),
-      port: z.number().describe('Target port'),
-      protocol: z.enum(['tcp', 'tls', 'http', 'https']).optional().describe('Probe depth'),
-      timeout: z.number().optional().describe('Probe timeout (ms)'),
+      server: z.string().optional().describe('Server to launch the outbound probe from (omit for local probe)'),
+      target_host: z.string().describe('Target host or IP'),
+      target_port: z.number().optional().describe('Target port (required for tcp/tls/http probes)'),
+      probe_chain: z.array(z.enum(['dns', 'tcp', 'tls', 'http'])).optional().describe('Probe ordering (default ["dns","tcp","tls","http"])'),
+      timeout_ms_per_probe: z.number().optional().describe('Per-probe timeout in ms'),
+      continue_on_fail: z.boolean().optional().describe('Continue running later probes even if an earlier one fails'),
       format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
