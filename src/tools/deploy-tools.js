@@ -248,10 +248,14 @@ export async function handleSshDeploy({ getConnection, getSftp, args }) {
   );
   try { await uploadTimer; }
   catch (e) {
+    try { sftp.end(); } catch (_) { /* already closed */ }
     return toMcp(fail('ssh_deploy', `upload failed: ${e.message || e}`, {
       server, duration_ms: Date.now() - startedAt,
     }), { format });
   }
+  // Best-effort SFTP close: ssh2 GCs on connection end, but each open consumes
+  // a channel slot (default OpenSSH MaxSessions=10).
+  try { sftp.end(); } catch (_) { /* already closed */ }
 
   const artifactSha256 = await sha256Promise.catch(() => null);
 

@@ -54,3 +54,8 @@ id_ed25519*
 .server-groups.json
 archived/
 .gitnexus
+
+# Claude Code runtime artifacts
+.claude/scheduled_tasks.lock
+.claude/scheduled_tasks/
+.claude/.last_run

@@ -69,6 +69,16 @@ function sftpFastGet(sftp, remotePath, localPath) {
 }
 
 /**
+ * Best-effort close of an sftp subsystem channel. ssh2 will GC channels when
+ * the parent connection ends, but each open consumes a channel slot and the
+ * default OpenSSH MaxSessions is 10 -- closing keeps us well clear.
+ */
+function endSftp(sftp) {
+  if (!sftp) return;
+  try { sftp.end(); } catch (_) { /* already closed */ }
+}
+
+/**
  * Compute sha256 of a local file. Streams, so fine on larger files.
  */
 function sha256File(localPath) {
@@ -152,7 +162,12 @@ function applyPatches(current, patches) {
   for (const p of patches || []) {
     if (!p || typeof p.find !== 'string') continue;
     const flags = typeof p.flags === 'string' ? p.flags : 'g';
-    const re = new RegExp(p.find, flags);
+    let re;
+    try {
+      re = new RegExp(p.find, flags);
+    } catch (e) {
+      throw new Error(`invalid patch regex ${JSON.stringify(p.find)} (flags=${flags}): ${e.message}`);
+    }
     out = out.replace(re, p.replace != null ? String(p.replace) : '');
   }
   return out;
@@ -233,6 +248,8 @@ export async function handleSshUpload({ getConnection, args }) {
     await sftpFastPut(sftp, local_path, remote_path);
   } catch (e) {
     return toMcp(fail('ssh_upload', `upload failed: ${e.message || e}`, { server }), { format });
+  } finally {
+    endSftp(sftp);
   }
 
   const data = {
@@ -340,6 +357,8 @@ export async function handleSshDownload({ getConnection, args }) {
     await sftpFastGet(sftp, remote_path, local_path);
   } catch (e) {
     return toMcp(fail('ssh_download', `download failed: ${e.message || e}`, { server }), { format });
+  } finally {
+    endSftp(sftp);
   }
 
   let downloadedBytes = 0;

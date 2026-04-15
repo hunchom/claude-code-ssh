@@ -162,7 +162,10 @@ class SSHManager {
     }
 
     const { timeout = 30000, cwd, rawCommand = false } = options;
-    const fullCommand = (cwd && !rawCommand) ? `cd ${cwd} && ${command}` : command;
+    // shell-quote cwd to match stream-exec.js. Without this an arg like
+    // `'/tmp/foo;rm -rf /'` would inject into `cd ${cwd} && ...`.
+    const quotedCwd = cwd ? `'${String(cwd).replace(/'/g, '\'\\\'\'')}'` : null;
+    const fullCommand = (cwd && !rawCommand) ? `cd ${quotedCwd} && ${command}` : command;
 
     return new Promise((resolve, reject) => {
       let stdout = '';
