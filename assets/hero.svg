@@ -5,7 +5,7 @@
   thin underline bar, one-line tagline. Sits quiet under the dramatic
   repo-image.png so the image does the visual work.
 -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 200" width="1200" height="200" role="img" aria-label="claude-code-ssh — SSH for Claude Code">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 200" width="1200" height="200" role="img" aria-label="claude-code-ssh — a Claude Code plugin to give Claude wings">
   <defs>
     <style>
       .mono   { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace; }
@@ -31,6 +31,6 @@
 
   <!-- Single tagline -->
   <text x="600" y="158" text-anchor="middle" class="sans dim" font-size="18" font-weight="400">
-    SSH for Claude Code
+    a Claude Code plugin to give Claude wings
   </text>
 </svg>
