@@ -125,6 +125,16 @@ class SSHManager {
     });
   }
 
+  // Pass-through to ssh2 Client.exec so callers that hold an SSHManager can
+  // use streaming exec helpers (stream-exec.js, tail-tools.js) which expect
+  // a node-ssh2 Client interface.
+  exec(command, opts, cb) {
+    if (typeof opts === 'function') { cb = opts; opts = undefined; }
+    return opts !== undefined
+      ? this.client.exec(command, opts, cb)
+      : this.client.exec(command, cb);
+  }
+
   async execCommand(command, options = {}) {
     if (!this.connected) {
       throw new Error('Not connected to SSH server');
