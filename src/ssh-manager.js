@@ -12,7 +12,7 @@ class SSHManager {
     this.config = config;
     this.client = new Client();
     this.connected = false;
-    this.sftp = null;
+    this._sftpHandle = null; // cached SFTP subsystem; do not collide with sftp() passthrough
     this.cachedHomeDir = null;
     this.autoAcceptHostKey = config.autoAcceptHostKey || false;
     this.hostKeyVerification = config.hostKeyVerification !== false; // Default true
@@ -125,14 +125,20 @@ class SSHManager {
     });
   }
 
-  // Pass-through to ssh2 Client.exec so callers that hold an SSHManager can
-  // use streaming exec helpers (stream-exec.js, tail-tools.js) which expect
-  // a node-ssh2 Client interface.
+  // Pass-throughs to the underlying ssh2 Client. Modular tool handlers
+  // (transfer-tools, deploy-tools, stream-exec, tail-tools) expect the
+  // node-ssh2 Client surface (.exec, .sftp, .forwardOut), but
+  // getConnection() returns this SSHManager wrapper. Without these
+  // shims every exec/sftp call fails with "client.{exec,sftp} is not a function".
   exec(command, opts, cb) {
     if (typeof opts === 'function') { cb = opts; opts = undefined; }
     return opts !== undefined
       ? this.client.exec(command, opts, cb)
       : this.client.exec(command, cb);
+  }
+
+  sftp(cb) {
+    return this.client.sftp(cb);
   }
 
   async execCommand(command, options = {}) {
@@ -284,7 +290,7 @@ class SSHManager {
   }
 
   async getSFTP() {
-    if (this.sftp) return this.sftp;
+    if (this._sftpHandle) return this._sftpHandle;
 
     return new Promise((resolve, reject) => {
       this.client.sftp((err, sftp) => {
@@ -292,7 +298,7 @@ class SSHManager {
           reject(err);
           return;
         }
-        this.sftp = sftp;
+        this._sftpHandle = sftp;
         resolve(sftp);
       });
     });
@@ -458,9 +464,9 @@ class SSHManager {
   }
 
   dispose() {
-    if (this.sftp) {
-      this.sftp.end();
-      this.sftp = null;
+    if (this._sftpHandle) {
+      this._sftpHandle.end();
+      this._sftpHandle = null;
     }
     if (this.client) {
       this.client.end();
@@ -468,9 +474,18 @@ class SSHManager {
     }
   }
 
-  async forwardOut(srcAddr, srcPort, dstAddr, dstPort) {
+  // Dual-mode: callback-style (matches ssh2 Client surface used by
+  // tunnel-tools.js) AND Promise-style (used by index.js for proxy jumps).
+  // Detect by presence of a 5th function arg.
+  forwardOut(srcAddr, srcPort, dstAddr, dstPort, cb) {
+    if (typeof cb === 'function') {
+      if (!this.connected) {
+        return cb(new Error('Not connected to SSH server'));
+      }
+      return this.client.forwardOut(srcAddr, srcPort, dstAddr, dstPort, cb);
+    }
     if (!this.connected) {
-      throw new Error('Not connected to SSH server');
+      return Promise.reject(new Error('Not connected to SSH server'));
     }
     return new Promise((resolve, reject) => {
       this.client.forwardOut(srcAddr, srcPort, dstAddr, dstPort, (err, stream) => {
