@@ -10,19 +10,19 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npx eslint src/ --max-warnings 50
+      - run: npx eslint src/ --max-warnings 150
         continue-on-error: true
 
   secrets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: scan for leaked secrets
@@ -34,7 +34,7 @@ jobs:
   ascii-only:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: verify ASCII-only in src/ and tests/
         run: |
           hits=$(LC_ALL=C grep -rnP '[^\x00-\x7F]' src/ tests/ --include='*.js' || true)

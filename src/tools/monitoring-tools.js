@@ -465,9 +465,9 @@ export function renderServiceStatus(result) {
   const active = d.active_state || 'unknown';
   const badge =
     active === 'active' ? '[ok] **active**' :
-    active === 'failed' ? '[err] **failed**' :
-    active === 'inactive' ? '[warn] **inactive**' :
-    `| \`${active}\``;
+      active === 'failed' ? '[err] **failed**' :
+        active === 'inactive' ? '[warn] **inactive**' :
+          `| \`${active}\``;
   const lines = [];
   lines.push(`${badge} | **ssh_service_status** | \`${d.service}\`${srv}`);
   lines.push('');
@@ -578,13 +578,13 @@ function fmtPct(x) {
 export async function handleSshHealthCheck({ getConnection, args }) {
   const { server, format = 'markdown' } = args || {};
   const command = [
-    "echo '---CPU---'", 'top -bn1 | head -5',
-    "echo '---MEM---'", 'free -b',
-    "echo '---DISK---'",
-    "df -B1 -x tmpfs -x devtmpfs --output=source,size,used,avail,pcent,target",
-    "echo '---LOAD---'", 'cat /proc/loadavg',
-    "echo '---UPTIME---'", 'cat /proc/uptime',
-    "echo '---CORES---'", 'nproc || grep -c ^processor /proc/cpuinfo',
+    'echo \'---CPU---\'', 'top -bn1 | head -5',
+    'echo \'---MEM---\'', 'free -b',
+    'echo \'---DISK---\'',
+    'df -B1 -x tmpfs -x devtmpfs --output=source,size,used,avail,pcent,target',
+    'echo \'---LOAD---\'', 'cat /proc/loadavg',
+    'echo \'---UPTIME---\'', 'cat /proc/uptime',
+    'echo \'---CORES---\'', 'nproc || grep -c ^processor /proc/cpuinfo',
   ].join('; ');
   const remote = `bash -c ${shQuote(command)}`;
 
@@ -713,9 +713,9 @@ export async function handleSshServiceStatus({ getConnection, args }) {
   const quoted = shQuote(String(service));
   const props = 'ActiveState,SubState,LoadState,UnitFileState,MainPID,MemoryCurrent,CPUUsageNSec,Description';
   const command = [
-    "echo '---SHOW---'",
+    'echo \'---SHOW---\'',
     `systemctl show ${quoted} --property=${props}`,
-    "echo '---STATUS---'",
+    'echo \'---STATUS---\'',
     `systemctl status ${quoted} --no-pager -n 10 2>/dev/null || true`,
   ].join('; ');
   const remote = `bash -c ${shQuote(command)}`;

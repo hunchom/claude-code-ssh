@@ -3,7 +3,7 @@
 // node-ssh2 Client surface (.exec, .sftp, .forwardOut), but getConnection()
 // returns an SSHManager wrapper. Without passthroughs every call fails at
 // runtime with "client.{exec,sftp,forwardOut} is not a function" or hangs
-// silently — while every existing unit test passes (they mock SSH).
+// silently, while every existing unit test passes (they mock SSH).
 
 import SSHManager from '../src/ssh-manager.js';
 

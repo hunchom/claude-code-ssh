@@ -158,7 +158,7 @@ export function renderDocker(result) {
   const d = result.data;
   if (d && d.preview) {
     const lines = [];
-    lines.push(`[ok] **ssh_docker** -- dry run`);
+    lines.push('[ok] **ssh_docker** -- dry run');
     lines.push('');
     lines.push('```json');
     lines.push(JSON.stringify(d.plan, null, 2));

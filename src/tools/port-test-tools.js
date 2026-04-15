@@ -139,18 +139,18 @@ export function buildTcpCommand(host, port, timeoutMs) {
   // We capture start/end epoch-millis around the successful strategy and echo
   // TCP_LATENCY_MS=N for the parser.
   return [
-    `bash -c '`,
-    `start=$(date +%s%3N 2>/dev/null || echo 0); `,
-    `if command -v nc >/dev/null 2>&1; then `,
+    'bash -c \'',
+    'start=$(date +%s%3N 2>/dev/null || echo 0); ',
+    'if command -v nc >/dev/null 2>&1; then ',
     `  nc -z -w ${timeoutSecs} ${h} ${p} && rc=0 || rc=$?; `,
-    `else `,
+    'else ',
     `  timeout ${timeoutSecs} bash -c "cat </dev/tcp/${host}/${p}" >/dev/null 2>&1 && rc=0 || rc=$?; `,
-    `fi; `,
-    `end=$(date +%s%3N 2>/dev/null || echo 0); `,
-    `if [ "$rc" = "0" ] && [ "$end" != "0" ] && [ "$start" != "0" ]; then `,
-    `  echo "TCP_LATENCY_MS=$((end - start))"; `,
-    `fi; `,
-    `exit $rc'`,
+    'fi; ',
+    'end=$(date +%s%3N 2>/dev/null || echo 0); ',
+    'if [ "$rc" = "0" ] && [ "$end" != "0" ] && [ "$start" != "0" ]; then ',
+    '  echo "TCP_LATENCY_MS=$((end - start))"; ',
+    'fi; ',
+    'exit $rc\'',
   ].join('');
 }
 
@@ -162,7 +162,7 @@ export function buildTlsCommand(host, port, timeoutMs) {
   // to openssl x509 which parses the server cert and prints subject/dates/fp.
   return [
     `echo | timeout ${timeoutSecs} openssl s_client -servername ${h} -connect ${h}:${p} 2>/dev/null `,
-    `| openssl x509 -noout -subject -dates -fingerprint -sha256 2>/dev/null`,
+    '| openssl x509 -noout -subject -dates -fingerprint -sha256 2>/dev/null',
   ].join('');
 }
 

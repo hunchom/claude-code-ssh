@@ -323,51 +323,51 @@ class ServerGroups {
     });
 
     switch (strategy) {
-    case EXECUTION_STRATEGIES.PARALLEL: {
+      case EXECUTION_STRATEGIES.PARALLEL: {
       // Execute on all servers simultaneously
-      const promises = group.servers.map(async (server) => {
-        try {
-          const result = await executor(server);
-          return { server, success: true, result };
-        } catch (error) {
-          logger.error(`Execution failed on ${server}`, { error: error.message });
-          return { server, success: false, error: error.message };
-        }
-      });
-
-      const parallelResults = await Promise.all(promises);
-      results.push(...parallelResults);
-      break;
-    }
-
-    case EXECUTION_STRATEGIES.SEQUENTIAL:
-    case EXECUTION_STRATEGIES.ROLLING:
-      // Execute one by one
-      for (const server of group.servers) {
-        try {
-          const result = await executor(server);
-          results.push({ server, success: true, result });
-
-          // Add delay for rolling strategy
-          if (strategy === EXECUTION_STRATEGIES.ROLLING && delay > 0) {
-            logger.debug(`Waiting ${delay}ms before next server`);
-            await new Promise(resolve => setTimeout(resolve, delay));
+        const promises = group.servers.map(async (server) => {
+          try {
+            const result = await executor(server);
+            return { server, success: true, result };
+          } catch (error) {
+            logger.error(`Execution failed on ${server}`, { error: error.message });
+            return { server, success: false, error: error.message };
           }
-        } catch (error) {
-          logger.error(`Execution failed on ${server}`, { error: error.message });
-          results.push({ server, success: false, error: error.message });
+        });
 
-          // Stop on error if configured
-          if (stopOnError) {
-            logger.warn('Stopping execution due to error', { server });
-            break;
-          }
-        }
+        const parallelResults = await Promise.all(promises);
+        results.push(...parallelResults);
+        break;
       }
-      break;
 
-    default:
-      throw new Error(`Unknown execution strategy: ${strategy}`);
+      case EXECUTION_STRATEGIES.SEQUENTIAL:
+      case EXECUTION_STRATEGIES.ROLLING:
+      // Execute one by one
+        for (const server of group.servers) {
+          try {
+            const result = await executor(server);
+            results.push({ server, success: true, result });
+
+            // Add delay for rolling strategy
+            if (strategy === EXECUTION_STRATEGIES.ROLLING && delay > 0) {
+              logger.debug(`Waiting ${delay}ms before next server`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+          } catch (error) {
+            logger.error(`Execution failed on ${server}`, { error: error.message });
+            results.push({ server, success: false, error: error.message });
+
+            // Stop on error if configured
+            if (stopOnError) {
+              logger.warn('Stopping execution due to error', { server });
+              break;
+            }
+          }
+        }
+        break;
+
+      default:
+        throw new Error(`Unknown execution strategy: ${strategy}`);
     }
 
     // Summary

@@ -209,20 +209,20 @@ class Logger {
     const message = `SSH connection ${event}: ${server}`;
 
     switch (event) {
-    case 'established':
-      this.info(message, data);
-      break;
-    case 'reused':
-      this.debug(message, data);
-      break;
-    case 'closed':
-      this.info(message, data);
-      break;
-    case 'failed':
-      this.error(message, data);
-      break;
-    default:
-      this.debug(message, data);
+      case 'established':
+        this.info(message, data);
+        break;
+      case 'reused':
+        this.debug(message, data);
+        break;
+      case 'closed':
+        this.info(message, data);
+        break;
+      case 'failed':
+        this.error(message, data);
+        break;
+      default:
+        this.debug(message, data);
     }
   }
 

@@ -16,7 +16,7 @@ import { StringDecoder } from 'string_decoder';
  * Encloses in single quotes and escapes embedded single quotes.
  */
 export function shQuote(s) {
-  return `'${String(s).replace(/'/g, "'\\''")}'`;
+  return `'${String(s).replace(/'/g, '\'\\\'\'')}'`;
 }
 
 /**

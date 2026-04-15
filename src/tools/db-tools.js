@@ -53,7 +53,7 @@ function detectLimit(sql) {
   const stripped = sql
     .replace(/--[^\n]*/g, ' ')
     .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/'(?:[^'\\]|\\.|'')*'/g, "''")
+    .replace(/'(?:[^'\\]|\\.|'')*'/g, '\'\'')
     .replace(/"(?:[^"\\]|\\.|"")*"/g, '""')
     .replace(/`(?:[^`]|``)*`/g, '``');
   const m = stripped.match(/\blimit\s+(\d+)\b/i);
@@ -105,7 +105,7 @@ export function buildMySqlQueryCommand({ database, query, user }) {
  */
 export function buildPostgresQueryCommand({ database, query, user }) {
   // -A: unaligned, -F '\t': tab separator, keep header (NO -t).
-  const parts = ['PGPASSWORD="$SSH_MGR_DB_PASS"', 'psql', '-A', "-F", "$'\\t'"];
+  const parts = ['PGPASSWORD="$SSH_MGR_DB_PASS"', 'psql', '-A', '-F', '$\'\\t\''];
   if (user) parts.push('-U', shQuote(user));
   if (database) parts.push('-d', shQuote(database));
   parts.push('-c', shQuote(query));
@@ -142,7 +142,7 @@ export function buildMySqlListCommand({ database, user }) {
 export function buildPostgresListCommand({ database, user }) {
   if (database) {
     // \dt outputs schema.table rows -- we use a proper SELECT for consistent output.
-    const q = "SELECT tablename FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema')";
+    const q = 'SELECT tablename FROM pg_tables WHERE schemaname NOT IN (\'pg_catalog\',\'information_schema\')';
     return `PGPASSWORD="$SSH_MGR_DB_PASS" psql -A -t${user ? ' -U ' + shQuote(user) : ''} -d ${shQuote(database)} -c ${shQuote(q)}`;
   }
   const q = 'SELECT datname FROM pg_database WHERE datistemplate = false';
@@ -212,7 +212,7 @@ export function buildImportCommand({ db_type, database, input_path, user }) {
   if (db_type === 'mongodb') {
     const userArgs = user ? ` -u ${shQuote(user)} -p "$SSH_MGR_DB_PASS"` : '';
     const gzipFlag = gz || String(input_path).endsWith('.archive.gz') ? ' --gzip' : '';
-    return `mongorestore${userArgs} --db ${shQuote(database)}${gzipFlag} --archive=${input_path.replace(/'/g, "'\\''")}`;
+    return `mongorestore${userArgs} --db ${shQuote(database)}${gzipFlag} --archive=${input_path.replace(/'/g, '\'\\\'\'')}`;
   }
   return '';
 }
@@ -226,7 +226,7 @@ export function buildTableCountCommand({ db_type, database, user }) {
     return `MYSQL_PWD="$SSH_MGR_DB_PASS" mysql --batch -N${user ? ' -u ' + shQuote(user) : ''} -e ${shQuote(q)}`;
   }
   if (db_type === 'postgresql') {
-    const q = "SELECT COUNT(*) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema')";
+    const q = 'SELECT COUNT(*) FROM pg_tables WHERE schemaname NOT IN (\'pg_catalog\',\'information_schema\')';
     return `PGPASSWORD="$SSH_MGR_DB_PASS" psql -A -t${user ? ' -U ' + shQuote(user) : ''} -d ${shQuote(database)} -c ${shQuote(q)}`;
   }
   if (db_type === 'mongodb') {
@@ -295,9 +295,9 @@ export async function handleSshDbQuery({ getConnection, args }) {
     // For Mongo: reject obviously-mutating operations in the eval.
     const lower = String(query).toLowerCase();
     const badOps = ['.drop(', '.droprole', '.dropuser', '.deletemany', '.deleteone',
-                    '.insertmany', '.insertone', '.updatemany', '.updateone',
-                    '.replaceone', '.remove(', '.bulkwrite', '.rename', '.createindex',
-                    '.dropindex'];
+      '.insertmany', '.insertone', '.updatemany', '.updateone',
+      '.replaceone', '.remove(', '.bulkwrite', '.rename', '.createindex',
+      '.dropindex'];
     for (const op of badOps) {
       if (lower.includes(op)) {
         return toMcp(

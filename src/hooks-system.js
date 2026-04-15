@@ -240,24 +240,24 @@ async function executeAction(action, command, context) {
 
     // Handle specific action types
     switch (action.type) {
-    case 'backup':
-      result.backupInfo = {
-        timestamp: new Date().toISOString(),
-        command: command
-      };
-      break;
+      case 'backup':
+        result.backupInfo = {
+          timestamp: new Date().toISOString(),
+          command: command
+        };
+        break;
 
-    case 'notification':
-      result.notified = true;
-      break;
+      case 'notification':
+        result.notified = true;
+        break;
 
-    case 'validation':
-      result.validated = result.success;
-      break;
+      case 'validation':
+        result.validated = result.success;
+        break;
 
-    case 'verification':
-      result.verified = result.success;
-      break;
+      case 'verification':
+        result.verified = result.success;
+        break;
     }
 
   } catch (error) {

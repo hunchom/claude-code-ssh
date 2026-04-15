@@ -383,24 +383,24 @@ export function parseComprehensiveHealthCheck(output) {
     const data = content.join('\n').trim();
 
     switch (name.toLowerCase().trim()) {
-    case 'cpu ===':
-      result.cpu = parseCPUUsage(data);
-      break;
-    case 'memory ===':
-      result.memory = parseMemoryUsage(data);
-      break;
-    case 'disk ===':
-      result.disks = parseDiskUsage(data);
-      break;
-    case 'load ===':
-      result.load_average = data;
-      break;
-    case 'uptime ===':
-      result.uptime = data;
-      break;
-    case 'network ===':
-      result.network = parseNetworkStats(data);
-      break;
+      case 'cpu ===':
+        result.cpu = parseCPUUsage(data);
+        break;
+      case 'memory ===':
+        result.memory = parseMemoryUsage(data);
+        break;
+      case 'disk ===':
+        result.disks = parseDiskUsage(data);
+        break;
+      case 'load ===':
+        result.load_average = data;
+        break;
+      case 'uptime ===':
+        result.uptime = data;
+        break;
+      case 'network ===':
+        result.network = parseNetworkStats(data);
+        break;
     }
   }
 

@@ -233,7 +233,7 @@ export async function handleSshBackupCreate({ getConnection, args }) {
         `output: \`${outPath}\``,
         gzip ? 'gzip compression enabled' : 'no compression',
         verify ? 'sha256 verification enabled -- hash written to .meta sidecar' : 'no verification (NOT recommended)',
-        `estimated size: unknown (will be measured post-write)`,
+        'estimated size: unknown (will be measured post-write)',
         `meta sidecar: \`${metaPath}\``,
       ],
       reversibility: 'manual',
@@ -319,7 +319,7 @@ export async function handleSshBackupCreate({ getConnection, args }) {
 
   return toMcp(
     ok('ssh_backup_create', { ...meta, meta_path: metaPath },
-       { server, duration_ms: Date.now() - startedAt }),
+      { server, duration_ms: Date.now() - startedAt }),
     { format, renderer: renderBackupCreate },
   );
 }
@@ -362,8 +362,8 @@ export async function handleSshBackupList({ getConnection, args }) {
   // Missing dir -> return [] cleanly (find would fail, we handle).
   const cmd = `if [ -d ${shQuote(backup_dir)} ]; then ` +
     `find ${shQuote(backup_dir)} -maxdepth 2 -name '*.meta' -type f -print0 ` +
-    `| while IFS= read -r -d '' f; do cat "$f"; printf '\\n---META---\\n'; done; ` +
-    `else :; fi`;
+    '| while IFS= read -r -d \'\' f; do cat "$f"; printf \'\\n---META---\\n\'; done; ' +
+    'else :; fi';
 
   let r;
   try { r = await streamExecCommand(client, cmd, { timeoutMs: timeout }); }
@@ -401,7 +401,7 @@ export async function handleSshBackupList({ getConnection, args }) {
 
   return toMcp(
     ok('ssh_backup_list', { backups, count: backups.length, backup_dir },
-       { server, duration_ms: Date.now() - startedAt }),
+      { server, duration_ms: Date.now() - startedAt }),
     { format, renderer: renderBackupList },
   );
 }
@@ -463,9 +463,9 @@ export async function handleSshBackupRestore({ getConnection, args }) {
   // This is more robust than relying on filenames.
   const findCmd =
     `find ${shQuote(backup_dir)} -maxdepth 2 -name '*.meta' -type f -print0 2>/dev/null ` +
-    `| while IFS= read -r -d '' f; do ` +
+    '| while IFS= read -r -d \'\' f; do ' +
     `if grep -q ${shQuote(`"backup_id":"${backup_id}"`)} "$f" 2>/dev/null; then echo "$f"; break; fi; ` +
-    `done`;
+    'done';
   let findR;
   try { findR = await streamExecCommand(client, findCmd, { timeoutMs: 30_000 }); }
   catch (e) {

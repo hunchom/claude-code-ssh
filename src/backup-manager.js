@@ -207,16 +207,16 @@ export function buildFilesBackupCommand(options) {
  */
 export function buildRestoreCommand(backupType, backupFile, options = {}) {
   switch (backupType) {
-  case BACKUP_TYPES.MYSQL:
-    return buildMySQLRestoreCommand(backupFile, options);
-  case BACKUP_TYPES.POSTGRESQL:
-    return buildPostgreSQLRestoreCommand(backupFile, options);
-  case BACKUP_TYPES.MONGODB:
-    return buildMongoDBRestoreCommand(backupFile, options);
-  case BACKUP_TYPES.FILES:
-    return buildFilesRestoreCommand(backupFile, options);
-  default:
-    throw new Error(`Unknown backup type: ${backupType}`);
+    case BACKUP_TYPES.MYSQL:
+      return buildMySQLRestoreCommand(backupFile, options);
+    case BACKUP_TYPES.POSTGRESQL:
+      return buildPostgreSQLRestoreCommand(backupFile, options);
+    case BACKUP_TYPES.MONGODB:
+      return buildMongoDBRestoreCommand(backupFile, options);
+    case BACKUP_TYPES.FILES:
+      return buildFilesRestoreCommand(backupFile, options);
+    default:
+      throw new Error(`Unknown backup type: ${backupType}`);
   }
 }
 
@@ -296,7 +296,6 @@ function buildPostgreSQLRestoreCommand(backupFile, options) {
  */
 function buildMongoDBRestoreCommand(backupFile, options) {
   const {
-    database,
     user,
     password,
     host = 'localhost',

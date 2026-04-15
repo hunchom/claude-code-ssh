@@ -206,7 +206,6 @@ export function buildPostgreSQLImportCommand(options) {
  */
 export function buildMongoDBRestoreCommand(options) {
   const {
-    database,
     user,
     password,
     host = 'localhost',
@@ -477,43 +476,43 @@ export function buildEstimateSizeCommand(type, database, options = {}) {
   const { user, password, host = 'localhost', port } = options;
 
   switch (type) {
-  case DB_TYPES.MYSQL: {
-    let command = 'mysql';
-    if (user) command += ` -u${user}`;
-    if (password) command += ` -p'${password}'`;
-    if (host) command += ` -h ${host}`;
-    if (port) command += ` -P ${port}`;
-    command += ` -e "SELECT SUM(data_length + index_length) FROM information_schema.TABLES WHERE table_schema='${database}';" | tail -n 1`;
-    return command;
-  }
-
-  case DB_TYPES.POSTGRESQL: {
-    let command = '';
-    if (password) {
-      command = `PGPASSWORD='${password}' `;
+    case DB_TYPES.MYSQL: {
+      let command = 'mysql';
+      if (user) command += ` -u${user}`;
+      if (password) command += ` -p'${password}'`;
+      if (host) command += ` -h ${host}`;
+      if (port) command += ` -P ${port}`;
+      command += ` -e "SELECT SUM(data_length + index_length) FROM information_schema.TABLES WHERE table_schema='${database}';" | tail -n 1`;
+      return command;
     }
-    command += 'psql';
-    if (user) command += ` -U ${user}`;
-    if (host) command += ` -h ${host}`;
-    if (port) command += ` -p ${port}`;
-    command += ` -d ${database}`;
-    command += ` -t -c "SELECT pg_database_size('${database}');" | sed 's/^[ \\t]*//'`;
-    return command;
-  }
 
-  case DB_TYPES.MONGODB: {
-    let command = 'mongo';
-    if (host) command += ` --host ${host}`;
-    if (port) command += ` --port ${port}`;
-    if (user) command += ` --username ${user}`;
-    if (password) command += ` --password '${password}'`;
-    command += ` ${database}`;
-    command += ' --quiet --eval "db.stats().dataSize"';
-    return command;
-  }
+    case DB_TYPES.POSTGRESQL: {
+      let command = '';
+      if (password) {
+        command = `PGPASSWORD='${password}' `;
+      }
+      command += 'psql';
+      if (user) command += ` -U ${user}`;
+      if (host) command += ` -h ${host}`;
+      if (port) command += ` -p ${port}`;
+      command += ` -d ${database}`;
+      command += ` -t -c "SELECT pg_database_size('${database}');" | sed 's/^[ \\t]*//'`;
+      return command;
+    }
 
-  default:
-    throw new Error(`Unknown database type: ${type}`);
+    case DB_TYPES.MONGODB: {
+      let command = 'mongo';
+      if (host) command += ` --host ${host}`;
+      if (port) command += ` --port ${port}`;
+      if (user) command += ` --username ${user}`;
+      if (password) command += ` --password '${password}'`;
+      command += ` ${database}`;
+      command += ' --quiet --eval "db.stats().dataSize"';
+      return command;
+    }
+
+    default:
+      throw new Error(`Unknown database type: ${type}`);
   }
 }
 

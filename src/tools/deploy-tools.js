@@ -169,7 +169,7 @@ export async function handleSshDeploy({ getConnection, getSftp, args }) {
       `artifact size: ${artifactBytes != null ? formatBytes(artifactBytes) : 'unknown'}`,
       stat.exists
         ? `target exists (${formatBytes(stat.size || 0)}) -- snapshot to \`${snapshotPath}\``
-        : `target does not exist -- new file`,
+        : 'target does not exist -- new file',
     ];
     if (post_hooks.length) {
       effects.push(`post_hooks (${post_hooks.length}, sequential):`);

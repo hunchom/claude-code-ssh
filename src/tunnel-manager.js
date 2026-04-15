@@ -54,20 +54,20 @@ class SSHTunnel {
   async start() {
     try {
       switch (this.type) {
-      case TUNNEL_TYPES.LOCAL:
-        await this.startLocalForwarding();
-        break;
+        case TUNNEL_TYPES.LOCAL:
+          await this.startLocalForwarding();
+          break;
 
-      case TUNNEL_TYPES.REMOTE:
-        await this.startRemoteForwarding();
-        break;
+        case TUNNEL_TYPES.REMOTE:
+          await this.startRemoteForwarding();
+          break;
 
-      case TUNNEL_TYPES.DYNAMIC:
-        await this.startDynamicForwarding();
-        break;
+        case TUNNEL_TYPES.DYNAMIC:
+          await this.startDynamicForwarding();
+          break;
 
-      default:
-        throw new Error(`Unknown tunnel type: ${this.type}`);
+        default:
+          throw new Error(`Unknown tunnel type: ${this.type}`);
       }
 
       this.state = TUNNEL_STATES.ACTIVE;

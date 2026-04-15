@@ -98,11 +98,11 @@ function stripStrings(sql) {
     const c = sql[i];
 
     // Postgres E'...' escape string
-    if ((c === 'E' || c === 'e') && sql[i + 1] === "'") {
+    if ((c === 'E' || c === 'e') && sql[i + 1] === '\'') {
       i += 2;
       while (i < n) {
         if (sql[i] === '\\' && i + 1 < n) { i += 2; continue; }
-        if (sql[i] === "'") { i++; break; }
+        if (sql[i] === '\'') { i++; break; }
         i++;
       }
       out += ' ';
@@ -128,14 +128,14 @@ function stripStrings(sql) {
       continue;
     }
 
-    if (c === "'") {
+    if (c === '\'') {
       i++;
       while (i < n) {
         // SQL standard: '' is an escaped single quote inside a string
-        if (sql[i] === "'" && sql[i + 1] === "'") { i += 2; continue; }
+        if (sql[i] === '\'' && sql[i + 1] === '\'') { i += 2; continue; }
         // Also tolerate backslash-quote (MySQL default, Postgres with standard_conforming_strings=off)
         if (sql[i] === '\\' && i + 1 < n) { i += 2; continue; }
-        if (sql[i] === "'") { i++; break; }
+        if (sql[i] === '\'') { i++; break; }
         i++;
       }
       out += ' ';

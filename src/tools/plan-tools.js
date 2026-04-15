@@ -206,7 +206,7 @@ function describeStep(step) {
 
   const target =
     action === 'wait' || action === 'assert'
-      ? `(plan-local)`
+      ? '(plan-local)'
       : `${server || '?'}${step.remote_path ? `:${step.remote_path}` : ''}`;
 
   const entry = {
@@ -554,8 +554,8 @@ export async function handleSshPlan({ dispatch = {}, args = {} } = {}) {
   // control of semantics). We choose: failed iff steps_failed > 0.
   const wrapper = steps_failed > 0
     ? fail('ssh_plan', `plan failed at step ${steps[failedIdx]?.step_id}: ${results[failedIdx]?.error || 'unknown'}`, {
-        duration_ms: payload.duration_ms,
-      })
+      duration_ms: payload.duration_ms,
+    })
     : ok('ssh_plan', payload, { duration_ms: payload.duration_ms });
 
   // Always attach the full payload so callers can introspect:

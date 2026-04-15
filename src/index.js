@@ -29,12 +29,6 @@ import {
   suggestAliases
 } from './command-aliases.js';
 import {
-  OUTPUT_LIMITS,
-  TIMEOUTS,
-  truncateOutput,
-  formatJSONResponse
-} from './config.js';
-import {
   initializeHooks,
   executeHook,
   toggleHook,
@@ -47,13 +41,6 @@ import {
   getActiveProfileName
 } from './profile-loader.js';
 import { logger } from './logger.js';
-import {
-  createSession,
-  getSession,
-  listSessions,
-  closeSession,
-  SESSION_STATES
-} from './session-manager.js';
 import {
   getGroup,
   createGroup,
@@ -895,85 +882,85 @@ registerToolConditional(
       let output = '';
 
       switch (action) {
-      case 'create':
-        if (!name) throw new Error('Group name required for create');
-        result = createGroup(name, servers || [], {
-          description,
-          strategy,
-          delay,
-          stopOnError
-        });
-        output = `[ok] Group '${name}' created\n`;
-        output += `Servers: ${result.servers.join(', ') || 'none'}\n`;
-        output += `Strategy: ${result.strategy}\n`;
-        break;
+        case 'create':
+          if (!name) throw new Error('Group name required for create');
+          result = createGroup(name, servers || [], {
+            description,
+            strategy,
+            delay,
+            stopOnError
+          });
+          output = `[ok] Group '${name}' created\n`;
+          output += `Servers: ${result.servers.join(', ') || 'none'}\n`;
+          output += `Strategy: ${result.strategy}\n`;
+          break;
 
-      case 'update':
-        if (!name) throw new Error('Group name required for update');
-        result = updateGroup(name, {
-          servers,
-          description,
-          strategy,
-          delay,
-          stopOnError
-        });
-        output = `[ok] Group '${name}' updated\n`;
-        output += `Servers: ${result.servers.join(', ')}\n`;
-        break;
+        case 'update':
+          if (!name) throw new Error('Group name required for update');
+          result = updateGroup(name, {
+            servers,
+            description,
+            strategy,
+            delay,
+            stopOnError
+          });
+          output = `[ok] Group '${name}' updated\n`;
+          output += `Servers: ${result.servers.join(', ')}\n`;
+          break;
 
-      case 'delete':
-        if (!name) throw new Error('Group name required for delete');
-        deleteGroup(name);
-        output = `[ok] Group '${name}' deleted`;
-        break;
+        case 'delete':
+          if (!name) throw new Error('Group name required for delete');
+          deleteGroup(name);
+          output = `[ok] Group '${name}' deleted`;
+          break;
 
-      case 'add-servers':
-        if (!name) throw new Error('Group name required');
-        if (!servers || servers.length === 0) throw new Error('Servers required');
-        result = addServersToGroup(name, servers);
-        output = `[ok] Added ${servers.length} servers to '${name}'\n`;
-        output += `Total servers: ${result.servers.length}\n`;
-        output += `Members: ${result.servers.join(', ')}`;
-        break;
+        case 'add-servers':
+          if (!name) throw new Error('Group name required');
+          if (!servers || servers.length === 0) throw new Error('Servers required');
+          result = addServersToGroup(name, servers);
+          output = `[ok] Added ${servers.length} servers to '${name}'\n`;
+          output += `Total servers: ${result.servers.length}\n`;
+          output += `Members: ${result.servers.join(', ')}`;
+          break;
 
-      case 'remove-servers':
-        if (!name) throw new Error('Group name required');
-        if (!servers || servers.length === 0) throw new Error('Servers required');
-        result = removeServersFromGroup(name, servers);
-        output = `[ok] Removed ${servers.length} servers from '${name}'\n`;
-        output += `Remaining: ${result.servers.length}\n`;
-        output += `Members: ${result.servers.join(', ') || 'none'}`;
-        break;
+        case 'remove-servers':
+          if (!name) throw new Error('Group name required');
+          if (!servers || servers.length === 0) throw new Error('Servers required');
+          result = removeServersFromGroup(name, servers);
+          output = `[ok] Removed ${servers.length} servers from '${name}'\n`;
+          output += `Remaining: ${result.servers.length}\n`;
+          output += `Members: ${result.servers.join(', ') || 'none'}`;
+          break;
 
-      case 'list': {
-        const groups = listGroups();
-        output = '[list] Server Groups\n';
-        output += '-'.repeat(60) + '\n\n';
+        case 'list': {
+          const groups = listGroups();
+          output = '[list] Server Groups\n';
+          output += '-'.repeat(60) + '\n\n';
 
-        groups.forEach(group => {
-          output += `[dir] ${group.name}`;
-          if (group.dynamic) output += ' (dynamic)';
-          output += '\n';
-          output += `   Description: ${group.description}\n`;
-          output += `   Servers: ${group.serverCount} servers\n`;
-          if (group.servers.length > 0) {
-            output += `   Members: ${group.servers.slice(0, 5).join(', ')}`;
-            if (group.servers.length > 5) output += ` ... +${group.servers.length - 5} more`;
+          groups.forEach(group => {
+            output += `[dir] ${group.name}`;
+            if (group.dynamic) output += ' (dynamic)';
             output += '\n';
-          }
-          output += `   Strategy: ${group.strategy || 'parallel'}\n`;
-          if (group.delay) output += `   Delay: ${group.delay}ms\n`;
-          if (group.stopOnError) output += '   Stop on error: yes\n';
-          output += '\n';
-        });
+            output += `   Description: ${group.description}\n`;
+            output += `   Servers: ${group.serverCount} servers\n`;
+            if (group.servers.length > 0) {
+              output += `   Members: ${group.servers.slice(0, 5).join(', ')}`;
+              if (group.servers.length > 5) output += ` ... +${group.servers.length - 5} more`;
+              output += '\n';
+            }
+            output += `   Strategy: ${group.strategy || 'parallel'}\n`;
+            if (group.delay) output += `   Delay: ${group.delay}ms\n`;
+            if (group.stopOnError) output += '   Stop on error: yes\n';
+            output += '\n';
+          });
 
-        output += '-'.repeat(60) + '\n';
-        output += `Total groups: ${groups.length}`;
-        break;
-      }
+          output += '-'.repeat(60) + '\n';
+          output += `Total groups: ${groups.length}`;
+          break;
+        }
 
-      default:
-        throw new Error(`Unknown action: ${action}`);
+        default:
+          throw new Error(`Unknown action: ${action}`);
       }
 
       logger.info('Group management action completed', {
@@ -1176,79 +1163,79 @@ registerToolConditional(
   async ({ action, alias, command }) => {
     try {
       switch (action) {
-      case 'add': {
-        if (!alias || !command) {
-          throw new Error('Both alias and command are required for add action');
+        case 'add': {
+          if (!alias || !command) {
+            throw new Error('Both alias and command are required for add action');
+          }
+
+          addCommandAlias(alias, command);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `[ok] Command alias created: ${alias} -> ${command}`,
+              },
+            ],
+          };
         }
 
-        addCommandAlias(alias, command);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `[ok] Command alias created: ${alias} -> ${command}`,
-            },
-          ],
-        };
-      }
+        case 'remove': {
+          if (!alias) {
+            throw new Error('Alias is required for remove action');
+          }
 
-      case 'remove': {
-        if (!alias) {
-          throw new Error('Alias is required for remove action');
+          removeCommandAlias(alias);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `[ok] Command alias removed: ${alias}`,
+              },
+            ],
+          };
         }
 
-        removeCommandAlias(alias);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `[ok] Command alias removed: ${alias}`,
-            },
-          ],
-        };
-      }
+        case 'list': {
+          const aliases = listCommandAliases();
 
-      case 'list': {
-        const aliases = listCommandAliases();
+          const aliasInfo = aliases.map(({ alias, command, isFromProfile, isCustom }) =>
+            `  ${alias} -> ${command}${isFromProfile ? ' (profile)' : ''}${isCustom ? ' (custom)' : ''}`
+          ).join('\n');
 
-        const aliasInfo = aliases.map(({ alias, command, isFromProfile, isCustom }) =>
-          `  ${alias} -> ${command}${isFromProfile ? ' (profile)' : ''}${isCustom ? ' (custom)' : ''}`
-        ).join('\n');
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: aliases.length > 0 ?
-                `[log] Command aliases:\n${aliasInfo}` :
-                '[log] No command aliases configured',
-            },
-          ],
-        };
-      }
-
-      case 'suggest': {
-        if (!command) {
-          throw new Error('Command search term is required for suggest action');
+          return {
+            content: [
+              {
+                type: 'text',
+                text: aliases.length > 0 ?
+                  `[log] Command aliases:\n${aliasInfo}` :
+                  '[log] No command aliases configured',
+              },
+            ],
+          };
         }
 
-        const suggestions = suggestAliases(command);
+        case 'suggest': {
+          if (!command) {
+            throw new Error('Command search term is required for suggest action');
+          }
 
-        const suggestionInfo = suggestions.map(({ alias, command }) =>
-          `  ${alias} -> ${command}`
-        ).join('\n');
+          const suggestions = suggestAliases(command);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: suggestions.length > 0 ?
-                `[tip] Suggested aliases for "${command}":\n${suggestionInfo}` :
-                `[tip] No aliases found matching "${command}"`,
-            },
-          ],
-        };
-      }
+          const suggestionInfo = suggestions.map(({ alias, command }) =>
+            `  ${alias} -> ${command}`
+          ).join('\n');
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: suggestions.length > 0 ?
+                  `[tip] Suggested aliases for "${command}":\n${suggestionInfo}` :
+                  `[tip] No aliases found matching "${command}"`,
+              },
+            ],
+          };
+        }
       }
     } catch (error) {
       return {
@@ -1276,71 +1263,71 @@ registerToolConditional(
   async ({ action, hook }) => {
     try {
       switch (action) {
-      case 'list': {
-        const hooks = listHooks();
+        case 'list': {
+          const hooks = listHooks();
 
-        const hooksInfo = hooks.map(({ name, enabled, description, actionCount }) =>
-          `  ${enabled ? '[ok]' : '[err]'} ${name}: ${description} (${actionCount} actions)`
-        ).join('\n');
+          const hooksInfo = hooks.map(({ name, enabled, description, actionCount }) =>
+            `  ${enabled ? '[ok]' : '[err]'} ${name}: ${description} (${actionCount} actions)`
+          ).join('\n');
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: hooks.length > 0 ?
-                `[hook] Available hooks:\n${hooksInfo}` :
-                '[hook] No hooks configured',
-            },
-          ],
-        };
-      }
-
-      case 'enable': {
-        if (!hook) {
-          throw new Error('Hook name is required for enable action');
+          return {
+            content: [
+              {
+                type: 'text',
+                text: hooks.length > 0 ?
+                  `[hook] Available hooks:\n${hooksInfo}` :
+                  '[hook] No hooks configured',
+              },
+            ],
+          };
         }
 
-        toggleHook(hook, true);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `[ok] Hook enabled: ${hook}`,
-            },
-          ],
-        };
-      }
+        case 'enable': {
+          if (!hook) {
+            throw new Error('Hook name is required for enable action');
+          }
 
-      case 'disable': {
-        if (!hook) {
-          throw new Error('Hook name is required for disable action');
+          toggleHook(hook, true);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `[ok] Hook enabled: ${hook}`,
+              },
+            ],
+          };
         }
 
-        toggleHook(hook, false);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `[err] Hook disabled: ${hook}`,
-            },
-          ],
-        };
-      }
+        case 'disable': {
+          if (!hook) {
+            throw new Error('Hook name is required for disable action');
+          }
 
-      case 'status': {
-        const hooks = listHooks();
-        const enabledHooks = hooks.filter(h => h.enabled);
-        const disabledHooks = hooks.filter(h => !h.enabled);
+          toggleHook(hook, false);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `[err] Hook disabled: ${hook}`,
+              },
+            ],
+          };
+        }
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `[hook] Hook status:\n  Enabled: ${enabledHooks.map(h => h.name).join(', ') || 'none'}\n  Disabled: ${disabledHooks.map(h => h.name).join(', ') || 'none'}`,
-            },
-          ],
-        };
-      }
+        case 'status': {
+          const hooks = listHooks();
+          const enabledHooks = hooks.filter(h => h.enabled);
+          const disabledHooks = hooks.filter(h => !h.enabled);
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `[hook] Hook status:\n  Enabled: ${enabledHooks.map(h => h.name).join(', ') || 'none'}\n  Disabled: ${disabledHooks.map(h => h.name).join(', ') || 'none'}`,
+              },
+            ],
+          };
+        }
       }
     } catch (error) {
       return {
@@ -1368,59 +1355,59 @@ registerToolConditional(
   async ({ action, profile }) => {
     try {
       switch (action) {
-      case 'list': {
-        const profiles = listProfiles();
+        case 'list': {
+          const profiles = listProfiles();
 
-        const profileInfo = profiles.map(p =>
-          `  ${p.name}: ${p.description} (${p.aliasCount} aliases, ${p.hookCount} hooks)`
-        ).join('\n');
+          const profileInfo = profiles.map(p =>
+            `  ${p.name}: ${p.description} (${p.aliasCount} aliases, ${p.hookCount} hooks)`
+          ).join('\n');
 
-        const current = getActiveProfileName();
+          const current = getActiveProfileName();
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: profiles.length > 0 ?
-                `[docs] Available profiles (current: ${current}):\n${profileInfo}` :
-                '[docs] No profiles found',
-            },
-          ],
-        };
-      }
-
-      case 'switch': {
-        if (!profile) {
-          throw new Error('Profile name is required for switch action');
-        }
-
-        if (setActiveProfile(profile)) {
           return {
             content: [
               {
                 type: 'text',
-                text: `[ok] Switched to profile: ${profile}\n[warn]  Restart Claude Code to apply profile changes`,
+                text: profiles.length > 0 ?
+                  `[docs] Available profiles (current: ${current}):\n${profileInfo}` :
+                  '[docs] No profiles found',
               },
             ],
           };
-        } else {
-          throw new Error(`Failed to switch to profile: ${profile}`);
         }
-      }
 
-      case 'current': {
-        const current = getActiveProfileName();
-        const profile = loadProfile();
+        case 'switch': {
+          if (!profile) {
+            throw new Error('Profile name is required for switch action');
+          }
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `[pkg] Current profile: ${current}\n[log] Description: ${profile.description || 'No description'}\n[conf] Aliases: ${Object.keys(profile.commandAliases || {}).length}\n[hook] Hooks: ${Object.keys(profile.hooks || {}).length}`,
-            },
-          ],
-        };
-      }
+          if (setActiveProfile(profile)) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `[ok] Switched to profile: ${profile}\n[warn]  Restart Claude Code to apply profile changes`,
+                },
+              ],
+            };
+          } else {
+            throw new Error(`Failed to switch to profile: ${profile}`);
+          }
+        }
+
+        case 'current': {
+          const current = getActiveProfileName();
+          const profile = loadProfile();
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `[pkg] Current profile: ${current}\n[log] Description: ${profile.description || 'No description'}\n[conf] Aliases: ${Object.keys(profile.commandAliases || {}).length}\n[hook] Hooks: ${Object.keys(profile.hooks || {}).length}`,
+              },
+            ],
+          };
+        }
       }
     } catch (error) {
       return {
@@ -1448,96 +1435,96 @@ registerToolConditional(
   async ({ action, server }) => {
     try {
       switch (action) {
-      case 'status': {
-        const activeConnections = [];
-        const now = Date.now();
+        case 'status': {
+          const activeConnections = [];
+          const now = Date.now();
 
-        for (const [serverName, ssh] of connections.entries()) {
-          const timestamp = connectionTimestamps.get(serverName);
-          const ageMinutes = Math.floor((now - timestamp) / 1000 / 60);
-          const isValid = await isConnectionValid(ssh);
+          for (const [serverName, ssh] of connections.entries()) {
+            const timestamp = connectionTimestamps.get(serverName);
+            const ageMinutes = Math.floor((now - timestamp) / 1000 / 60);
+            const isValid = await isConnectionValid(ssh);
 
-          activeConnections.push({
-            server: serverName,
-            status: isValid ? '[ok] Active' : '[err] Dead',
-            age: `${ageMinutes} minutes`,
-            keepalive: keepaliveIntervals.has(serverName) ? '[ok]' : '[err]'
-          });
-        }
-
-        const statusInfo = activeConnections.length > 0 ?
-          activeConnections.map(c => `  ${c.server}: ${c.status} (age: ${c.age}, keepalive: ${c.keepalive})`).join('\n') :
-          '  No active connections';
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `[conn] Connection Pool Status:\n${statusInfo}\n\nSettings:\n  Timeout: ${CONNECTION_TIMEOUT / 1000 / 60} minutes\n  Keepalive: Every ${KEEPALIVE_INTERVAL / 1000 / 60} minutes`,
-            },
-          ],
-        };
-      }
-
-      case 'reconnect': {
-        if (!server) {
-          throw new Error('Server name is required for reconnect action');
-        }
-
-        const normalizedName = server.toLowerCase();
-        if (connections.has(normalizedName)) {
-          closeConnection(normalizedName);
-        }
-
-        await getConnection(server);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `[recycle]  Reconnected to ${server}`,
-            },
-          ],
-        };
-      }
-
-      case 'disconnect': {
-        if (!server) {
-          throw new Error('Server name is required for disconnect action');
-        }
-
-        closeConnection(server);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `[conn] Disconnected from ${server}`,
-            },
-          ],
-        };
-      }
-
-      case 'cleanup': {
-        const oldCount = connections.size;
-        cleanupOldConnections();
-
-        // Also check and remove dead connections
-        for (const [serverName, ssh] of connections.entries()) {
-          const isValid = await isConnectionValid(ssh);
-          if (!isValid) {
-            closeConnection(serverName);
+            activeConnections.push({
+              server: serverName,
+              status: isValid ? '[ok] Active' : '[err] Dead',
+              age: `${ageMinutes} minutes`,
+              keepalive: keepaliveIntervals.has(serverName) ? '[ok]' : '[err]'
+            });
           }
+
+          const statusInfo = activeConnections.length > 0 ?
+            activeConnections.map(c => `  ${c.server}: ${c.status} (age: ${c.age}, keepalive: ${c.keepalive})`).join('\n') :
+            '  No active connections';
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `[conn] Connection Pool Status:\n${statusInfo}\n\nSettings:\n  Timeout: ${CONNECTION_TIMEOUT / 1000 / 60} minutes\n  Keepalive: Every ${KEEPALIVE_INTERVAL / 1000 / 60} minutes`,
+              },
+            ],
+          };
         }
 
-        const cleaned = oldCount - connections.size;
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `[clean] Cleanup complete: ${cleaned} connections closed, ${connections.size} active`,
-            },
-          ],
-        };
-      }
+        case 'reconnect': {
+          if (!server) {
+            throw new Error('Server name is required for reconnect action');
+          }
+
+          const normalizedName = server.toLowerCase();
+          if (connections.has(normalizedName)) {
+            closeConnection(normalizedName);
+          }
+
+          await getConnection(server);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `[recycle]  Reconnected to ${server}`,
+              },
+            ],
+          };
+        }
+
+        case 'disconnect': {
+          if (!server) {
+            throw new Error('Server name is required for disconnect action');
+          }
+
+          closeConnection(server);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `[conn] Disconnected from ${server}`,
+              },
+            ],
+          };
+        }
+
+        case 'cleanup': {
+          const oldCount = connections.size;
+          cleanupOldConnections();
+
+          // Also check and remove dead connections
+          for (const [serverName, ssh] of connections.entries()) {
+            const isValid = await isConnectionValid(ssh);
+            if (!isValid) {
+              closeConnection(serverName);
+            }
+          }
+
+          const cleaned = oldCount - connections.size;
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `[clean] Cleanup complete: ${cleaned} connections closed, ${connections.size} active`,
+              },
+            ],
+          };
+        }
       }
     } catch (error) {
       return {
@@ -1648,65 +1635,65 @@ registerToolConditional(
   async ({ action, alias, server }) => {
     try {
       switch (action) {
-      case 'add': {
-        if (!alias || !server) {
-          throw new Error('Both alias and server are required for add action');
+        case 'add': {
+          if (!alias || !server) {
+            throw new Error('Both alias and server are required for add action');
+          }
+
+          const servers = loadServerConfig();
+          const resolvedName = resolveServerName(server, servers);
+
+          if (!resolvedName) {
+            throw new Error(`Server "${server}" not found`);
+          }
+
+          addAlias(alias, resolvedName);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `[ok] Alias created: ${alias} -> ${resolvedName}`,
+              },
+            ],
+          };
         }
 
-        const servers = loadServerConfig();
-        const resolvedName = resolveServerName(server, servers);
+        case 'remove': {
+          if (!alias) {
+            throw new Error('Alias is required for remove action');
+          }
 
-        if (!resolvedName) {
-          throw new Error(`Server "${server}" not found`);
+          removeAlias(alias);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `[ok] Alias removed: ${alias}`,
+              },
+            ],
+          };
         }
 
-        addAlias(alias, resolvedName);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `[ok] Alias created: ${alias} -> ${resolvedName}`,
-            },
-          ],
-        };
-      }
+        case 'list': {
+          const aliases = listAliases();
+          const servers = loadServerConfig();
 
-      case 'remove': {
-        if (!alias) {
-          throw new Error('Alias is required for remove action');
+          const aliasInfo = aliases.map(({ alias, target }) => {
+            const server = servers[target];
+            return `  ${alias} -> ${target} (${server?.host || 'unknown'})`;
+          }).join('\n');
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: aliases.length > 0 ?
+                  `[log] Server aliases:\n${aliasInfo}` :
+                  '[log] No aliases configured',
+              },
+            ],
+          };
         }
-
-        removeAlias(alias);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `[ok] Alias removed: ${alias}`,
-            },
-          ],
-        };
-      }
-
-      case 'list': {
-        const aliases = listAliases();
-        const servers = loadServerConfig();
-
-        const aliasInfo = aliases.map(({ alias, target }) => {
-          const server = servers[target];
-          return `  ${alias} -> ${target} (${server?.host || 'unknown'})`;
-        }).join('\n');
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: aliases.length > 0 ?
-                `[log] Server aliases:\n${aliasInfo}` :
-                '[log] No aliases configured',
-            },
-          ],
-        };
-      }
       }
     } catch (error) {
       return {
@@ -1943,126 +1930,126 @@ registerToolConditional(
       let response;
 
       switch (action) {
-      case 'set': {
+        case 'set': {
         // Create alert configuration
-        const config = createAlertConfig({
-          cpu: cpuThreshold,
-          memory: memoryThreshold,
-          disk: diskThreshold,
-          enabled
-        });
+          const config = createAlertConfig({
+            cpu: cpuThreshold,
+            memory: memoryThreshold,
+            disk: diskThreshold,
+            enabled
+          });
 
-        // Save to server
-        const saveCommand = buildSaveAlertConfigCommand(config, configPath);
-        const saveResult = await ssh.execCommand(saveCommand);
+          // Save to server
+          const saveCommand = buildSaveAlertConfigCommand(config, configPath);
+          const saveResult = await ssh.execCommand(saveCommand);
 
-        if (saveResult.code !== 0) {
-          throw new Error(`Failed to save alert config: ${saveResult.stderr}`);
-        }
-
-        response = {
-          server: serverName,
-          action: 'set',
-          config,
-          config_path: configPath,
-          success: true
-        };
-
-        logger.info('Alert thresholds configured', {
-          server: serverName,
-          thresholds: config
-        });
-        break;
-      }
-
-      case 'get': {
-        // Load configuration
-        const loadCommand = buildLoadAlertConfigCommand(configPath);
-        const result = await ssh.execCommand(loadCommand);
-
-        let config = {};
-        if (result.stdout && result.stdout.trim()) {
-          try {
-            config = JSON.parse(result.stdout);
-          } catch (e) {
-            config = { error: 'Failed to parse config' };
+          if (saveResult.code !== 0) {
+            throw new Error(`Failed to save alert config: ${saveResult.stderr}`);
           }
-        }
 
-        response = {
-          server: serverName,
-          action: 'get',
-          config,
-          config_path: configPath
-        };
-        break;
-      }
-
-      case 'check': {
-        // Load thresholds
-        const loadCommand = buildLoadAlertConfigCommand(configPath);
-        const loadResult = await ssh.execCommand(loadCommand);
-
-        let thresholds = {};
-        if (loadResult.stdout && loadResult.stdout.trim()) {
-          try {
-            thresholds = JSON.parse(loadResult.stdout);
-          } catch (e) {
-            throw new Error('No alert configuration found. Use action=set to configure.');
-          }
-        } else {
-          throw new Error('No alert configuration found. Use action=set to configure.');
-        }
-
-        if (!thresholds.enabled) {
           response = {
             server: serverName,
-            action: 'check',
-            message: 'Alerts are disabled',
-            thresholds
+            action: 'set',
+            config,
+            config_path: configPath,
+            success: true
+          };
+
+          logger.info('Alert thresholds configured', {
+            server: serverName,
+            thresholds: config
+          });
+          break;
+        }
+
+        case 'get': {
+        // Load configuration
+          const loadCommand = buildLoadAlertConfigCommand(configPath);
+          const result = await ssh.execCommand(loadCommand);
+
+          let config = {};
+          if (result.stdout && result.stdout.trim()) {
+            try {
+              config = JSON.parse(result.stdout);
+            } catch (e) {
+              config = { error: 'Failed to parse config' };
+            }
+          }
+
+          response = {
+            server: serverName,
+            action: 'get',
+            config,
+            config_path: configPath
           };
           break;
         }
 
-        // Get current metrics
-        const healthCommand = buildComprehensiveHealthCheckCommand();
-        const healthResult = await ssh.execCommand(healthCommand);
+        case 'check': {
+        // Load thresholds
+          const loadCommand = buildLoadAlertConfigCommand(configPath);
+          const loadResult = await ssh.execCommand(loadCommand);
 
-        if (healthResult.code !== 0) {
-          throw new Error('Failed to get current metrics');
-        }
+          let thresholds = {};
+          if (loadResult.stdout && loadResult.stdout.trim()) {
+            try {
+              thresholds = JSON.parse(loadResult.stdout);
+            } catch (e) {
+              throw new Error('No alert configuration found. Use action=set to configure.');
+            }
+          } else {
+            throw new Error('No alert configuration found. Use action=set to configure.');
+          }
 
-        const metrics = parseComprehensiveHealthCheck(healthResult.stdout);
+          if (!thresholds.enabled) {
+            response = {
+              server: serverName,
+              action: 'check',
+              message: 'Alerts are disabled',
+              thresholds
+            };
+            break;
+          }
 
-        // Check thresholds
-        const alerts = checkAlertThresholds(metrics, thresholds);
+          // Get current metrics
+          const healthCommand = buildComprehensiveHealthCheckCommand();
+          const healthResult = await ssh.execCommand(healthCommand);
 
-        response = {
-          server: serverName,
-          action: 'check',
-          thresholds,
-          current_metrics: {
-            cpu: metrics.cpu,
-            memory: metrics.memory,
-            disks: metrics.disks
-          },
-          alerts,
-          alert_count: alerts.length,
-          status: alerts.length === 0 ? 'ok' : 'alerts_triggered'
-        };
+          if (healthResult.code !== 0) {
+            throw new Error('Failed to get current metrics');
+          }
 
-        if (alerts.length > 0) {
-          logger.warn('Health alerts triggered', {
+          const metrics = parseComprehensiveHealthCheck(healthResult.stdout);
+
+          // Check thresholds
+          const alerts = checkAlertThresholds(metrics, thresholds);
+
+          response = {
             server: serverName,
+            action: 'check',
+            thresholds,
+            current_metrics: {
+              cpu: metrics.cpu,
+              memory: metrics.memory,
+              disks: metrics.disks
+            },
+            alerts,
             alert_count: alerts.length,
-            alerts
-          });
-        }
-        break;
-      }
+            status: alerts.length === 0 ? 'ok' : 'alerts_triggered'
+          };
 
-      default:
-        throw new Error(`Unknown action: ${action}`);
+          if (alerts.length > 0) {
+            logger.warn('Health alerts triggered', {
+              server: serverName,
+              alert_count: alerts.length,
+              alerts
+            });
+          }
+          break;
+        }
+
+        default:
+          throw new Error(`Unknown action: ${action}`);
       }
 
       return {

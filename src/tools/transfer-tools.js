@@ -117,7 +117,7 @@ function encodeBase64(content) {
  * `nginx -t -c` for nginx configs (path heuristic).
  */
 function pickSyntaxChecker(filePath, override) {
-  if (override === 'none' || override === false) return null;
+  if (override === 'none' || override === 'off' || override === false) return null;
   if (override && typeof override === 'string' && override !== 'auto') {
     // explicit override -- return as-is, command must accept the tmp path as $1
     return { kind: override, build: (tmp) => `${override} ${shQuote(tmp)}` };
@@ -614,7 +614,7 @@ export async function handleSshDiff({ getConnection, args }) {
         : `${server}:${path_a} vs ${server}:${path_b}`,
       effects: [
         server_b
-          ? `downloads both remote files and diffs locally`
+          ? 'downloads both remote files and diffs locally'
           : `runs \`diff -u ${path_a} ${path_b}\` on ${server}`,
       ],
       reversibility: 'auto',
@@ -642,12 +642,12 @@ export async function handleSshDiff({ getConnection, args }) {
       await sftpFastGet(sftpA, path_a, tmpA);
       await sftpFastGet(sftpB, path_b, tmpB);
     } catch (e) {
-      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) { /* ignore */ }
       return toMcp(fail('ssh_diff', `fetch failed: ${e.message || e}`, { server }), { format });
     }
 
     const diffOut = await spawnDiffLocal(tmpA, tmpB);
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) { /* ignore */ }
 
     const data = {
       mode: 'cross-server',

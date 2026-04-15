@@ -216,7 +216,7 @@ export function renderSystemctl(result) {
   const d = result.data;
   if (d && d.preview) {
     const lines = [];
-    lines.push(`[ok] **ssh_systemctl** -- dry run`);
+    lines.push('[ok] **ssh_systemctl** -- dry run');
     lines.push('');
     lines.push('```json');
     lines.push(JSON.stringify(d.plan, null, 2));
@@ -367,9 +367,9 @@ async function runStatus({ getConnection, server, unit, format }) {
   const quoted = shQuote(String(unit));
   const props = 'ActiveState,SubState,LoadState,UnitFileState,MainPID,MemoryCurrent,CPUUsageNSec,Description';
   const command = [
-    "echo '---SHOW---'",
+    'echo \'---SHOW---\'',
     `systemctl show ${quoted} --property=${props}`,
-    "echo '---LOGS---'",
+    'echo \'---LOGS---\'',
     `journalctl -u ${quoted} -n 10 --no-pager 2>/dev/null || true`,
   ].join('; ');
   const remote = `bash -c ${shQuote(command)}`;
