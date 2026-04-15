@@ -648,13 +648,14 @@ registerToolConditional(
 registerToolConditional(
   'ssh_tail',
   {
-    description: 'Tail remote log files (sessionized follow mode, grep filter, format-aware)',
+    description: 'Tail remote log file once (last N lines, optional grep). For live streaming use ssh_tail_start.',
     inputSchema: {
       server: z.string().describe('Server name from configuration'),
       file: z.string().describe('Path to the log file to tail'),
-      lines: z.number().optional().describe('Number of lines to show initially (default: 100)'),
-      follow: z.boolean().optional().describe('Follow file for new content (default: false)'),
-      grep: z.string().optional().describe('Filter lines with grep pattern'),
+      lines: z.number().optional().describe('Number of trailing lines to return (default: 50)'),
+      grep: z.string().optional().describe('Extended-regex filter applied before output truncation'),
+      timeout: z.number().optional().describe('Command timeout in ms (default 120000)'),
+      maxLen: z.number().optional().describe('Output truncation cap in chars (default 10000)'),
       format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
@@ -664,12 +665,10 @@ registerToolConditional(
 registerToolConditional(
   'ssh_monitor',
   {
-    description: 'Monitor system resources (CPU, RAM, disk, network) -- typed output',
+    description: 'Point-in-time system snapshot: cpu, memory, disk, network, process, or full overview',
     inputSchema: {
       server: z.string().describe('Server name from configuration'),
-      type: z.enum(['overview', 'cpu', 'memory', 'disk', 'network', 'process']).optional().describe('Monitor type'),
-      interval: z.number().optional().describe('Update interval in seconds'),
-      duration: z.number().optional().describe('Duration in seconds'),
+      type: z.enum(['overview', 'cpu', 'memory', 'disk', 'network', 'process']).optional().describe('Which subsystem to snapshot (default: overview)'),
       format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
@@ -1869,10 +1868,9 @@ registerToolConditional(
 registerToolConditional(
   'ssh_health_check',
   {
-    description: 'Comprehensive health check (single-shot bash -c with marker-delimited sections)',
+    description: 'Comprehensive health snapshot (cpu, memory, disk, load, uptime, cores) via one bash -c call with marker-delimited sections',
     inputSchema: {
       server: z.string().describe('Server name'),
-      detailed: z.boolean().optional().describe('Include network, load average'),
       format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
@@ -1882,10 +1880,10 @@ registerToolConditional(
 registerToolConditional(
   'ssh_service_status',
   {
-    description: 'Check service status (batch-safe parsing, typed health rollup)',
+    description: 'Typed systemd service status (ActiveState/SubState/LoadState/UnitFileState + last 10 status lines)',
     inputSchema: {
       server: z.string().describe('Server name'),
-      services: z.array(z.string()).describe('Service names'),
+      service: z.string().describe('Service unit name (e.g. "nginx" or "nginx.service")'),
       format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
@@ -2289,16 +2287,17 @@ registerToolConditional(
 registerToolConditional(
   'ssh_journalctl',
   {
-    description: 'Read systemd journal (typed JSONL, priority normalization)',
+    description: 'Read systemd journal (typed JSONL; priority normalization; no follow -- use ssh_tail_start for streaming)',
     inputSchema: {
       server: z.string().describe('Server name'),
-      unit: z.string().optional().describe('Unit to filter by'),
-      since: z.string().optional().describe('Time filter (e.g., "1 hour ago")'),
-      until: z.string().optional().describe('Upper bound'),
+      unit: z.string().optional().describe('Unit to filter by (e.g. "sshd.service")'),
+      since: z.string().optional().describe('Time lower bound (e.g., "1 hour ago", "2026-04-14 12:00")'),
+      until: z.string().optional().describe('Time upper bound'),
+      priority: z.string().optional().describe('Priority filter (debug/info/notice/warning/err/crit/alert/emerg, default info)'),
       lines: z.number().optional().describe('Max lines'),
-      priority: z.string().optional().describe('Priority filter'),
-      grep: z.string().optional().describe('Regex filter'),
-      output: z.enum(['json', 'text']).optional().describe('Journal output mode'),
+      grep: z.string().optional().describe('Extended-regex filter on message body'),
+      follow: z.boolean().optional().describe('Rejected -- use ssh_tail_start for streaming'),
+      json: z.boolean().optional().describe('Parse journal output as JSONL (default true); set false to parse as plain text'),
       format: z.enum(['markdown', 'json']).optional().describe('Tool output format')
     }
   },
@@ -2308,17 +2307,16 @@ registerToolConditional(
 registerToolConditional(
   'ssh_docker',
   {
-    description: 'Docker CLI wrapper (container/image regex validation, irreversibility flags)',
+    description: 'Docker CLI wrapper (container/image regex validation, preview on mutations)',
     inputSchema: {
       server: z.string().describe('Server name'),
       action: z.enum(['ps', 'images', 'inspect', 'logs', 'start', 'stop', 'restart', 'rm', 'rmi', 'pull', 'exec']).describe('Docker action'),
       container: z.string().optional().describe('Container name/ID'),
       image: z.string().optional().describe('Image reference'),
-      command: z.string().optional().describe('exec command'),
-      lines: z.number().optional().describe('logs tail lines'),
-      all: z.boolean().optional().describe('ps -a / images -a'),
-      force: z.boolean().optional().describe('rm -f / rmi -f'),
-      preview: z.boolean().optional().describe('Preview mutating actions'),
+      command: z.string().optional().describe('exec command (for action=exec)'),
+      tail_lines: z.number().optional().describe('logs tail line count'),
+      follow: z.boolean().optional().describe('logs -f streaming (only meaningful for action=logs)'),
+      preview: z.boolean().optional().describe('Preview mutating actions (start/stop/restart/rm/rmi/pull/exec)'),
       format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
@@ -2345,13 +2343,13 @@ registerToolConditional(
 registerToolConditional(
   'ssh_diff',
   {
-    description: 'Diff remote file vs local/remote (sha256-first fast path)',
+    description: 'Diff two files (same-server remote:remote, or cross-server by specifying server_b)',
     inputSchema: {
-      server: z.string().describe('Server name'),
-      remote_path: z.string().describe('Remote file'),
-      local_path: z.string().optional().describe('Local file to diff against'),
-      against: z.string().optional().describe('Another remote path to diff against'),
-      context: z.number().optional().describe('Context lines'),
+      server: z.string().describe('Server hosting path_a'),
+      path_a: z.string().describe('First file path'),
+      path_b: z.string().describe('Second file path (on `server` unless server_b set)'),
+      server_b: z.string().optional().describe('If set, path_b lives on this other server (cross-server diff)'),
+      preview: z.boolean().optional().describe('Show plan without running diff'),
       format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
@@ -2361,13 +2359,16 @@ registerToolConditional(
 registerToolConditional(
   'ssh_edit',
   {
-    description: 'Atomic safe-edit (tmp -> syntax-check -> backup -> mv swap, preview-capable)',
+    description: 'Atomic safe-edit (tmp -> optional syntax-check -> cp backup -> mv swap, preview-capable)',
     inputSchema: {
       server: z.string().describe('Server name'),
       path: z.string().describe('Remote file path'),
-      content: z.string().optional().describe('New content'),
-      encoding: z.enum(['utf8', 'base64']).optional().describe('Content encoding'),
-      syntax_check: z.string().optional().describe('Syntax check command (e.g., "nginx -t")'),
+      new_content: z.string().optional().describe('Replacement content for the whole file (mutually exclusive with patch)'),
+      patch: z.array(z.object({
+        find: z.string().describe('Literal string to replace'),
+        replace: z.string().describe('Replacement'),
+      })).optional().describe('List of find/replace edits to apply in order (mutually exclusive with new_content)'),
+      syntax_check: z.union([z.string(), z.enum(['auto', 'off'])]).optional().describe('Syntax checker: "auto" picks by extension, "off" disables, or a literal command'),
       preview: z.boolean().optional().describe('Show plan without editing'),
       format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
@@ -2378,13 +2379,12 @@ registerToolConditional(
 registerToolConditional(
   'ssh_tail_start',
   {
-    description: 'Start a sessionized tail follow (ring-buffered, readable later)',
+    description: 'Start a sessionized tail follow. Returns session_id; read new output later with ssh_tail_read; stop with ssh_tail_stop.',
     inputSchema: {
       server: z.string().describe('Server name'),
       file: z.string().describe('Path to log file'),
-      lines: z.number().optional().describe('Initial tail lines'),
-      grep: z.string().optional().describe('Grep filter'),
-      buffer_size: z.number().optional().describe('Ring buffer size'),
+      lines: z.number().optional().describe('Initial trailing lines to emit (default 50)'),
+      grep: z.string().optional().describe('Extended-regex filter'),
       format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
@@ -2394,10 +2394,10 @@ registerToolConditional(
 registerToolConditional(
   'ssh_tail_read',
   {
-    description: 'Read buffered output from a tail session',
+    description: 'Pull buffered output from a tail session started with ssh_tail_start. Cursor-style: pass since_offset to resume from a known point.',
     inputSchema: {
-      session_id: z.string().describe('Tail session ID'),
-      max_lines: z.number().optional().describe('Max lines to return'),
+      session_id: z.string().describe('Tail session ID returned by ssh_tail_start'),
+      since_offset: z.number().optional().describe('Resume from this byte offset (returned as total_bytes on prior read). Omit to return the current ring buffer window.'),
       format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
@@ -2432,12 +2432,9 @@ registerToolConditional(
 registerToolConditional(
   'ssh_session_memory',
   {
-    description: 'Read/write session-scoped memory KV store',
+    description: 'Snapshot the inferred memory/state of a running session (env vars set, cwd, last exit code, etc.)',
     inputSchema: {
-      session_id: z.string().describe('Session ID'),
-      action: z.enum(['get', 'set', 'delete', 'list']).describe('Action'),
-      key: z.string().optional().describe('Memory key'),
-      value: z.string().optional().describe('Value to set'),
+      session_id: z.string().describe('Session ID returned by ssh_session_start'),
       format: z.enum(['markdown', 'json']).optional().describe('Output format')
     }
   },
