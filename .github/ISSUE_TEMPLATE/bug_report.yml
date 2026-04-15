@@ -1,0 +1,88 @@
+name: Bug report
+description: Something broken in claude-code-ssh
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please include enough detail that a maintainer can reproduce without asking follow-ups.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `node -p "require('./package.json').version"` or `ssh-manager --version`
+      placeholder: 3.2.2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: client
+    attributes:
+      label: MCP client
+      options:
+        - Claude Code
+        - OpenAI Codex
+        - Other (explain below)
+    validations:
+      required: true
+
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      placeholder: v20.11.0
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15.2, Ubuntu 24.04, ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Describe the actual behavior. Include the tool name if you know it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should have happened
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: Minimal steps. If a specific SSH host setup matters (proxy_jump, Windows platform, etc.), include that.
+      placeholder: |
+        1. Configure server with `SSH_SERVER_X_PROXYJUMP=bastion`
+        2. Ask Claude to `ssh_execute` with cwd `/tmp`
+        3. Tool returns error ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Paste output from `~/.ssh-manager.log` or MCP stderr. Run with `SSH_LOG_LEVEL=DEBUG` if you can.
+      render: shell
+
+  - type: checkboxes
+    id: checked
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
+        - label: I redacted any credentials, hostnames, or paths from logs above
+          required: true

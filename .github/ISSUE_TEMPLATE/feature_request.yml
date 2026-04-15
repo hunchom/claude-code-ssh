@@ -1,0 +1,51 @@
+name: Feature request
+description: Something claude-code-ssh should do that it doesn't
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Good feature requests describe a real workflow that's painful today and the outcome you want, not a specific implementation.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What's the workflow you're trying to do, and where does it break down?
+    validations:
+      required: true
+
+  - type: textarea
+    id: desired
+    attributes:
+      label: What you'd want Claude to be able to say
+      description: A concrete example of the interaction you'd want.
+      placeholder: |
+        "ssh into prod03, check redis memory, restart if > 8GB"
+    validations:
+      required: true
+
+  - type: textarea
+    id: existing
+    attributes:
+      label: Why existing tools don't cover it
+      description: Did you try a combination of ssh_execute, ssh_service_status, ssh_tail? What was missing?
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Other tools, workarounds, or designs you looked at.
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Where does this belong
+      options:
+        - New tool in an existing group
+        - New tool group
+        - Change to an existing tool's schema/behavior
+        - Docs / examples
+        - Unsure
+    validations:
+      required: true

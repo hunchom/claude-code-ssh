@@ -18,31 +18,65 @@ Stop being the middleman between Claude and your servers.
 
 ## Why
 
-Claude can already run SSH. It has a bash tool. Hand it `ssh user@host "tail /var/log/app.log"` and it'll do the thing.
+Without an MCP, fleet ops through Claude looks like this:
 
-The problem is that every session you have to re-explain which hosts exist, which key unlocks which box, which user has sudo where, which port isn't the default, which bastion fronts the internal VLAN. Claude forgets all of it between conversations. Anything beyond a one-shot command turns into a fragile bash one-liner Claude rebuilds from scratch every time — a database dump here, a tunnel there, a deploy with rollback. Outputs aren't truncated, so one `journalctl --no-pager` can blow your whole context window. Connections don't pool, so every command is a fresh handshake.
+```
+you:    back up the payments db from prod01 and restore it to prod02
+Claude: which host is prod01? what user runs pg_dump? what key? which port?
+        does prod02 accept the same auth? what's the backup path?
+        [rebuilds the same bash one-liner it rebuilt last Tuesday]
+```
 
-It's technically possible. It's practically miserable.
+With claude-code-ssh:
 
-**claude-code-ssh formalizes the setup once and lets Claude operate against it naturally.** You declare your fleet — hosts, users, keys, bastions, default directories — in a config file Claude remembers across every session. You get 51 typed tools for the operations that were previously fragile bash: database dumps, SSH tunnels, atomic deploys, health checks, real-time log tails. Output is truncated head+tail so logs don't eat context. Connections pool. Sudo passwords go in via stdin, never argv. The query tool rejects anything but read-only SELECTs.
+```
+you:    back up the payments db from prod01 and restore it to prod02
+Claude: [ssh_backup_create] [ssh_download] [ssh_backup_restore]
+        done. dump is payments-2026-04-14.sql.gz (~340 MB). prod02 back in sync.
+```
 
-You describe outcomes. Claude picks tools. The servers respond.
+Fleet context lives in a config Claude reads once and keeps. Every tool is typed, pooled, head+tail truncated, sudo/password-safe by construction.
 
 ## What changes
 
-**Debugging production is a conversation, not a shell race.** "nginx is 502-ing on prod01" — Claude pulls the journal, checks the upstream config, spots the timeout, fixes it. You didn't touch a terminal.
-
-**Fleet operations collapse into one sentence.** "Roll out this config to every web server, one at a time, pause if any fail healthcheck." Done. No Ansible playbook, no tmux panes, no for-loop bash one-liners.
-
-**Claude has standing fleet context.** It already knows prod01 lives at 10.0.0.10, reaches it through the bastion, deploys to `/var/www/app`, uses the ed25519 key. You don't re-brief it every session.
-
-**You stop context-switching between terminal tabs and chat.** One surface. One conversation. The work gets done in the same thread you're thinking in.
+| | Before | After |
+|---|---|---|
+| **Production debug** | alt-tab between chat and three terminals | "prod01 is 502-ing" → Claude pulls journal, spots upstream timeout, fixes it |
+| **Fleet rollout** | Ansible playbook or tmux + for-loop | "roll this config to every web server, pause on healthcheck fail" |
+| **Session memory** | re-brief Claude every chat | fleet declared once, remembered across every session |
+| **Output overhead** | one `journalctl --no-pager` eats the context window | head+tail truncation, ASCII tables |
+| **Connection cost** | every command: fresh TCP + TLS + auth handshake | pooled, 30-minute idle timeout |
+| **Safety footguns** | sudo password in argv, Claude can `DROP TABLE` | stdin-only sudo, SELECT-only SQL parser |
 
 ## What it is
 
-An MCP server. Claude Code connects to it, it connects to your SSH hosts. 51 tools under the hood — shell, files, databases, backups, deploys, tunnels, sessions — but you never think about which tool; Claude picks them.
+```mermaid
+flowchart LR
+  subgraph client["your machine"]
+    C[Claude Code]
+  end
+  subgraph mcp["claude-code-ssh (MCP server)"]
+    T[51 typed tools]
+    P[ssh2 connection pool]
+    O[head+tail output]
+    T --> P
+    T --> O
+  end
+  subgraph fleet["your fleet"]
+    H1[prod01]
+    H2[prod02]
+    B[bastion]
+  end
+  C -- stdio --> T
+  P --> H1
+  P --> H2
+  P -. ProxyJump .-> B
+  B --> H1
+```
 
-Connections pool so reconnects don't cost seconds. Output gets truncated head+tail so long logs don't blow your context window. Tools are opt-in per group so you only pay for what you use (5-tool minimal mode is ~3.5k tokens, full mode is ~43k).
+- **51 typed tools across 7 groups** — shell, files, databases, backups, deploys, tunnels, sessions. Claude picks; you never enumerate.
+- **Pooled connections** — 30-minute idle timeout. Reconnects cost zero.
+- **Opt-in per group** — minimal mode (5 tools, ~3.5k tokens) to full mode (51 tools, ~43k tokens).
 
 ## Install
 
@@ -116,6 +150,32 @@ Pre-commit hooks scan for leaked secrets before push. Every SSH connection pools
 | gamechanger | 14 | cat, diff, edit, docker, journalctl, port-test |
 
 `ssh-manager tools configure` lets you pick which groups load.
+
+## vs raw `ssh` + bash
+
+Claude already has a bash tool. Why this server?
+
+| | `ssh` + bash | claude-code-ssh |
+|---|---|---|
+| Fleet memory across sessions | you re-brief every chat | declared once, remembered forever |
+| Output truncation | full `journalctl` blows the context window | head+tail, ASCII tables |
+| Connection handshake | every command is a new TCP + TLS + auth | pooled, 30min idle timeout |
+| Sudo password handling | argv / `echo pwd \| sudo -S` (leaks to `ps`) | stdin only, never argv |
+| DB query safety | Claude can send `DROP TABLE` | token-level SQL parser, SELECT only |
+| Host key verification | TOFU by default, no MITM check | SHA256 fingerprint match, strict mode available |
+| Tool surface | 1 generic shell exec | 51 typed tools with JSON schemas |
+| Context cost | unbounded per command | ~3.5k tokens minimal mode, ~43k full |
+
+The pitch isn't "Claude couldn't SSH before." The pitch is "Claude could SSH, but badly — and one bad command on prod is one too many."
+
+## Limitations
+
+What this doesn't do, today, honestly:
+
+- **No Windows SSH server support.** The platform flag exists, but most tools assume POSIX shell, systemd, and coreutils. If you run OpenSSH on Windows, `ssh_execute` works for simple commands; `ssh_service_status`, `ssh_journalctl`, `ssh_docker`, `ssh_systemctl` do not.
+- **No Kerberos / GSSAPI auth.** The underlying `ssh2` library supports password, key, and agent auth only. Enterprise AD-bound hosts won't work.
+- **`ssh_db_query` is read-only.** The token-level SQL parser rejects anything but `SELECT`. For writes, go through `ssh_execute` against the DB CLI — that's intentional, not a roadmap item.
+- **No connection failover or HA.** Pool is single-host. If a pooled connection dies, the next command reconnects fresh. There's no cross-host retry, no cluster awareness, no active/passive failover.
 
 ## Testing
 

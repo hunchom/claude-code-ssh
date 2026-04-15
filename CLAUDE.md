@@ -6,13 +6,13 @@ This file provides guidance to Claude Code when working on this repository.
 
 **claude-code-ssh** is an MCP server that gives Claude Code direct SSH access to a configured fleet of servers. The goal: Claude stops being a read-only assistant and becomes a hands-on operator — reading logs, editing configs, running backups, deploying, debugging — without a human typing commands between them.
 
-51 tools, 6 groups, opt-in per user. Connection pooling, streaming exec, head+tail output truncation, ASCII-only rendering.
+51 tools, 7 groups, opt-in per user. Connection pooling, streaming exec, head+tail output truncation, ASCII-only rendering.
 
 ## Architecture
 
 - **`src/index.js`** — MCP server entry, registers all 51 tools via `registerToolConditional()`
 - **`src/tools/*.js`** — 17 modular handler files, one per logical tool area (exec, files, backup, db, etc.)
-- **`src/tool-registry.js`** — tool metadata + group membership (core, sessions, monitoring, backup, database, advanced)
+- **`src/tool-registry.js`** — tool metadata + group membership (core, sessions, monitoring, backup, database, advanced, gamechanger)
 - **`src/tool-config-manager.js`** — per-user enablement via `~/.ssh-manager/tools-config.json`
 - **`src/stream-exec.js`** — streaming SSH exec with backpressure and UTF-8 boundary-safe chunking
 - **`src/output-formatter.js`** — ASCII markdown tables with head+tail truncation

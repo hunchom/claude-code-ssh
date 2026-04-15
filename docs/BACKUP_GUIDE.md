@@ -455,7 +455,6 @@ sudo /usr/local/bin/ssh-manager-backup-production.sh
 
 ## 🔗 Related Documentation
 
-- [Deployment Guide](DEPLOYMENT_GUIDE.md) - Deployment workflows
 - [Aliases & Hooks](ALIASES_AND_HOOKS.md) - Automation and hooks
 - [Main README](../README.md) - Getting started
 

@@ -468,6 +468,6 @@ Add comments to your config file to remember why you enabled specific groups:
 ## See Also
 
 - [README.md](../README.md) - Main project documentation
-- [CLAUDE.md](../CLAUDE.md) - Instructions for Claude Code AI
+- [Claude Code instructions (CLAUDE.md at repo root)](https://github.com/hunchom/claude-code-ssh/blob/main/CLAUDE.md)
 - [Tool Registry Source](../src/tool-registry.js) - Tool group definitions
 - [Config Manager Source](../src/tool-config-manager.js) - Configuration logic

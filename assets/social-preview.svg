@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <rect width="1280" height="640" fill="#0d1117"/>
+
+  <g font-family="Menlo, 'SF Mono', Consolas, 'Liberation Mono', monospace" text-anchor="middle">
+    <text x="640" y="280" font-size="110" fill="#e6edf3" font-weight="700" letter-spacing="-2">claude-code-ssh</text>
+    <text x="640" y="360" font-size="38" fill="#8b949e" font-weight="400">51 typed SSH tools for Claude Code</text>
+  </g>
+
+  <rect x="440" y="410" width="400" height="3" fill="#39d353"/>
+
+  <g font-family="Menlo, 'SF Mono', Consolas, 'Liberation Mono', monospace" text-anchor="middle">
+    <text x="640" y="470" font-size="24" fill="#6e7681" letter-spacing="1">pooled  ·  gated  ·  context-lean  ·  MCP</text>
+  </g>
+</svg>

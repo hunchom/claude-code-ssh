@@ -1,0 +1,9 @@
+# Default: all files reviewed by the repo owner.
+*   @hunchom
+
+# Security-sensitive paths — require owner review explicitly.
+/src/stream-exec.js         @hunchom
+/src/tools/exec-tools.js    @hunchom
+/src/tools/db-tools.js      @hunchom
+/SECURITY.md                @hunchom
+/.github/workflows/         @hunchom
