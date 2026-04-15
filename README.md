@@ -32,11 +32,14 @@
 
 ---
 
-An MCP server that gives Claude Code direct, typed SSH access to your server fleet. Fifty-one tools across seven opt-in groups (`core`, `sessions`, `monitoring`, `backup`, `database`, `advanced`, `gamechanger`). Connection-pooled. Head-plus-tail output truncation. Sudo passwords on stdin, never argv. The query tool refuses anything but `SELECT`.
+**An MCP server that hands Claude Code direct, typed SSH access to your server fleet.**
 
-<table>
-<tr>
-<td width="50%" valign="top">
+Fifty-one tools across seven opt-in groups (`core`, `sessions`, `monitoring`, `backup`, `database`, `advanced`, `gamechanger`), with the safety bits built in:
+
+- **Connection-pooled** — 30-minute idle timeout, every tool reuses the warm socket
+- **Head + tail output truncation** — `journalctl --no-pager` doesn't blow your context window
+- **Sudo passwords on stdin, never argv** — they don't leak into `ps`
+- **Token-level SQL parser** — the query tool refuses anything but `SELECT`
 
 ### From a Claude Code session
 
@@ -48,9 +51,6 @@ roll this nginx.conf to every web server, pause on healthcheck fail
 tunnel grafana.internal:3000 through bastion
 ```
 
-</td>
-<td width="50%" valign="top">
-
 ### From the shell
 
 ```bash
@@ -60,10 +60,6 @@ tunnel grafana.internal:3000 through bastion
 ./cli/ssh-manager tools list
 claude mcp add ssh-manager node "$(pwd)/src/index.js"
 ```
-
-</td>
-</tr>
-</table>
 
 ---
 
