@@ -43,7 +43,7 @@ export class ToolConfigManager {
           this.config = this.getDefaultConfig();
         } else {
           logger.info(`Tool configuration loaded from ${this.configPath}`);
-          logger.info(`Mode: ${this.config.mode}, Enabled tools: ${this.getEnabledTools().length}/37`);
+          logger.info(`Mode: ${this.config.mode}, Enabled tools: ${this.getEnabledTools().length}/${getAllTools().length}`);
         }
       } else {
         // No config file - default to all tools enabled
@@ -73,7 +73,8 @@ export class ToolConfigManager {
         monitoring: { enabled: true },
         backup: { enabled: true },
         database: { enabled: true },
-        advanced: { enabled: true }
+        advanced: { enabled: true },
+        gamechanger: { enabled: true }
       },
       tools: {},
       _comment: 'Tool configuration for claude-code-ssh. Run "ssh-manager tools configure" to customize.'
@@ -363,7 +364,7 @@ export class ToolConfigManager {
     return {
       mode: this.config.mode,
       configPath: this.configPath,
-      totalTools: 37,
+      totalTools: getAllTools().length,
       enabledCount: enabledTools.length,
       disabledCount: disabledTools.length,
       groups: Object.keys(TOOL_GROUPS).map(groupName => ({

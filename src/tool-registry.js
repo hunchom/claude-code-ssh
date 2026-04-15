@@ -7,7 +7,7 @@
 
 /**
  * Tool groups with their associated tools
- * Total: 37 tools across 6 groups
+ * Total: 51 tools across 7 groups
  */
 export const TOOL_GROUPS = {
   // Core group (5 tools) - Essential SSH operations
@@ -19,12 +19,14 @@ export const TOOL_GROUPS = {
     'ssh_sync'
   ],
 
-  // Sessions group (4 tools) - Persistent SSH session management
+  // Sessions group (6 tools) - Persistent SSH session management
   sessions: [
     'ssh_session_start',
     'ssh_session_send',
     'ssh_session_list',
-    'ssh_session_close'
+    'ssh_session_close',
+    'ssh_session_replay',
+    'ssh_session_memory'
   ],
 
   // Monitoring group (6 tools) - System health and monitoring
@@ -69,6 +71,22 @@ export const TOOL_GROUPS = {
     'ssh_execute_group',
     'ssh_group_manage',
     'ssh_history'
+  ],
+
+  // Gamechanger group (12 tools) - File/service/log/network/deploy primitives
+  gamechanger: [
+    'ssh_cat',
+    'ssh_edit',
+    'ssh_diff',
+    'ssh_systemctl',
+    'ssh_journalctl',
+    'ssh_docker',
+    'ssh_port_test',
+    'ssh_tail_start',
+    'ssh_tail_read',
+    'ssh_tail_stop',
+    'ssh_deploy_artifact',
+    'ssh_plan'
   ]
 };
 
@@ -77,11 +95,12 @@ export const TOOL_GROUPS = {
  */
 export const TOOL_GROUP_DESCRIPTIONS = {
   core: 'Essential SSH operations (list servers, execute commands, upload/download files, sync)',
-  sessions: 'Persistent SSH sessions with state management',
+  sessions: 'Persistent SSH sessions with state, replay, and inferred memory',
   monitoring: 'System health checks, service monitoring, process management, and alerts',
   backup: 'Automated backup and restore for databases and files',
   database: 'Database operations (MySQL, PostgreSQL, MongoDB)',
-  advanced: 'Advanced features (deployment, sudo, tunnels, groups, aliases, hooks, profiles)'
+  advanced: 'Advanced features (deployment, sudo, tunnels, groups, aliases, hooks, profiles)',
+  gamechanger: 'File reads/edits/diffs, systemd + journal + docker wrappers, port probe, sessionized log tails, declarative deploy, multi-step plans'
 };
 
 /**
@@ -89,16 +108,17 @@ export const TOOL_GROUP_DESCRIPTIONS = {
  */
 export const TOOL_GROUP_COUNTS = {
   core: 5,
-  sessions: 4,
+  sessions: 6,
   monitoring: 6,
   backup: 4,
   database: 4,
-  advanced: 14
+  advanced: 14,
+  gamechanger: 12
 };
 
 /**
  * Get all tool names across all groups
- * @returns {string[]} Array of all 37 tool names
+ * @returns {string[]} Array of all tool names (51 across 7 groups)
  */
 export function getAllTools() {
   return Object.values(TOOL_GROUPS).flat();
