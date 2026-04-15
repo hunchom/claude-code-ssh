@@ -1,12 +1,18 @@
 <p align="center">
-  <img src="assets/hero.svg" alt="claude-code-ssh" width="900" />
+  <img src="assets/repo-image.png" alt="claude-code-ssh — the operator reaches for the machine" width="920" />
+</p>
+
+<h1 align="center">claude-code-ssh</h1>
+
+<p align="center">
+  <em>Fifty-one typed SSH tools. Seven opt-in groups. Zero credentials on argv.</em>
 </p>
 
 <p align="center">
   <a href="https://github.com/hunchom/claude-code-ssh/actions/workflows/test.yml"><img src="https://github.com/hunchom/claude-code-ssh/actions/workflows/test.yml/badge.svg" alt="tests"/></a>
-  <a href="https://github.com/hunchom/claude-code-ssh/releases"><img src="https://img.shields.io/github/v/tag/hunchom/claude-code-ssh?label=version&style=flat-square" alt="version"/></a>
-  <img src="https://img.shields.io/badge/tools-51-brightgreen?style=flat-square" alt="51 tools" />
-  <img src="https://img.shields.io/badge/node-%E2%89%A518-339933?style=flat-square" alt="node 18+" />
+  <a href="https://github.com/hunchom/claude-code-ssh/releases"><img src="https://img.shields.io/github/v/tag/hunchom/claude-code-ssh?label=version&style=flat-square&color=FF6B1A" alt="version"/></a>
+  <img src="https://img.shields.io/badge/tools-51-FF6B1A?style=flat-square" alt="51 tools" />
+  <img src="https://img.shields.io/badge/node-%E2%89%A518-informational?style=flat-square" alt="node 18+" />
   <a href="https://github.com/hunchom/claude-code-ssh/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-informational?style=flat-square" alt="MIT"/></a>
 </p>
 
@@ -27,10 +33,6 @@
 </p>
 
 ## Why
-
-<p align="center">
-  <img src="assets/repo-image.png" alt="operator directs the machine" width="560" />
-</p>
 
 Without an MCP, fleet ops through Claude looks like this:
 
