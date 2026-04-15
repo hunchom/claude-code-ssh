@@ -135,6 +135,9 @@ cp .env.example .env       # add your servers
 claude mcp add ssh-manager node "$(pwd)/src/index.js"
 ```
 
+> [!TIP]
+> Restart your Claude Code session after `claude mcp add` so the tool registry reloads. Verify with `list my ssh servers` — Claude should answer from `.env`, not ask which servers you mean.
+
 ## Configure
 
 `.env` for Claude Code:
