@@ -11,7 +11,7 @@
   <a href="https://github.com/hunchom/claude-code-ssh/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-informational?style=flat-square" alt="license"/></a>
   <img src="https://img.shields.io/badge/node-%E2%89%A518-informational?style=flat-square" alt="node 18+"/>
   <img src="https://img.shields.io/badge/mcp-server-FF6B1A?style=flat-square" alt="mcp server"/>
-  <a href="https://github.com/hunchom/claude-code-ssh/releases"><img src="https://img.shields.io/github/v/tag/hunchom/claude-code-ssh?label=version&style=flat-square" alt="version"/></a>
+  <a href="https://www.npmjs.com/package/claude-code-ssh"><img src="https://img.shields.io/npm/v/claude-code-ssh?style=flat-square&color=cb3837&label=npm" alt="npm version"/></a>
 </p>
 
 <p align="center">
@@ -126,6 +126,17 @@ flowchart LR
 - **Opt-in per group** — minimal mode (5 tools, ~3.5k tokens) to full mode (51 tools, ~43k tokens).
 
 ## Install
+
+**From npm** ([`claude-code-ssh`](https://www.npmjs.com/package/claude-code-ssh)):
+
+```bash
+npm install -g claude-code-ssh
+cp $(npm root -g)/claude-code-ssh/.env.example ~/.claude-code-ssh.env
+# edit ~/.claude-code-ssh.env with your servers, then:
+claude mcp add ssh-manager claude-code-ssh
+```
+
+**From source** (for development or hacking on the tools):
 
 ```bash
 git clone https://github.com/hunchom/claude-code-ssh
