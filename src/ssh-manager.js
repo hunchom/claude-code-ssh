@@ -56,45 +56,53 @@ class SSHManager {
         }
       };
 
-      // Add host key verification callback if enabled
+      // Host key verification. ssh2 passes the raw SSH-wire-format public key
+      // as a Buffer. We SHA256 it and compare against known_hosts entries,
+      // which getCurrentHostKey also stores as base64-encoded SHA256 of the
+      // same bytes. Behavior:
+      //   - host is known and fingerprint matches one on file -> accept.
+      //   - host is known but fingerprint does NOT match       -> REJECT
+      //     (possible MITM or legitimate key rotation; user must manually
+      //     remove the stale entry via ssh-keygen -R to re-pin).
+      //   - host is not known                                  -> accept +
+      //     record (TOFU). If SSH_STRICT_HOSTS=1 is set in the environment,
+      //     unknown hosts are rejected instead.
       if (this.hostKeyVerification) {
-        connConfig.hostVerifier = (hashedKey) => {
+        connConfig.hostVerifier = (key) => {
           const port = this.config.port || 22;
           const host = this.config.host;
 
-          // Check if host is already known
+          const presented = 'SHA256:' + crypto.createHash('sha256').update(key).digest('base64').replace(/=+$/, '');
+
           if (isHostKnown(host, port)) {
-            // For now, accept all known hosts
-            // TODO: Implement proper fingerprint comparison once we understand SSH2's hash format
-            logger.info('Host key verified', { host, port });
-            return true;
-          }
-
-          // Host is not known
-          logger.info('New host detected', { host, port });
-
-          // If autoAcceptHostKey is enabled, accept and add the key
-          if (this.autoAcceptHostKey) {
-            logger.info('Auto-accept host key', { host, port });
-            // Schedule key addition after connection
-            setImmediate(async () => {
-              try {
-                await addHostKey(host, port);
-                logger.info('Host key added', { host, port });
-              } catch (err) {
-                logger.warn('Failed to add host key', {
-                  host,
-                  port,
-                  error: err.message
-                });
-              }
+            const stored = getCurrentHostKey(host, port) || [];
+            const match = stored.some(s => {
+              const norm = (s.fingerprint || '').replace(/=+$/, '');
+              return norm === presented;
             });
-            return true;
+            if (match) {
+              logger.info('Host key verified', { host, port, fingerprint: presented });
+              return true;
+            }
+            logger.error('HOST KEY MISMATCH -- possible MITM or key rotation', {
+              host, port,
+              presented,
+              stored: stored.map(s => s.fingerprint)
+            });
+            return false;
           }
 
-          // For backward compatibility, accept new hosts by default
-          // In production, you might want to prompt the user or check a whitelist
-          logger.warn('Auto-accepting new host', { host, port });
+          // Unknown host. Strict mode rejects; default is TOFU.
+          if (process.env.SSH_STRICT_HOSTS === '1') {
+            logger.error('Unknown host rejected (SSH_STRICT_HOSTS=1)', { host, port, presented });
+            return false;
+          }
+
+          logger.warn('TOFU: recording host key on first connect', { host, port, presented });
+          setImmediate(async () => {
+            try { await addHostKey(host, port); logger.info('Host key recorded', { host, port }); }
+            catch (err) { logger.warn('Failed to record host key', { host, port, error: err.message }); }
+          });
           return true;
         };
       }
