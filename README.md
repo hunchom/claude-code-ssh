@@ -1,19 +1,17 @@
 <p align="center">
-  <img src="assets/repo-image.png" alt="claude-code-ssh — the operator reaches for the machine" width="920" />
+  <img src="assets/repo-image.png" alt="" width="760"/>
 </p>
 
-<h1 align="center">claude-code-ssh</h1>
-
 <p align="center">
-  <em>Fifty-one typed SSH tools. Seven opt-in groups. Zero credentials on argv.</em>
+  <img src="assets/hero.svg" alt="claude-code-ssh" width="880"/>
 </p>
 
 <p align="center">
   <a href="https://github.com/hunchom/claude-code-ssh/actions/workflows/test.yml"><img src="https://github.com/hunchom/claude-code-ssh/actions/workflows/test.yml/badge.svg" alt="tests"/></a>
-  <a href="https://github.com/hunchom/claude-code-ssh/releases"><img src="https://img.shields.io/github/v/tag/hunchom/claude-code-ssh?label=version&style=flat-square&color=FF6B1A" alt="version"/></a>
-  <img src="https://img.shields.io/badge/tools-51-FF6B1A?style=flat-square" alt="51 tools" />
-  <img src="https://img.shields.io/badge/node-%E2%89%A518-informational?style=flat-square" alt="node 18+" />
-  <a href="https://github.com/hunchom/claude-code-ssh/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-informational?style=flat-square" alt="MIT"/></a>
+  <a href="https://github.com/hunchom/claude-code-ssh/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-informational?style=flat-square" alt="license"/></a>
+  <img src="https://img.shields.io/badge/node-%E2%89%A518-informational?style=flat-square" alt="node 18+"/>
+  <img src="https://img.shields.io/badge/mcp-server-FF6B1A?style=flat-square" alt="mcp server"/>
+  <a href="https://github.com/hunchom/claude-code-ssh/releases"><img src="https://img.shields.io/github/v/tag/hunchom/claude-code-ssh?label=version&style=flat-square" alt="version"/></a>
 </p>
 
 <p align="center">
@@ -31,6 +29,43 @@
   &middot;
   <a href="https://github.com/hunchom/claude-code-ssh/wiki">Wiki</a>
 </p>
+
+---
+
+An MCP server that gives Claude Code direct, typed SSH access to your server fleet. Fifty-one tools across seven opt-in groups (`core`, `sessions`, `monitoring`, `backup`, `database`, `advanced`, `gamechanger`). Connection-pooled. Head-plus-tail output truncation. Sudo passwords on stdin, never argv. The query tool refuses anything but `SELECT`.
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### From a Claude Code session
+
+```text
+list my ssh servers
+health check prod01
+back up payments db, restore to staging01
+roll this nginx.conf to every web server, pause on healthcheck fail
+tunnel grafana.internal:3000 through bastion
+```
+
+</td>
+<td width="50%" valign="top">
+
+### From the shell
+
+```bash
+./cli/ssh-manager server add
+./cli/ssh-manager server test prod01
+./cli/ssh-manager tools configure
+./cli/ssh-manager tools list
+claude mcp add ssh-manager node "$(pwd)/src/index.js"
+```
+
+</td>
+</tr>
+</table>
+
+---
 
 ## Why
 
