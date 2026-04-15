@@ -6,104 +6,191 @@
       .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
       .sans { font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
     </style>
+
+    <!-- Warm stone gradient, Sistine ceiling at dusk -->
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%"   stop-color="#111827"/>
-      <stop offset="100%" stop-color="#0B0F18"/>
+      <stop offset="0%"   stop-color="#1F1812"/>
+      <stop offset="55%"  stop-color="#120C07"/>
+      <stop offset="100%" stop-color="#0A0604"/>
     </linearGradient>
+
     <linearGradient id="accentBar" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%"   stop-color="#39D353"/>
-      <stop offset="100%" stop-color="#4ADE80"/>
+      <stop offset="0%"   stop-color="#FFB34A"/>
+      <stop offset="100%" stop-color="#FF3D1A"/>
     </linearGradient>
-    <radialGradient id="glow" cx="50%" cy="40%" r="70%">
-      <stop offset="0%"   stop-color="#39D353" stop-opacity="0.12"/>
-      <stop offset="60%"  stop-color="#39D353" stop-opacity="0"/>
+
+    <!-- Divine light from upper-left (the painting's light source) -->
+    <radialGradient id="divineRay" cx="22%" cy="30%" r="85%">
+      <stop offset="0%"   stop-color="#FFD07A" stop-opacity="0.26"/>
+      <stop offset="25%"  stop-color="#FF8C2B" stop-opacity="0.10"/>
+      <stop offset="60%"  stop-color="#FF3D1A" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Ember glow around the touch point -->
+    <radialGradient id="emberHalo" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="#FFE0A0" stop-opacity="0.85"/>
+      <stop offset="35%"  stop-color="#FF8C2B" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#FF3D1A" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Machine-red radial, fades the crimson into the background -->
+    <radialGradient id="machineRed" cx="50%" cy="50%" r="60%">
+      <stop offset="0%"   stop-color="#E04528"/>
+      <stop offset="70%"  stop-color="#A82518"/>
+      <stop offset="100%" stop-color="#6B1610"/>
     </radialGradient>
   </defs>
 
-  <!-- Background -->
+  <!-- Layer 1: warm dark base -->
   <rect width="1280" height="640" fill="url(#bg)"/>
-  <rect width="1280" height="640" fill="url(#glow)"/>
+  <!-- Layer 2: divine-ray from upper-left, echoing the painting -->
+  <rect width="1280" height="640" fill="url(#divineRay)"/>
 
-  <!-- Card frame -->
+  <!-- Bronze card frame -->
   <rect x="4" y="4" width="1272" height="632" rx="10" ry="10"
-        fill="none" stroke="#2A3348" stroke-width="2"/>
+        fill="none" stroke="#3A2A1A" stroke-width="2"/>
 
-  <!-- Left accent bar -->
+  <!-- Left accent bar (ember gradient) -->
   <rect x="12" y="12" width="4" height="616" rx="2" fill="url(#accentBar)"/>
 
-  <!-- Dotted grid (very subtle, adds texture) -->
-  <g fill="#1F2937" opacity="0.55">
+  <!-- Faint crack lines on the left stone (subtle, like ceiling fissures) -->
+  <g stroke="#2E2113" stroke-width="1" opacity="0.55" fill="none">
+    <path d="M 40 120 L 88 140 L 72 180 L 110 210"/>
+    <path d="M 20 420 L 60 450 L 45 500 L 80 540"/>
+  </g>
+
+  <!-- Floating code-rain behind the Claude figure (green glyphs, matches painting) -->
+  <g font-family="'JetBrains Mono', monospace" font-size="10" opacity="0.12" fill="#9EC96A">
+    <text x="900" y="105">01100101</text>
+    <text x="1010" y="128">10110100</text>
+    <text x="950" y="152">11001011</text>
+    <text x="1050" y="176">00111010</text>
+    <text x="920" y="200">10101001</text>
+    <text x="1060" y="224">01101100</text>
+    <text x="980" y="248">11011010</text>
+  </g>
+
+  <!-- Subtle cracked-stone texture dots -->
+  <g fill="#3A2A1A" opacity="0.5">
     <circle cx="120" cy="100" r="1.2"/>
     <circle cx="200" cy="100" r="1.2"/>
     <circle cx="280" cy="100" r="1.2"/>
-    <circle cx="1100" cy="100" r="1.2"/>
-    <circle cx="1180" cy="100" r="1.2"/>
     <circle cx="120" cy="540" r="1.2"/>
     <circle cx="200" cy="540" r="1.2"/>
-    <circle cx="1100" cy="540" r="1.2"/>
-    <circle cx="1180" cy="540" r="1.2"/>
   </g>
 
-  <!-- Top-right status pill -->
-  <g transform="translate(1040, 60)">
-    <rect x="0" y="0" width="150" height="30" rx="15" fill="#1A2030" stroke="#2A3348" stroke-width="1"/>
-    <circle cx="18" cy="15" r="4" fill="#4ADE80"/>
-    <text x="32" y="19" class="mono" font-size="11" fill="#9AA3AF" letter-spacing="1">v3.2.2 · 551 tests</text>
+  <!-- ========== Creation-of-Adam fingertip composition (right panel) ========== -->
+
+  <!-- Human arm/finger from lower-left of the panel, reaching up-right toward center.
+       Cream/marble, semi-translucent so the glow reads through. -->
+  <path d="M 680 520
+           C 760 490, 830 455, 885 410
+           C 910 390, 930 370, 945 348
+           C 952 340, 958 336, 962 340
+           C 966 344, 964 350, 958 356
+           C 945 372, 928 390, 908 408
+           C 855 454, 790 492, 680 534 Z"
+        fill="#E4C8A0"/>
+  <!-- Warm shadow on the underside of the human arm -->
+  <path d="M 680 534
+           C 790 492, 855 454, 908 408
+           C 918 398, 924 392, 930 388
+           C 925 400, 912 418, 895 432
+           C 845 470, 780 510, 680 545 Z"
+        fill="#A88863" opacity="0.65"/>
+
+  <!-- Machine arm/finger from upper-right, reaching down-left.
+       Deep crimson using the machineRed gradient. -->
+  <path d="M 1230 130
+           C 1150 160, 1080 200, 1020 252
+           C 1000 270, 985 285, 975 300
+           C 968 307, 965 312, 970 316
+           C 975 320, 980 318, 985 312
+           C 995 300, 1010 286, 1030 270
+           C 1090 222, 1160 180, 1240 148 Z"
+        fill="url(#machineRed)"/>
+  <!-- Crimson highlight along the top of the machine arm -->
+  <path d="M 1230 130
+           C 1150 160, 1080 200, 1020 252
+           C 1012 258, 1008 262, 1005 265
+           C 1015 255, 1028 242, 1045 230
+           C 1105 188, 1170 152, 1240 125 Z"
+        fill="#FF5028" opacity="0.35"/>
+
+  <!-- Ember halo behind the touch point -->
+  <circle cx="967" cy="328" r="72" fill="url(#emberHalo)"/>
+  <!-- Radial light rays from the touch point -->
+  <g stroke="#FFB34A" stroke-width="1.6" stroke-linecap="round" opacity="0.55">
+    <line x1="967" y1="260" x2="967" y2="230"/>
+    <line x1="967" y1="396" x2="967" y2="426"/>
+    <line x1="899" y1="328" x2="869" y2="328"/>
+    <line x1="1035" y1="328" x2="1065" y2="328"/>
+    <line x1="919" y1="280" x2="898" y2="259"/>
+    <line x1="1015" y1="376" x2="1036" y2="397"/>
+    <line x1="919" y1="376" x2="898" y2="397"/>
+    <line x1="1015" y1="280" x2="1036" y2="259"/>
   </g>
+  <!-- Ember core, layered bright-to-white -->
+  <circle cx="967" cy="328" r="18" fill="#FF8C2B" opacity="0.75"/>
+  <circle cx="967" cy="328" r="10" fill="#FFD070"/>
+  <circle cx="967" cy="328" r="5" fill="#FFF5E0"/>
+  <circle cx="967" cy="328" r="2" fill="#FFFFFF"/>
+
+  <!-- ========== Text layer (left panel) ========== -->
 
   <!-- Top-left marker -->
-  <text x="80" y="75" class="mono" font-size="13" fill="#6B7686" letter-spacing="3">
+  <text x="80" y="75" class="mono" font-size="13" fill="#8A7250" letter-spacing="3">
     ~/ CLAUDE-CODE-SSH
   </text>
 
-  <!-- Hero title -->
-  <text x="80" y="218" class="mono" font-weight="700" font-size="92" fill="#F5F7FA" letter-spacing="-3">
+  <!-- Top-right status pill -->
+  <g transform="translate(1040, 60)">
+    <rect x="0" y="0" width="150" height="30" rx="15" fill="#201610" stroke="#3A2A1A" stroke-width="1"/>
+    <circle cx="18" cy="15" r="4" fill="#FF8C2B"/>
+    <text x="32" y="19" class="mono" font-size="11" fill="#B8A689" letter-spacing="1">v3.2.2 · 551 tests</text>
+  </g>
+
+  <!-- Hero title, left-aligned, smaller than before so the illustration breathes -->
+  <text x="80" y="210" class="mono" font-weight="700" font-size="78" fill="#F4ECD8" letter-spacing="-2">
     claude-code
   </text>
-  <text x="80" y="318" class="mono" font-weight="700" font-size="92" fill="#39D353" letter-spacing="-3">
+  <text x="80" y="296" class="mono" font-weight="700" font-size="78" fill="#FF6B1A" letter-spacing="-2">
     -ssh
   </text>
 
-  <!-- Accent underline -->
-  <rect x="80" y="336" width="180" height="4" rx="2" fill="url(#accentBar)"/>
+  <!-- Ember underline -->
+  <rect x="80" y="314" width="160" height="4" rx="2" fill="url(#accentBar)"/>
 
   <!-- Tagline -->
-  <text x="80" y="398" class="sans" font-size="26" fill="#C6CBD4" font-weight="500">
+  <text x="80" y="372" class="sans" font-size="24" fill="#D4C4A6" font-weight="500">
     Fifty-one typed SSH tools.
-    <tspan fill="#9AA3AF" font-weight="400">Seven opt-in groups.</tspan>
   </text>
-  <text x="80" y="436" class="sans" font-size="26" fill="#9AA3AF" font-weight="400">
-    Zero credentials on argv. Zero writes through query.
+  <text x="80" y="406" class="sans" font-size="24" fill="#A99477" font-weight="400">
+    Seven opt-in groups. Zero credentials on argv.
   </text>
 
-  <!-- Tool group ladder with highlighted terminal -->
+  <!-- Small scriptural cue (nods to the painting without being cringe) -->
+  <text x="80" y="470" class="mono" font-size="12" fill="#7A6850" letter-spacing="2">
+    "and claude touched the host, and it was debugged."
+  </text>
+
+  <!-- Bottom-left context markers -->
   <g transform="translate(80, 540)">
-    <!-- leading core group, framed -->
-    <rect x="-8" y="-24" width="52" height="34" rx="4" fill="#1A2030" stroke="#2A3348" stroke-width="1"/>
-    <text x="18" y="-2" text-anchor="middle" class="mono" font-size="14" fill="#C6CBD4" font-weight="500">core</text>
+    <rect x="-8" y="-24" width="52" height="34" rx="4" fill="#201610" stroke="#3A2A1A" stroke-width="1"/>
+    <text x="18" y="-2" text-anchor="middle" class="mono" font-size="14" fill="#D4C4A6" font-weight="500">core</text>
+    <text x="60" y="0" class="mono" font-size="16" fill="#5E4C38">→</text>
+    <text x="92" y="0" class="mono" font-size="14" fill="#A99477">...</text>
+    <text x="130" y="0" class="mono" font-size="16" fill="#5E4C38">→</text>
 
-    <text x="60" y="0" class="mono" font-size="16" fill="#4B5568">→</text>
-    <text x="92" y="0" class="mono" font-size="14" fill="#9AA3AF">sessions</text>
-    <text x="178" y="0" class="mono" font-size="16" fill="#4B5568">→</text>
-    <text x="210" y="0" class="mono" font-size="14" fill="#9AA3AF">monitoring</text>
-    <text x="320" y="0" class="mono" font-size="16" fill="#4B5568">→</text>
-    <text x="352" y="0" class="mono" font-size="14" fill="#9AA3AF">backup</text>
-    <text x="430" y="0" class="mono" font-size="16" fill="#4B5568">→</text>
-    <text x="462" y="0" class="mono" font-size="14" fill="#9AA3AF">database</text>
-    <text x="552" y="0" class="mono" font-size="16" fill="#4B5568">→</text>
-    <text x="584" y="0" class="mono" font-size="14" fill="#9AA3AF">advanced</text>
-    <text x="680" y="0" class="mono" font-size="16" fill="#4B5568">→</text>
+    <rect x="162" y="-24" width="126" height="34" rx="4" fill="#FF6B1A" opacity="0.14"/>
+    <rect x="162" y="-24" width="126" height="34" rx="4" fill="none" stroke="#FF6B1A" stroke-width="2"/>
+    <text x="225" y="-2" text-anchor="middle" class="mono" font-size="14" fill="#FF8C2B" font-weight="700">gamechanger</text>
 
-    <!-- terminal gamechanger group, in accent -->
-    <rect x="710" y="-24" width="126" height="34" rx="4" fill="#39D353" opacity="0.12"/>
-    <rect x="710" y="-24" width="126" height="34" rx="4" fill="none" stroke="#39D353" stroke-width="2"/>
-    <text x="773" y="-2" text-anchor="middle" class="mono" font-size="14" fill="#39D353" font-weight="700">gamechanger</text>
-
-    <text x="860" y="0" class="mono" font-size="13" fill="#6B7686" letter-spacing="2">CLAUDE PICKS</text>
+    <text x="310" y="0" class="mono" font-size="13" fill="#7A6850" letter-spacing="2">CLAUDE PICKS</text>
   </g>
 
   <!-- Bottom-right coordinates -->
-  <text x="1200" y="598" text-anchor="end" class="mono" font-size="12" fill="#4B5568">
+  <text x="1200" y="598" text-anchor="end" class="mono" font-size="12" fill="#5E4C38">
     hunchom/claude-code-ssh · MIT
   </text>
 </svg>
