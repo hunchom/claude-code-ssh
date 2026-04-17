@@ -1,6 +1,6 @@
 # Tool reference
 
-50 tools across 7 groups. Claude picks them based on your intent — you rarely name them directly. This page exists so you can audit what Claude has access to and disable groups you don't need.
+51 tools across 7 groups. Claude picks them based on your intent — you rarely name them directly. This page exists so you can audit what Claude has access to and disable groups you don't need.
 
 > [!TIP]
 > `ssh-manager tools list` prints the currently-enabled tools and the token cost of your active set. `ssh-manager tools configure` flips groups on/off interactively.
@@ -51,6 +51,7 @@ Persistent shells. The session keeps its cwd, env, and shell state across multip
 | `ssh_process_manager` | list / filter / kill processes |
 | `ssh_tail` | real-time log tail with regex filter |
 | `ssh_monitor` | CPU / RAM / disk / net snapshot |
+| `ssh_alert_setup` | set / get / check threshold alerts (CPU, memory, per-mount disk) |
 | `ssh_history` | per-server command history |
 
 ## backup (4)

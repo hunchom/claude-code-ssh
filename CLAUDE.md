@@ -6,11 +6,11 @@ This file provides guidance to Claude Code when working on this repository.
 
 **claude-code-ssh** is an MCP server that gives Claude Code direct SSH access to a configured fleet of servers. The goal: Claude stops being a read-only assistant and becomes a hands-on operator — reading logs, editing configs, running backups, deploying, debugging — without a human typing commands between them.
 
-50 tools, 7 groups, opt-in per user. Connection pooling, streaming exec, head+tail output truncation, ASCII-only rendering.
+51 tools, 7 groups, opt-in per user. Connection pooling, streaming exec, head+tail output truncation, ASCII-only rendering.
 
 ## Architecture
 
-- **`src/index.js`** — MCP server entry, registers all 50 tools via `registerToolConditional()`
+- **`src/index.js`** — MCP server entry, registers all 51 tools via `registerToolConditional()`
 - **`src/tools/*.js`** — 17 modular handler files, one per logical tool area (exec, files, backup, db, etc.)
 - **`src/tool-registry.js`** — tool metadata + group membership (core, sessions, monitoring, backup, database, advanced, gamechanger)
 - **`src/tool-config-manager.js`** — per-user enablement via `~/.ssh-manager/tools-config.json`
@@ -97,6 +97,7 @@ The server exposes these tools to Claude Code and OpenAI Codex:
 - `ssh_health_check`: Comprehensive server health check (CPU, RAM, Disk, Network)
 - `ssh_service_status`: Check status of services (nginx, mysql, docker, etc.)
 - `ssh_process_manager`: List, monitor, or kill processes
+- `ssh_alert_setup`: Configure CPU/memory/disk thresholds per server; `check` action compares live metrics to thresholds
 
 ### Database Management (v2.3+)
 - `ssh_db_dump`: Create database dumps (MySQL, PostgreSQL, MongoDB)

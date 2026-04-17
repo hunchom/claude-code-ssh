@@ -37,9 +37,13 @@ const ICONS = {
 
 class Logger {
   constructor() {
-    // Set log level from environment variable
-    const envLevel = process.env.SSH_LOG_LEVEL?.toUpperCase() || 'INFO';
-    this.currentLevel = LOG_LEVELS[envLevel] ?? LOG_LEVELS.INFO;
+    // Set log level. Priority: SSH_LOG_LEVEL > MCP_SSH_DEBUG (shorthand for
+    // LEVEL=DEBUG) > default INFO.
+    const envLevel = process.env.SSH_LOG_LEVEL?.toUpperCase();
+    const debugShorthand = /^(1|true|yes|on)$/i.test(process.env.MCP_SSH_DEBUG || '');
+    this.currentLevel = envLevel != null
+      ? (LOG_LEVELS[envLevel] ?? LOG_LEVELS.INFO)
+      : (debugShorthand ? LOG_LEVELS.DEBUG : LOG_LEVELS.INFO);
 
     // Enable verbose mode from environment
     this.verbose = process.env.SSH_VERBOSE === 'true';

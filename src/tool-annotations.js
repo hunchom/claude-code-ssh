@@ -54,6 +54,12 @@ export const TOOL_ANNOTATIONS = {
   ssh_process_manager: { title: 'Manage Remote Processes', annotations: { openWorldHint: true } },
   ssh_monitor: { title: 'Resource Monitor Snapshot', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
   ssh_tail: { title: 'Tail Log File', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
+  ssh_alert_setup: {
+    title: 'Configure Health Alerts',
+    // set/get mutate local config; check is read-only against the remote.
+    // Taken together, not readOnly and not destructive -- just stateful config.
+    annotations: { idempotentHint: true },
+  },
 
   // Backup
   ssh_backup_create: { title: 'Create Backup', annotations: { openWorldHint: true } },

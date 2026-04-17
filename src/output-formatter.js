@@ -6,7 +6,13 @@
  * no emoji, single-char dividers.
  *
  * Callers build an ExecResult, then choose MCP content via makeMcpContent().
+ *
+ * Truncation cap defaults to OUTPUT_LIMITS.MAX_OUTPUT_LENGTH (tunable via
+ * MCP_SSH_MAX_OUTPUT_LENGTH env var). Tool handlers may still pass an
+ * explicit maxLen -- it overrides the env default.
  */
+
+import { OUTPUT_LIMITS } from './config.js';
 
 // ANSI CSI / OSC stripping. Covers color, cursor, title sequences.
 // eslint-disable-next-line no-control-regex
@@ -27,7 +33,7 @@ export function stripAnsi(s) {
  * - If input fits, truncatedBytes = 0 and text is unchanged.
  * - Else keeps max/2 chars from head and from tail.
  */
-export function truncateHeadTail(s, max = 10_000) {
+export function truncateHeadTail(s, max = OUTPUT_LIMITS.MAX_OUTPUT_LENGTH) {
   const input = s == null ? '' : String(s);
   const originalBytes = input.length;
   if (originalBytes <= max) {
@@ -58,7 +64,7 @@ export function formatExecResult({
   stderr,
   code,
   durationMs,
-  maxLen = 10_000,
+  maxLen = OUTPUT_LIMITS.MAX_OUTPUT_LENGTH,
 }) {
   const out = truncateHeadTail(stripAnsi(stdout), maxLen);
   const err = truncateHeadTail(stripAnsi(stderr), maxLen);

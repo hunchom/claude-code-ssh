@@ -7,7 +7,7 @@
 
 /**
  * Tool groups with their associated tools
- * Total: 50 tools across 7 groups
+ * Total: 51 tools across 7 groups
  */
 export const TOOL_GROUPS = {
   // Core group (5 tools) - Essential SSH operations
@@ -29,13 +29,14 @@ export const TOOL_GROUPS = {
     'ssh_session_memory'
   ],
 
-  // Monitoring group (5 tools) - System health and monitoring
+  // Monitoring group (6 tools) - System health and monitoring
   monitoring: [
     'ssh_health_check',
     'ssh_service_status',
     'ssh_process_manager',
     'ssh_monitor',
-    'ssh_tail'
+    'ssh_tail',
+    'ssh_alert_setup'
   ],
 
   // Backup group (4 tools) - Backup and restore operations
@@ -108,7 +109,7 @@ export const TOOL_GROUP_DESCRIPTIONS = {
 export const TOOL_GROUP_COUNTS = {
   core: 5,
   sessions: 6,
-  monitoring: 5,
+  monitoring: 6,
   backup: 4,
   database: 4,
   advanced: 14,

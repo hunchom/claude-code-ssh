@@ -58,6 +58,7 @@ import { handleSshExecute, handleSshExecuteSudo, handleSshExecuteGroup } from '.
 import { handleSshUpload, handleSshDownload, handleSshSync, handleSshDiff, handleSshEdit } from './tools/transfer-tools.js';
 import { handleSshTail, handleSshTailStart, handleSshTailRead, handleSshTailStop } from './tools/tail-tools.js';
 import { handleSshHealthCheck, handleSshMonitor, handleSshServiceStatus, handleSshProcessManager } from './tools/monitoring-tools.js';
+import { handleSshAlertSetup } from './tools/alerts-tools.js';
 import { handleSshDbQuery, handleSshDbList, handleSshDbDump, handleSshDbImport } from './tools/db-tools.js';
 import { handleSshBackupCreate, handleSshBackupList, handleSshBackupRestore, handleSshBackupSchedule } from './tools/backup-tools.js';
 import { handleSshDeploy } from './tools/deploy-tools.js';
@@ -1457,7 +1458,7 @@ registerToolConditional(
     description: 'Create SSH tunnel (DNS+TCP reachability preview, typed state)',
     inputSchema: {
       server: z.string().describe('Server name or alias'),
-      type: z.enum(['local', 'remote']).describe('Tunnel type (local port forward or remote reverse tunnel)'),
+      type: z.enum(['local', 'remote', 'dynamic']).describe('local port forward, remote reverse tunnel, or dynamic SOCKS5 proxy'),
       localHost: z.string().optional().describe('Local host (alias for local_host)'),
       local_host: z.string().optional().describe('Local host'),
       localPort: z.number().optional().describe('Local port (alias for local_port)'),
@@ -1809,6 +1810,23 @@ registerToolConditional(
     getConnection,
     args: { ...args, sort_by: args.sort_by || args.sortBy }
   })
+);
+
+registerToolConditional(
+  'ssh_alert_setup',
+  {
+    description: 'Configure and check health-threshold alerts. Stores config per server on the operator machine; `check` compares current health_check metrics to thresholds. No background runner -- wire `check` into cron or ssh_hooks for continuous monitoring.',
+    inputSchema: {
+      server: z.string().describe('Server name'),
+      action: z.enum(['set', 'get', 'check']).describe('set thresholds, get config, or check current metrics against thresholds'),
+      cpuThreshold: z.number().min(0).max(100).optional().describe('CPU usage threshold percent (0-100)'),
+      memoryThreshold: z.number().min(0).max(100).optional().describe('Memory usage threshold percent (0-100)'),
+      diskThreshold: z.number().min(0).max(100).optional().describe('Disk usage threshold percent applied to every mount (0-100)'),
+      enabled: z.boolean().optional().describe('Enable or disable alert evaluation (default true)'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format'),
+    }
+  },
+  async (args) => handleSshAlertSetup({ getConnection, args })
 );
 
 // ============================================================================
