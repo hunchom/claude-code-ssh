@@ -382,9 +382,9 @@ await test('ssh_download: fastGet error -> isError', async () => {
 // --------------------------------------------------------------------------
 // ssh_sync
 // --------------------------------------------------------------------------
-await test('buildRsyncArgv: keypath auth yields direct rsync with -i key', () => {
+await test('buildRsyncArgv: keyPath auth yields direct rsync with -i key (canonical field)', () => {
   const argv = buildRsyncArgv({
-    serverConfig: { user: 'u', host: 'h', keypath: '/k' },
+    serverConfig: { user: 'u', host: 'h', keyPath: '/k' },
     direction: 'push', localPath: '/src', remotePath: '/dst',
     exclude: [], dry_run: false, delete: false, compress: true,
   });
@@ -398,14 +398,28 @@ await test('buildRsyncArgv: keypath auth yields direct rsync with -i key', () =>
   assert(argv[argv.length - 1] === 'u@h:/dst');
 });
 
-await test('buildRsyncArgv: password auth prepends -p + rsync', () => {
+await test('buildRsyncArgv: keypath (legacy alias) still accepted for backward compat', () => {
+  const argv = buildRsyncArgv({
+    serverConfig: { user: 'u', host: 'h', keypath: '/legacy' },
+    direction: 'push', localPath: '/s', remotePath: '/d',
+  });
+  const eIdx = argv.indexOf('-e');
+  assert(argv[eIdx + 1].includes('-i /legacy'),
+    'legacy lowercase keypath field should resolve the same as keyPath');
+});
+
+await test('buildRsyncArgv: password auth is NOT embedded in argv (regression: no secret leak via ps aux)', () => {
   const argv = buildRsyncArgv({
     serverConfig: { user: 'u', host: 'h', password: 'sekret' },
     direction: 'push', localPath: '/s', remotePath: '/d',
   });
-  assert.strictEqual(argv[0], '-p');
-  assert.strictEqual(argv[1], 'sekret');
-  assert.strictEqual(argv[2], 'rsync');
+  // Password must not appear anywhere in the rsync argv. The handler uses
+  // `sshpass -e` + SSHPASS env var -- proven by the ssh_sync test below.
+  for (const v of argv) {
+    assert(!String(v).includes('sekret'),
+      `password leaked into rsync argv: ${JSON.stringify(argv)}`);
+  }
+  assert.strictEqual(argv[0], '-avz'); // pure rsync flags, no sshpass prefix
 });
 
 await test('buildRsyncArgv: exclude + dry_run + delete flags honored', () => {
@@ -523,10 +537,10 @@ await test('ssh_sync: same-prefix source/dest rejected with helpful error', asyn
   assert(parsed.error.includes('one local + one remote'));
 });
 
-await test('ssh_sync: password config drives sshpass command', async () => {
+await test('ssh_sync: password config drives `sshpass -e rsync ...` with SSHPASS env (no secret in argv)', async () => {
   const spawnCalls = [];
-  const fakeSpawn = (cmd, args) => {
-    spawnCalls.push({ cmd, args });
+  const fakeSpawn = (cmd, args, opts) => {
+    spawnCalls.push({ cmd, args, opts });
     const proc = new EventEmitter();
     proc.stdout = new EventEmitter();
     proc.stderr = new EventEmitter();
@@ -542,10 +556,15 @@ await test('ssh_sync: password config drives sshpass command', async () => {
       format: 'json', spawnFn: fakeSpawn,
     },
   });
-  assert.strictEqual(spawnCalls[0].cmd, 'sshpass');
-  assert.strictEqual(spawnCalls[0].args[0], '-p');
-  assert.strictEqual(spawnCalls[0].args[1], 'pw');
-  assert.strictEqual(spawnCalls[0].args[2], 'rsync');
+  const call = spawnCalls[0];
+  assert.strictEqual(call.cmd, 'sshpass');
+  assert.strictEqual(call.args[0], '-e', 'sshpass must read password from SSHPASS env, not argv');
+  assert.strictEqual(call.args[1], 'rsync');
+  // Password must not be in argv at all
+  for (const a of call.args) {
+    assert(!String(a).includes('pw'), `password leaked into argv: ${JSON.stringify(call.args)}`);
+  }
+  assert.strictEqual(call.opts.env.SSHPASS, 'pw', 'SSHPASS must be set in spawn env');
 });
 
 // --------------------------------------------------------------------------

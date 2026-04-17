@@ -26,6 +26,20 @@ const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_LIMIT = 1000;
 const MAX_ALLOWED_LIMIT = 100_000;
 
+/**
+ * Assemble a MongoDB URI for the `mongo` family so we can hand it to mongosh
+ * via env var instead of argv. Defaults to localhost:27017 because the SSH
+ * server IS typically the DB host in this deployment model.
+ */
+function buildMongoConnectionUri({ user, password, host = 'localhost', port = 27017, database, authSource }) {
+  const userinfo = user
+    ? (password ? `${encodeURIComponent(user)}:${encodeURIComponent(password)}@` : `${encodeURIComponent(user)}@`)
+    : '';
+  const db = database ? `/${encodeURIComponent(database)}` : '';
+  const q = authSource ? `?authSource=${encodeURIComponent(authSource)}` : '';
+  return `mongodb://${userinfo}${host}:${port}${db}${q}`;
+}
+
 // --------------------------------------------------------------------------
 // Helpers
 // --------------------------------------------------------------------------
@@ -113,19 +127,24 @@ export function buildPostgresQueryCommand({ database, query, user }) {
 }
 
 /**
- * Build the MongoDB query command. Credentials via URI env var.
- * `query` here is expected to be a JS snippet (e.g. 'db.users.find({active:true}).limit(100).toArray()').
+ * Build the MongoDB query command. Credentials via SSH_MGR_DB_URI env var
+ * (never argv). `query` is a JS snippet; the db is switched via
+ * `db.getSiblingDB(...)` inside the eval so we don't rely on mongosh's
+ * positional-URI parsing.
  */
-export function buildMongoQueryCommand({ database, query, user }) {
-  // MONGO_URL carried via env var; mongosh accepts `mongodb://user:pw@host/db`.
-  // We fall back to plain mongosh against localhost when no URL is configured.
-  const parts = ['mongosh', '--quiet'];
-  if (database) parts.push(shQuote(database));
-  parts.push('--eval', shQuote(query));
-  if (user) {
-    parts.splice(2, 0, '-u', shQuote(user), '-p', '"$SSH_MGR_DB_PASS"');
-  }
-  return parts.join(' ');
+export function buildMongoQueryCommand({ database, query, user: _user }) {
+  // Assemble a single eval that: (a) connects via URI read from env (so no
+  // credentials appear in argv on the target host), (b) selects the target
+  // database via getSiblingDB instead of a positional, (c) runs the caller's
+  // snippet with the correct `db` binding.
+  const dbLit = JSON.stringify(database || 'admin');
+  const wrappedEval =
+    'const __mgr_conn = new Mongo(process.env.SSH_MGR_DB_URI); ' +
+    `const db = __mgr_conn.getDB(${dbLit}); ` +
+    query;
+  // --nodb tells mongosh NOT to auto-connect; we build the connection in the
+  // eval so mongosh never sees a URI in argv.
+  return `mongosh --quiet --nodb --eval ${shQuote(wrappedEval)}`;
 }
 
 // --------------------------------------------------------------------------
@@ -212,7 +231,8 @@ export function buildImportCommand({ db_type, database, input_path, user }) {
   if (db_type === 'mongodb') {
     const userArgs = user ? ` -u ${shQuote(user)} -p "$SSH_MGR_DB_PASS"` : '';
     const gzipFlag = gz || String(input_path).endsWith('.archive.gz') ? ' --gzip' : '';
-    return `mongorestore${userArgs} --db ${shQuote(database)}${gzipFlag} --archive=${input_path.replace(/'/g, '\'\\\'\'')}`;
+    // shQuote wraps in single quotes: --archive='/path with spaces/db.archive'
+    return `mongorestore${userArgs} --db ${shQuote(database)}${gzipFlag} --archive=${shQuote(input_path)}`;
   }
   return '';
 }
@@ -310,14 +330,19 @@ export async function handleSshDbQuery({ getConnection, args }) {
 
   // Build command
   let cmd;
-  if (db_type === 'mysql') cmd = buildMySqlQueryCommand({ database, query: finalQuery, user });
-  else if (db_type === 'postgresql') cmd = buildPostgresQueryCommand({ database, query: finalQuery, user });
-  else cmd = buildMongoQueryCommand({ database, query: finalQuery, user });
-
-  // Wrap with env-var password injection so the secret never touches argv.
-  // `SSH_MGR_DB_PASS` is set inline before the command; shell exports it to
-  // the child (mysql/psql/mongosh) via MYSQL_PWD/PGPASSWORD.
-  const envPrefix = `SSH_MGR_DB_PASS=${shQuote(password)} `;
+  let envPrefix;
+  if (db_type === 'mysql') {
+    cmd = buildMySqlQueryCommand({ database, query: finalQuery, user });
+    envPrefix = `SSH_MGR_DB_PASS=${shQuote(password)} `;
+  } else if (db_type === 'postgresql') {
+    cmd = buildPostgresQueryCommand({ database, query: finalQuery, user });
+    envPrefix = `SSH_MGR_DB_PASS=${shQuote(password)} `;
+  } else {
+    // mongo: URI via env so the password never enters argv on the target host.
+    cmd = buildMongoQueryCommand({ database, query: finalQuery, user });
+    const uri = buildMongoConnectionUri({ user, password, database });
+    envPrefix = `SSH_MGR_DB_URI=${shQuote(uri)} `;
+  }
   const fullCmd = envPrefix + cmd;
 
   const startedAt = Date.now();

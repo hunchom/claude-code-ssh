@@ -79,15 +79,31 @@ await test('buildPostgresQueryCommand: uses PGPASSWORD env, NOT password in argv
   assert(cmd.includes("-d 'app'"));
 });
 
-await test('buildMongoQueryCommand: escapes eval snippet', () => {
+await test('buildMongoQueryCommand: uses --nodb + env-URI, escapes eval, names db via getSiblingDB', () => {
   const cmd = buildMongoQueryCommand({
     database: 'app',
     query: "db.users.find({name: \"O'Brien\"}).toArray()",
   });
   assert(cmd.startsWith('mongosh'));
-  assert(cmd.includes("'app'"));
+  assert(cmd.includes('--nodb'),
+    '--nodb is required so mongosh does NOT auto-connect from argv/URI');
+  assert(cmd.includes('getDB("app")'),
+    'target db must be selected via Mongo().getDB(), not as a positional URI arg');
+  assert(cmd.includes('process.env.SSH_MGR_DB_URI'),
+    'connection URI must be read from env, never argv');
   // Single quotes inside the query get POSIX-escaped: '\''
   assert(cmd.includes("'\\''"), 'single-quote inside eval must be POSIX-escaped');
+});
+
+await test('buildMongoQueryCommand: no user/credentials appear in argv (regression: H8)', () => {
+  const cmd = buildMongoQueryCommand({
+    database: 'app',
+    query: 'db.x.find({}).toArray()',
+    user: 'alice',
+  });
+  // Neither `-u` nor `-p` should appear -- those leak via `ps aux`.
+  assert(!/\s-u\s/.test(cmd), 'mongo query must not put `-u` user in argv');
+  assert(!/\s-p\s/.test(cmd), 'mongo query must not put `-p` password in argv');
 });
 
 // --------------------------------------------------------------------------

@@ -421,14 +421,28 @@ function renderTransferMarkdown(tool) {
 // --------------------------------------------------------------------------
 
 /**
+ * Resolved auth method for rsync. Returns the concrete strategy so the
+ * caller can pick a spawn shape without re-checking fields.
+ * Accepts both `keyPath` (canonical, matches config-loader) and `keypath`
+ * (historical alias).
+ */
+function resolveRsyncAuth(serverConfig) {
+  if (!serverConfig) return { kind: 'none', keyFile: null };
+  const keyFile = serverConfig.keyPath || serverConfig.keypath || null;
+  if (keyFile) return { kind: 'key', keyFile: String(keyFile).replace(/^~/, os.homedir()) };
+  if (serverConfig.password) return { kind: 'password', password: String(serverConfig.password) };
+  return { kind: 'none' };
+}
+
+/**
  * Build argv for rsync based on args + resolved server config.
+ * Returns ONLY rsync arguments -- never includes `sshpass` or a password.
+ * Caller is responsible for wrapping in `sshpass -e` when auth.kind === 'password'.
  * Exported for unit tests.
  */
 export function buildRsyncArgv({ serverConfig, direction, localPath, remotePath, exclude = [], dry_run = false, delete: del = false, compress = true }) {
+  const auth = resolveRsyncAuth(serverConfig);
   const argv = [];
-  if (serverConfig && serverConfig.password && !serverConfig.keypath) {
-    argv.push('-p', serverConfig.password, 'rsync');
-  }
   const opts = compress ? ['-avz'] : ['-av'];
   if (dry_run) opts.push('--dry-run');
   if (del) opts.push('--delete');
@@ -438,10 +452,9 @@ export function buildRsyncArgv({ serverConfig, direction, localPath, remotePath,
   argv.push(...opts);
 
   const sshOpts = ['-o StrictHostKeyChecking=accept-new', '-o ConnectTimeout=10'];
-  if (serverConfig && serverConfig.keypath) {
+  if (auth.kind === 'key') {
     sshOpts.unshift('-o BatchMode=yes');
-    const keyPath = String(serverConfig.keypath).replace(/^~/, os.homedir());
-    sshOpts.push(`-i ${keyPath}`);
+    sshOpts.push(`-i ${auth.keyFile}`);
   }
   if (serverConfig && serverConfig.port && String(serverConfig.port) !== '22') {
     sshOpts.push(`-p ${serverConfig.port}`);
@@ -516,9 +529,22 @@ export async function handleSshSync({ getConnection: _getConnection, getServerCo
     try { serverConfig = await getServerConfig(server); } catch (_) { /* best-effort */ }
   }
 
-  const usePassword = !!(serverConfig && serverConfig.password && !serverConfig.keypath);
-  const rsyncCmd = usePassword ? 'sshpass' : 'rsync';
+  const auth = resolveRsyncAuth(serverConfig);
   const rsyncArgs = buildRsyncArgv({ serverConfig, direction, localPath, remotePath, exclude, dry_run, delete: del, compress });
+
+  // Password auth: wrap rsync in `sshpass -e rsync ...` and pass password via
+  // SSHPASS env var. Never put the password in argv (visible to `ps aux`).
+  let spawnCmd;
+  let spawnArgs;
+  const spawnOpts = { stdio: ['ignore', 'pipe', 'pipe'] };
+  if (auth.kind === 'password') {
+    spawnCmd = 'sshpass';
+    spawnArgs = ['-e', 'rsync', ...rsyncArgs];
+    spawnOpts.env = { ...process.env, SSHPASS: auth.password };
+  } else {
+    spawnCmd = 'rsync';
+    spawnArgs = rsyncArgs;
+  }
 
   const startedAt = Date.now();
 
@@ -528,7 +554,7 @@ export async function handleSshSync({ getConnection: _getConnection, getServerCo
     let timedOut = false;
     let proc;
     try {
-      proc = spawnFn(rsyncCmd, rsyncArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+      proc = spawnFn(spawnCmd, spawnArgs, spawnOpts);
     } catch (e) {
       return resolve(toMcp(fail('ssh_sync', `spawn failed: ${e.message || e}`, { server }), { format }));
     }
@@ -584,7 +610,7 @@ export async function handleSshSync({ getConnection: _getConnection, getServerCo
         files_transferred: filesMatch ? parseInt(filesMatch[1].replace(/,/g, ''), 10) : 0,
         bytes_transferred: sizeMatch ? parseInt(sizeMatch[1].replace(/,/g, ''), 10) : 0,
         duration_ms: durationMs,
-        rsync_argv: [rsyncCmd, ...rsyncArgs],
+        rsync_argv: [spawnCmd, ...spawnArgs],
       };
       resolve(toMcp(
         ok('ssh_sync', data, { server, duration_ms: durationMs }),
@@ -653,15 +679,24 @@ export async function handleSshDiff({ getConnection, args }) {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sshdiff-'));
     const tmpA = path.join(tmpDir, 'a');
     const tmpB = path.join(tmpDir, 'b');
+    let sftpA, sftpB;
     try {
-      const sftpA = await getSftpChannel(clientA);
-      const sftpB = await getSftpChannel(clientB);
+      sftpA = await getSftpChannel(clientA);
+      sftpB = await getSftpChannel(clientB);
       await sftpFastGet(sftpA, path_a, tmpA);
       await sftpFastGet(sftpB, path_b, tmpB);
     } catch (e) {
+      // Close SFTP channels before returning -- OpenSSH defaults to MaxSessions=10
+      // and leaking SFTP channels on cross-server diffs runs the pool dry fast (H1).
+      if (sftpA) endSftp(sftpA);
+      if (sftpB) endSftp(sftpB);
       try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) { /* ignore */ }
       return toMcp(fail('ssh_diff', `fetch failed: ${e.message || e}`, { server }), { format });
     }
+
+    // Success path must also release the SFTP channels (H1).
+    if (sftpA) endSftp(sftpA);
+    if (sftpB) endSftp(sftpB);
 
     const diffOut = await spawnDiffLocal(tmpA, tmpB);
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) { /* ignore */ }

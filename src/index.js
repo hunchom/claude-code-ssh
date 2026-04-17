@@ -407,13 +407,17 @@ async function getConnection(serverName) {
   return connections.get(normalizedName);
 }
 
-// Create MCP server
+// Create MCP server. Version pulled from package.json so the wire version
+// never drifts from the released build.
+const __pkgDir = path.dirname(fileURLToPath(import.meta.url));
+const __pkgJson = JSON.parse(fs.readFileSync(path.join(__pkgDir, '..', 'package.json'), 'utf8'));
+const SERVER_VERSION = __pkgJson.version;
 const server = new McpServer({
   name: 'claude-code-ssh',
-  version: '3.2.2',
+  version: SERVER_VERSION,
 });
 
-logger.info('MCP Server initialized', { version: '3.2.2' });
+logger.info('MCP Server initialized', { version: SERVER_VERSION });
 
 /**
  * Helper function to conditionally register tools based on configuration
@@ -442,7 +446,9 @@ registerToolConditional(
     description: 'Execute command on remote SSH server (streaming, UTF-8 safe, ANSI-clean markdown)',
     inputSchema: {
       server: z.string().describe('Server name from configuration'),
-      command: z.string().describe('Command to execute'),
+      // Cap at 512 KB -- keeps us well under every UNIX ARG_MAX (typical 128KB-2MB)
+      // even after shQuote expansion, which can ~2x the size for quote-heavy input.
+      command: z.string().min(1).max(524_288).describe('Command to execute (max 512 KB)'),
       cwd: z.string().optional().describe('Working directory (uses default_dir if configured)'),
       timeout: z.number().optional().describe('Command timeout in ms (default 120000, max 300000)'),
       format: z.enum(['markdown', 'json']).optional().describe('Output format')
@@ -1439,7 +1445,7 @@ registerToolConditional(
     description: 'Create SSH tunnel (DNS+TCP reachability preview, typed state)',
     inputSchema: {
       server: z.string().describe('Server name or alias'),
-      type: z.enum(['local', 'remote', 'dynamic']).describe('Tunnel type'),
+      type: z.enum(['local', 'remote']).describe('Tunnel type (local port forward or remote reverse tunnel)'),
       localHost: z.string().optional().describe('Local host (alias for local_host)'),
       local_host: z.string().optional().describe('Local host'),
       localPort: z.number().optional().describe('Local port (alias for local_port)'),

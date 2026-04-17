@@ -586,7 +586,10 @@ export async function handleSshHealthCheck({ getConnection, args }) {
     'echo \'---UPTIME---\'', 'cat /proc/uptime',
     'echo \'---CORES---\'', 'nproc || grep -c ^processor /proc/cpuinfo',
   ].join('; ');
-  const remote = `bash -c ${shQuote(command)}`;
+  // LANG=C / LC_ALL=C pins output format for parsers: avoids locale-specific
+  // number formatting (e.g. `1,234.5` vs `1.234,5`) and translated column
+  // headers on non-English hosts.
+  const remote = `LANG=C LC_ALL=C bash -c ${shQuote(command)}`;
 
   const startedAt = Date.now();
   let client;

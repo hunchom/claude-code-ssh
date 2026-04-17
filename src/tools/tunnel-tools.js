@@ -103,36 +103,41 @@ export async function handleSshTunnelCreate(ctx = {}) {
     preview: isPreview = false,
   } = args;
 
-  if (!type || !['local', 'remote', 'dynamic'].includes(type)) {
+  if (!type || !['local', 'remote'].includes(type)) {
+    // `dynamic` (SOCKS5) was previously advertised but never implemented --
+    // its listener destroyed every inbound connection, silently black-holing
+    // traffic. Rather than ship a trap, we reject it explicitly until a real
+    // SOCKS5 handler lands.
+    if (type === 'dynamic') {
+      return toMcp(fail('ssh_tunnel_create',
+        'type="dynamic" (SOCKS5) is not implemented; use type="local" with a ' +
+        'concrete remote_host:remote_port, or run an external SOCKS proxy',
+        { server: server ?? null }), { format });
+    }
     return toMcp(fail('ssh_tunnel_create', `invalid type: ${type}`, { server: server ?? null }), { format });
   }
   const lport = Math.floor(Number(local_port));
   if (!Number.isFinite(lport) || lport <= 0 || lport > 65535) {
     return toMcp(fail('ssh_tunnel_create', 'local_port must be 1..65535', { server: server ?? null }), { format });
   }
-  if (type !== 'dynamic') {
-    if (!remote_host || !remote_port) {
-      return toMcp(fail('ssh_tunnel_create',
-        `remote_host and remote_port required for type=${type}`, { server: server ?? null }), { format });
-    }
+  if (!remote_host || !remote_port) {
+    return toMcp(fail('ssh_tunnel_create',
+      `remote_host and remote_port required for type=${type}`, { server: server ?? null }), { format });
   }
 
   // -- preview -------------------------------------------------------
   if (isPreview) {
     let probe = null;
-    if (type !== 'dynamic' && remote_host && remote_port) {
+    if (remote_host && remote_port) {
       probe = await probeImpl(remote_host, Number(remote_port), { timeoutMs: 2000 });
     }
     const effects = [];
     if (type === 'local') {
       effects.push(`opens TCP listener on ${bind}:${lport}`);
       effects.push(`forwards to ${shQuote(remote_host)}:${remote_port} via ${server}`);
-    } else if (type === 'remote') {
+    } else {
       effects.push(`requests remote forward ${shQuote(remote_host)}:${remote_port} from ${server}`);
       effects.push(`incoming connections piped to local ${bind}:${lport}`);
-    } else {
-      effects.push(`opens SOCKS5 proxy on ${bind}:${lport}`);
-      effects.push(`all SOCKS client requests routed via ${server}`);
     }
     if (probe) {
       effects.push(`reachability probe: dns=${probe.dns.ok ? 'ok' : 'fail'}, tcp=${probe.tcp.ok ? 'ok' : 'fail'}`);
@@ -163,17 +168,11 @@ export async function handleSshTunnelCreate(ctx = {}) {
   };
 
   try {
-    if (type === 'local' || type === 'dynamic') {
+    if (type === 'local') {
       const listener = net.createServer((sock) => {
         const srcAddr = sock.remoteAddress || '127.0.0.1';
         const srcPort = sock.remotePort || 0;
-        const dstHost = type === 'local' ? remote_host : null;
-        const dstPort = type === 'local' ? Number(remote_port) : null;
-        if (type !== 'local') { // dynamic: no remote handler -- hook left as future work
-          sock.destroy();
-          return;
-        }
-        client.forwardOut(srcAddr, srcPort, dstHost, dstPort, (err, stream) => {
+        client.forwardOut(srcAddr, srcPort, remote_host, Number(remote_port), (err, stream) => {
           if (err) { sock.destroy(); return; }
           sock.pipe(stream).pipe(sock);
           sock.on('close', () => { try { stream.destroy(); } catch (_) { /* ignore */ } });

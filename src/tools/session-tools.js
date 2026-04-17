@@ -656,10 +656,35 @@ export async function handleSshSessionList({ args }) {
 }
 
 /**
- * ssh_session_close -- idempotent close.
+ * ssh_session_close -- idempotent close. Special value "all" closes every
+ * session currently tracked (advertised in the tool schema).
  */
 export async function handleSshSessionClose({ args }) {
   const { session_id, format = 'markdown' } = args || {};
+
+  if (session_id === 'all') {
+    const ids = Array.from(sessions.keys());
+    const closed = [];
+    const errors = [];
+    for (const id of ids) {
+      const s = sessions.get(id);
+      if (!s) continue;
+      try { await s.close(); }
+      catch (e) { errors.push({ session_id: id, error: e.message || String(e) }); }
+      sessions.delete(id);
+      closed.push({ session_id: id, server: s.server, command_count: s.commandCount });
+    }
+    return toMcp(
+      ok('ssh_session_close', {
+        session_id: 'all',
+        closed: true,
+        closed_count: closed.length,
+        sessions: closed,
+        errors,
+      }),
+      { format }
+    );
+  }
 
   const session = sessions.get(session_id);
   if (!session) {

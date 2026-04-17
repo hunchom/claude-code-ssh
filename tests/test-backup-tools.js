@@ -256,5 +256,41 @@ await test('backup_schedule: preview shows cron plan', async () => {
   assert(parsed.data.plan.action.includes('schedule'));
 });
 
+await test('backup_schedule: refuses password arg for DB backups (no plaintext secret in crontab)', async () => {
+  for (const dbType of ['mysql', 'postgresql', 'mongodb']) {
+    const r = await handleSshBackupSchedule({
+      getConnection: async () => { throw new Error('should not reach connection'); },
+      args: {
+        server: 's', cron: '0 2 * * *',
+        backup_type: dbType, database: 'app', user: 'u', password: 'sekret',
+        preview: true, format: 'json',
+      },
+    });
+    assert.strictEqual(r.isError, true, `${dbType}: expected fail response when password present`);
+    const parsed = JSON.parse(r.content[0].text);
+    assert(parsed.error.includes('refusing to embed password'),
+      `${dbType}: expected explicit refusal, got: ${parsed.error}`);
+    // Secret must not appear anywhere in the response
+    assert(!JSON.stringify(parsed).includes('sekret'),
+      `${dbType}: password leaked into response`);
+  }
+});
+
+await test('backup_schedule: preview for DB without password produces cron line with no secret', async () => {
+  const r = await handleSshBackupSchedule({
+    getConnection: async () => { throw new Error('should not call'); },
+    args: {
+      server: 's', cron: '30 3 * * *',
+      backup_type: 'mysql', database: 'app', user: 'u',
+      preview: true, format: 'json',
+    },
+  });
+  const parsed = JSON.parse(r.content[0].text);
+  assert.strictEqual(parsed.success, true, parsed.error);
+  assert(parsed.data.plan.cron_line);
+  assert(!parsed.data.plan.cron_line.includes('MCP_BACKUP_PASS='),
+    'cron line must not embed password env prefix');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }

@@ -502,6 +502,36 @@ await test('session_close: idempotent -- second call is success with already_clo
   assert.strictEqual(secondP.data.already_closed, true);
 });
 
+await test('session_close: session_id="all" closes every tracked session (C4)', async () => {
+  await cleanupAllSessions();
+  const streams = [makeSeedingStream(), makeSeedingStream(), makeSeedingStream()];
+  const ids = [];
+  for (const s of streams) {
+    const started = await handleSshSessionStart({
+      getConnection: async () => makeFakeClient(s),
+      args: { server: 's', format: 'json' },
+    });
+    ids.push(JSON.parse(started.content[0].text).data.session_id);
+  }
+
+  const r = await handleSshSessionClose({ args: { session_id: 'all', format: 'json' } });
+  const parsed = JSON.parse(r.content[0].text);
+  assert.strictEqual(parsed.success, true);
+  assert.strictEqual(parsed.data.closed_count, 3, 'all three sessions should be reported closed');
+  const closedIds = parsed.data.sessions.map(s => s.session_id).sort();
+  assert.deepStrictEqual(closedIds, [...ids].sort(), 'every started session must appear in the result');
+
+  // Registry must be empty afterwards.
+  const list = await handleSshSessionList({ args: { format: 'json' } });
+  assert.strictEqual(JSON.parse(list.content[0].text).data.total, 0);
+
+  // Each stream must have received exit\n + end().
+  for (const s of streams) {
+    assert(s.writes.join('').includes('exit\n'));
+    assert.strictEqual(s.endCalls, 1);
+  }
+});
+
 await test('session_close: gracefully writes `exit` and ends the stream', async () => {
   const stream = makeSeedingStream();
   const started = await handleSshSessionStart({

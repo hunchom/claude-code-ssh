@@ -28,16 +28,44 @@ export function ok(tool, data, meta = {}) {
 
 /**
  * Build an error result. `error` may be Error, string, or object.
+ * Normalizes shapes so the rendered error text is always useful:
+ *   - Error:  -> e.message (keeps stack in `stack` field for debugging)
+ *   - string  -> passthrough
+ *   - object  -> JSON.stringify (falls back to String() if cyclic)
+ *   - null    -> 'unknown error'
  */
 export function fail(tool, error, meta = {}) {
-  return {
+  let message;
+  let stack;
+  if (error == null) {
+    message = 'unknown error';
+  } else if (error instanceof Error) {
+    message = error.message || error.name || 'Error';
+    stack = error.stack;
+  } else if (typeof error === 'string') {
+    message = error;
+  } else if (typeof error === 'object') {
+    if (typeof error.message === 'string' && error.message) {
+      message = error.message;
+    } else {
+      try { message = JSON.stringify(error); }
+      catch (_) { message = String(error); }
+    }
+  } else {
+    message = String(error);
+  }
+  const out = {
     success: false,
     tool,
     server: meta.server ?? null,
     data: null,
     meta: strip(meta, ['server']),
-    error: String(error && error.message ? error.message : error),
+    error: message,
   };
+  if (stack && process.env.MCP_SSH_INCLUDE_STACK === '1') {
+    out.error_stack = stack;
+  }
+  return out;
 }
 
 /**

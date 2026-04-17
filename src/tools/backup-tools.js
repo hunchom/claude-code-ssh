@@ -161,8 +161,9 @@ async function remoteSizeBytes(client, remotePath) {
  */
 async function writeMeta(client, metaPath, metaObject, { timeout = 15_000 } = {}) {
   const json = JSON.stringify(metaObject);
-  // printf '%s' 'json' -> the JSON is a single shQuoted arg.
-  const cmd = `printf '%s' ${shQuote(json)} > ${shQuote(metaPath)}`;
+  // `printf '%s' -- ...` stops printf from treating a leading `%` in the JSON
+  // (e.g. a URL-encoded path like /backups/50%25-used/) as a format directive.
+  const cmd = `printf '%s' -- ${shQuote(json)} > ${shQuote(metaPath)}`;
   const r = await streamExecCommand(client, cmd, { timeoutMs: timeout });
   if (r.code !== 0) {
     throw new Error(`meta write failed: ${(r.stderr || '').trim() || `exit ${r.code}`}`);
@@ -641,13 +642,23 @@ export async function handleSshBackupSchedule({ getConnection, args }) {
     return toMcp(fail('ssh_backup_schedule', 'cron is required (e.g. "0 2 * * *")', { server }), { format });
   }
 
+  // Refuse to schedule if a password was passed -- writing it into crontab
+  // would persist the secret in plaintext (readable to anyone who gains the
+  // user's shell) and contradicts the "passwords never in argv/storage"
+  // invariant the rest of this server holds. Callers must pre-populate
+  // ~/.my.cnf / ~/.pgpass / PGPASSFILE on the target host.
+  if (password && (backup_type === 'mysql' || backup_type === 'postgresql' || backup_type === 'mongodb')) {
+    return toMcp(fail('ssh_backup_schedule',
+      'refusing to embed password in crontab. Pre-configure credentials on the target host ' +
+      '(~/.my.cnf for mysql, ~/.pgpass or PGPASSFILE for postgresql, URI without password for ' +
+      'mongodb) and omit the password argument.',
+      { server }), { format });
+  }
+
   // Build the backup command that cron will run. Output path is templated with
-  // $(date) so each run produces a distinct artifact. We intentionally do NOT
-  // embed the password into the cron line -- caller should put `password` into
-  // ~/.my.cnf, ~/.pgpass, or environment to pick it up at run time.
-  //
-  // Schedule is a best-effort convenience: if `password` was provided, we include
-  // it inline but ALSO warn in the plan.
+  // $(date) so each run produces a distinct artifact. envPrefix is now empty
+  // because we reject password up front -- if that invariant ever changes,
+  // this is the place to carefully route the secret to a secured file.
   const targetName = backup_type === 'files'
     ? ((paths && paths[0]) || 'files').replace(/^\//, '').replace(/\//g, '_') || 'files'
     : database || backup_type;
@@ -656,14 +667,23 @@ export async function handleSshBackupSchedule({ getConnection, args }) {
   let cmdBundle;
   try {
     cmdBundle = buildBackupCommand({
-      backup_type, database, paths, user, password, host, port,
+      backup_type, database, paths, user, password: undefined, host, port,
       outputPath: scheduledOutTemplate, gzip,
     });
   } catch (e) {
     return toMcp(fail('ssh_backup_schedule', e.message || String(e), { server }), { format });
   }
 
-  const fullCmd = cmdBundle.envPrefix + cmdBundle.command;
+  if (cmdBundle.envPrefix) {
+    // Defense in depth: buildBackupCommand returned a non-empty envPrefix even
+    // though we passed password=undefined. Bail rather than write something
+    // surprising to crontab.
+    return toMcp(fail('ssh_backup_schedule',
+      'internal: build returned secret env prefix; refusing to install cron line',
+      { server }), { format });
+  }
+
+  const fullCmd = cmdBundle.command;
   const marker = `# claude-code-ssh-backup:${backup_type}:${targetName}`;
   const cronLine = `${cron.trim()} ${fullCmd} ${marker}`;
 
@@ -679,7 +699,7 @@ export async function handleSshBackupSchedule({ getConnection, args }) {
           : `database: \`${database}\``,
         `output template: \`${scheduledOutTemplate}\``,
         'appends to user crontab; other entries preserved',
-        password ? 'WARNING: password embedded in cron line -- prefer ~/.my.cnf or ~/.pgpass' : 'no password embedded',
+        'credentials must be pre-configured on host (~/.my.cnf, ~/.pgpass, PGPASSFILE, or URI)',
       ],
       reversibility: 'manual',
       risk: 'medium',
