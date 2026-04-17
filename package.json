@@ -18,7 +18,7 @@
     "test:tools": "node tests/test-tool-registry.js",
     "test:all": "npm test && ./scripts/validate.sh",
     "validate": "./scripts/validate.sh",
-    "lint": "eslint src/*.js",
+    "lint": "eslint 'src/**/*.js'",
     "format": "prettier --write 'src/**/*.js' 'tests/**/*.js'"
   },
   "keywords": [

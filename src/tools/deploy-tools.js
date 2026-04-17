@@ -57,7 +57,7 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import { streamExecCommand, shQuote } from '../stream-exec.js';
-import { ok, fail, preview, toMcp, defaultRender } from '../structured-result.js';
+import { ok, fail, preview, toMcp } from '../structured-result.js';
 import { buildPlan } from '../preview-mode.js';
 import { formatBytes, formatDuration } from '../output-formatter.js';
 
@@ -79,10 +79,6 @@ function sha256File(localPath) {
     s.on('data', (c) => h.update(c));
     s.on('end', () => resolve(h.digest('hex')));
   });
-}
-
-function localSize(p) {
-  try { return fs.statSync(p).size; } catch (_) { return null; }
 }
 
 function promisifyGetSftp(client, getSftp) {
@@ -288,18 +284,20 @@ export async function handleSshDeploy({ getConnection, getSftp, args }) {
 
   // 5. Health check -- only if all post-hooks passed.
   let healthCheckExit = null;
-  let healthStderr = '';
   if (!firstFailure && health_check) {
     try {
       const hr = await streamExecCommand(client, health_check, { timeoutMs: health_timeout });
       healthCheckExit = hr.code;
-      healthStderr = hr.stderr || '';
       if (hr.code !== 0) {
-        firstFailure = { phase: 'health_check', reason: `health_check exited ${hr.code}`, hook: health_check };
+        const stderrSnippet = (hr.stderr || '').trim().slice(0, 200);
+        firstFailure = {
+          phase: 'health_check',
+          reason: `health_check exited ${hr.code}${stderrSnippet ? `: ${stderrSnippet}` : ''}`,
+          hook: health_check
+        };
       }
     } catch (e) {
       healthCheckExit = -1;
-      healthStderr = String(e.message || e);
       firstFailure = { phase: 'health_check', reason: `health_check errored: ${e.message || e}`, hook: health_check };
     }
   }

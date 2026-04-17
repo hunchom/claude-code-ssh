@@ -1,10 +1,8 @@
 import { Client } from 'ssh2';
 import fs from 'fs';
 import os from 'os';
-import { promisify } from 'util';
 import crypto from 'crypto';
-import { isHostKnown, getCurrentHostKey, addHostKey, updateHostKey } from './ssh-key-manager.js';
-import { configLoader } from './config-loader.js';
+import { isHostKnown, getCurrentHostKey, addHostKey } from './ssh-key-manager.js';
 import { logger } from './logger.js';
 
 class SSHManager {
@@ -246,67 +244,6 @@ class SSHManager {
     });
   }
 
-  async execCommandStream(command, options = {}) {
-    if (!this.connected) {
-      throw new Error('Not connected to SSH server');
-    }
-
-    const { cwd, onStdout, onStderr } = options;
-    const fullCommand = cwd ? `cd ${cwd} && ${command}` : command;
-
-    return new Promise((resolve, reject) => {
-      this.client.exec(fullCommand, (err, stream) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-
-        let stdout = '';
-        let stderr = '';
-
-        stream.on('close', (code, signal) => {
-          resolve({
-            stdout,
-            stderr,
-            code: code || 0,
-            signal,
-            stream
-          });
-        });
-
-        stream.on('data', (data) => {
-          const chunk = data.toString();
-          stdout += chunk;
-          if (onStdout) onStdout(chunk);
-        });
-
-        stream.stderr.on('data', (data) => {
-          const chunk = data.toString();
-          stderr += chunk;
-          if (onStderr) onStderr(chunk);
-        });
-
-        stream.on('error', reject);
-      });
-    });
-  }
-
-  async requestShell(options = {}) {
-    if (!this.connected) {
-      throw new Error('Not connected to SSH server');
-    }
-
-    return new Promise((resolve, reject) => {
-      this.client.shell(options, (err, stream) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve(stream);
-      });
-    });
-  }
-
   async getSFTP() {
     if (this._sftpHandle) return this._sftpHandle;
 
@@ -458,23 +395,6 @@ class SSHManager {
         else resolve();
       });
     });
-  }
-
-  async putFiles(files, options = {}) {
-    const sftp = await this.getSFTP();
-    const results = [];
-
-    for (const file of files) {
-      try {
-        await this.putFile(file.local, file.remote);
-        results.push({ ...file, success: true });
-      } catch (error) {
-        results.push({ ...file, success: false, error: error.message });
-        if (options.stopOnError) break;
-      }
-    }
-
-    return results;
   }
 
   isConnected() {

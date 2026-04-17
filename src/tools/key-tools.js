@@ -35,7 +35,6 @@ import { ok, fail, preview, toMcp } from '../structured-result.js';
 import { buildPlan } from '../preview-mode.js';
 
 const KNOWN_HOSTS_PATH = path.join(os.homedir(), '.ssh', 'known_hosts');
-const KNOWN_HOSTS_BACKUP = path.join(os.homedir(), '.ssh', 'known_hosts.mcp-backup');
 
 // Module-level internal store keyed by `${host}:${port}`. Separate from OpenSSH
 // known_hosts: lets the MCP track keys accepted during its own lifetime without

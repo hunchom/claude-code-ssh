@@ -35,8 +35,6 @@ import { ok, fail, preview, toMcp, defaultRender } from '../structured-result.js
 import { buildPlan } from '../preview-mode.js';
 import { formatBytes, formatDuration } from '../output-formatter.js';
 
-const DEFAULT_EXEC_TIMEOUT_MS = 120_000;
-
 // --------------------------------------------------------------------------
 // Helpers
 // --------------------------------------------------------------------------
@@ -459,7 +457,7 @@ export function buildRsyncArgv({ serverConfig, direction, localPath, remotePath,
   return argv;
 }
 
-export async function handleSshSync({ getConnection, getServerConfig, args }) {
+export async function handleSshSync({ getConnection: _getConnection, getServerConfig, args }) {
   const {
     server,
     source,

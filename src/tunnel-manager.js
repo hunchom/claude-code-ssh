@@ -182,7 +182,7 @@ class SSHTunnel {
     });
 
     // Handle incoming connections from remote
-    this.ssh.on('tcp connection', (info, accept, reject) => {
+    this.ssh.on('tcp connection', (info, accept, _reject) => {
       if (info.destPort !== remotePort) return;
 
       this.stats.connectionsTotal++;
@@ -497,7 +497,7 @@ export function getTunnel(tunnelId) {
 export function listTunnels(serverName = null) {
   const activeTunnels = [];
 
-  for (const [id, tunnel] of tunnels.entries()) {
+  for (const tunnel of tunnels.values()) {
     if (tunnel.state !== TUNNEL_STATES.CLOSED) {
       if (!serverName || tunnel.serverName === serverName) {
         activeTunnels.push(tunnel.getInfo());
@@ -528,7 +528,7 @@ export function closeTunnel(tunnelId) {
 export function closeServerTunnels(serverName) {
   let closedCount = 0;
 
-  for (const [id, tunnel] of tunnels.entries()) {
+  for (const tunnel of tunnels.values()) {
     if (tunnel.serverName === serverName) {
       tunnel.close();
       closedCount++;

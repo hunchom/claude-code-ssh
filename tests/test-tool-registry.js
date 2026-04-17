@@ -53,16 +53,16 @@ function assertTrue(condition, message) {
 console.log('\n' + YELLOW + 'Running Tool Registry Tests...' + NC + '\n');
 
 // Test 1: All tools are accounted for
-test('All 51 tools are defined in groups', () => {
+test('All 50 tools are defined in groups', () => {
   const allTools = getAllTools();
-  assertEqual(allTools.length, 51, 'Should have exactly 51 tools');
+  assertEqual(allTools.length, 50, 'Should have exactly 50 tools');
 });
 
 // Test 2: No duplicate tools
 test('No duplicate tools across groups', () => {
   const allTools = getAllTools();
   const uniqueTools = new Set(allTools);
-  assertEqual(uniqueTools.size, 51, 'All 51 tools should be unique');
+  assertEqual(uniqueTools.size, 50, 'All 50 tools should be unique');
 });
 
 // Test 3: Tool group counts are correct
@@ -130,7 +130,7 @@ test('verifyIntegrity returns valid', () => {
 test('getToolStats returns correct statistics', () => {
   const stats = getToolStats();
   assertEqual(stats.totalGroups, 7, 'Should have 7 groups');
-  assertEqual(stats.totalTools, 51, 'Should have 51 total tools');
+  assertEqual(stats.totalTools, 50, 'Should have 50 total tools');
   assertEqual(stats.groups.length, 7, 'Should have 7 group entries');
 });
 
@@ -153,8 +153,8 @@ test('validateToolRegistry identifies correct tools', () => {
   assertTrue(validation.valid, 'Validation should pass for all tools');
   assertEqual(validation.missing.length, 0, 'Should have no missing tools');
   assertEqual(validation.unexpected.length, 0, 'Should have no unexpected tools');
-  assertEqual(validation.total, 51, 'Should expect 51 tools');
-  assertEqual(validation.registered, 51, 'Should register 51 tools');
+  assertEqual(validation.total, 50, 'Should expect 50 tools');
+  assertEqual(validation.registered, 50, 'Should register 50 tools');
 });
 
 // Test 12: validateToolRegistry catches missing tools
@@ -171,7 +171,7 @@ test('validateToolRegistry detects missing tools', () => {
 test('Group sizes match specifications', () => {
   assertEqual(TOOL_GROUPS.core.length, 5, 'Core should have 5 tools');
   assertEqual(TOOL_GROUPS.sessions.length, 6, 'Sessions should have 6 tools');
-  assertEqual(TOOL_GROUPS.monitoring.length, 6, 'Monitoring should have 6 tools');
+  assertEqual(TOOL_GROUPS.monitoring.length, 5, 'Monitoring should have 5 tools');
   assertEqual(TOOL_GROUPS.backup.length, 4, 'Backup should have 4 tools');
   assertEqual(TOOL_GROUPS.database.length, 4, 'Database should have 4 tools');
   assertEqual(TOOL_GROUPS.advanced.length, 14, 'Advanced should have 14 tools');

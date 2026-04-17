@@ -15,7 +15,7 @@
  */
 
 import { streamExecCommand } from '../stream-exec.js';
-import { formatExecResult, renderMarkdown, makeMcpContent } from '../output-formatter.js';
+import { formatExecResult, makeMcpContent } from '../output-formatter.js';
 import { ok, fail, preview, toMcp, defaultRender } from '../structured-result.js';
 import { buildPlan } from '../preview-mode.js';
 import { pMap } from '../concurrency.js';
