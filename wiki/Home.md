@@ -20,7 +20,7 @@ flowchart LR
 |---|---|
 | Setup the server and connect your first host | [Getting started](Getting-started) |
 | Declare hosts, keys, bastions, default dirs | [Configuration](Configuration) |
-| Browse all 51 tools with schemas and examples | [Tool reference](Tool-reference) |
+| Browse all 50 tools with schemas and examples | [Tool reference](Tool-reference) |
 | How the server, pool, and SSH layer fit together | [Architecture](Architecture) |
 | Trust boundaries, credential handling, audit | [Security model](Security-model) |
 | Real workflows: backups, rollouts, debugging | [Recipes](Recipes) |
@@ -46,14 +46,14 @@ claude mcp add ssh-manager node "$(pwd)/src/index.js"
 ## Tool groups at a glance
 
 ```mermaid
-pie title 51 tools across 7 groups
+pie title 50 tools across 7 groups
   "core" : 5
-  "sessions" : 4
-  "monitoring" : 6
+  "sessions" : 6
+  "monitoring" : 5
   "backup" : 4
   "database" : 4
   "advanced" : 14
-  "gamechanger" : 14
+  "gamechanger" : 12
 ```
 
 Opt in per group via `ssh-manager tools configure`. Minimal mode (5 tools) is ~3.5k tokens; full mode is ~43k.

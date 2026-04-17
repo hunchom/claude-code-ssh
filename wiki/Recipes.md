@@ -13,8 +13,9 @@ Claude: [ssh_journalctl unit=nginx since=15min] upstream connect timeout to 10.0
         [ssh_execute server=prod01 command="curl -s -o /dev/null -w '%{http_code}' http://10.0.0.31:8080/health"] 200
         root cause: payments-api died ~8 min ago, nginx still timing out on cached upstream
         fix: restarted payments-api, nginx now healthy
-you:    add an alert so i hear about it next time
-Claude: [ssh_alert_setup server=app01 metric=service_up threshold=1 unit=payments-api interval=60] configured
+you:    add a hook so nagios pages me next time this fires
+Claude: [ssh_hooks add server=app01 event=on_service_down
+         action="curl -X POST https://nagios.internal/incidents -d 'unit=payments-api'"] registered
 ```
 
 ## Rolling config deploy across a fleet

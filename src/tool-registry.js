@@ -7,7 +7,7 @@
 
 /**
  * Tool groups with their associated tools
- * Total: 51 tools across 7 groups
+ * Total: 50 tools across 7 groups
  */
 export const TOOL_GROUPS = {
   // Core group (5 tools) - Essential SSH operations

@@ -88,7 +88,6 @@ System health checks and monitoring:
 - `ssh_process_manager` - List, monitor, or kill processes
 - `ssh_monitor` - Real-time system resource monitoring
 - `ssh_tail` - Tail log files in real-time
-- `ssh_alert_setup` - Configure health monitoring alerts and thresholds
 
 **When to use**: Enable for server administration, DevOps work, or troubleshooting.
 
