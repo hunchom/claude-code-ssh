@@ -69,6 +69,7 @@ export async function handleSshTail({ getConnection, args }) {
     timeout = DEFAULT_TIMEOUT_MS,
     maxLen = DEFAULT_MAX_LEN,
     format = 'markdown',
+    abortSignal,
   } = args || {};
 
   if (!file) {
@@ -86,7 +87,7 @@ export async function handleSshTail({ getConnection, args }) {
 
   let result, error;
   try {
-    result = await streamExecCommand(client, command, { timeoutMs: timeout });
+    result = await streamExecCommand(client, command, { timeoutMs: timeout, abortSignal });
   } catch (e) { error = e; }
 
   const durationMs = Date.now() - startedAt;

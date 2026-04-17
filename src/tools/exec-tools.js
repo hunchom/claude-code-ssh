@@ -35,6 +35,7 @@ export async function handleSshExecute({ getConnection, args }) {
     format = 'markdown',
     preview: isPreview = false,
     onChunk,
+    abortSignal,
   } = args;
 
   if (isPreview) {
@@ -60,7 +61,7 @@ export async function handleSshExecute({ getConnection, args }) {
   let result, error;
   try {
     result = await streamExecCommand(client, command, {
-      cwd, timeoutMs: timeout, debounceMs: DEFAULT_DEBOUNCE_MS, onChunk,
+      cwd, timeoutMs: timeout, debounceMs: DEFAULT_DEBOUNCE_MS, onChunk, abortSignal,
     });
   } catch (e) { error = e; }
 
@@ -97,6 +98,7 @@ export async function handleSshExecuteSudo({ getConnection, getServerConfig, arg
     maxLen = DEFAULT_MAX_LEN,
     format = 'markdown',
     preview: isPreview = false,
+    abortSignal,
   } = args;
 
   // Strip leading "sudo " -- we always add it explicitly below.
@@ -141,6 +143,7 @@ export async function handleSshExecuteSudo({ getConnection, getServerConfig, arg
       // Write password + newline to stream.stdin. `sudo -S` consumes it.
       // When pw is empty/undefined, send an empty line so passwordless sudo still works.
       stdin: (pw || '') + '\n',
+      abortSignal,
     });
   } catch (e) { error = e; }
 
@@ -170,6 +173,7 @@ export async function handleSshExecuteGroup({ getConnection, resolveGroup, args 
     format = 'markdown',
     stopOnError = false,
     preview: isPreview = false,
+    abortSignal,
   } = args;
 
   const servers = await resolveGroup(group);
@@ -207,7 +211,7 @@ export async function handleSshExecuteGroup({ getConnection, resolveGroup, args 
     }
     try {
       const r = await streamExecCommand(client, command, {
-        cwd, timeoutMs: timeout, debounceMs: DEFAULT_DEBOUNCE_MS,
+        cwd, timeoutMs: timeout, debounceMs: DEFAULT_DEBOUNCE_MS, abortSignal,
       });
       const formatted = formatExecResult({
         server: srv, command, cwd,

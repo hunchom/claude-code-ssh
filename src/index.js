@@ -51,6 +51,7 @@ import {
   listGroups
 } from './server-groups.js';
 import { loadToolConfig, isToolEnabled } from './tool-config-manager.js';
+import { withAnnotations } from './tool-annotations.js';
 
 // Modularized tool handlers (src/tools/*.js) -- 10/10 "gamechanger" versions
 import { handleSshExecute, handleSshExecuteSudo, handleSshExecuteGroup } from './tools/exec-tools.js';
@@ -426,12 +427,23 @@ logger.info('MCP Server initialized', { version: SERVER_VERSION });
  * @param {Function} handler - Tool handler function
  */
 function registerToolConditional(toolName, schema, handler) {
-  if (isToolEnabled(toolName)) {
-    server.registerTool(toolName, schema, handler);
-    logger.debug(`Registered tool: ${toolName}`);
-  } else {
+  if (!isToolEnabled(toolName)) {
     logger.debug(`Skipped disabled tool: ${toolName}`);
+    return;
   }
+  // Thread MCP cancellation through to the tool handler. The SDK delivers an
+  // AbortSignal at `extra.signal`; tools surface it as `args.abortSignal`
+  // (which streamExecCommand already accepts) so long-running remote commands
+  // stop when the client hits Esc instead of running to completion on the
+  // target host.
+  const wrapped = async (args, extra) => {
+    const mergedArgs = extra && extra.signal
+      ? { ...args, abortSignal: extra.signal }
+      : args;
+    return handler(mergedArgs, extra);
+  };
+  server.registerTool(toolName, withAnnotations(toolName, schema), wrapped);
+  logger.debug(`Registered tool: ${toolName}`);
 }
 
 // Register available tools

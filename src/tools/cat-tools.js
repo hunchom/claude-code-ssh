@@ -60,6 +60,7 @@ export async function handleSshCat({ getConnection, args }) {
     timeout = 15_000,
     maxLen = 10_000,
     format = 'markdown',
+    abortSignal,
   } = args;
 
   if (!file) {
@@ -77,7 +78,7 @@ export async function handleSshCat({ getConnection, args }) {
 
   let result, error;
   try {
-    result = await streamExecCommand(client, command, { timeoutMs: timeout });
+    result = await streamExecCommand(client, command, { timeoutMs: timeout, abortSignal });
   } catch (e) { error = e; }
 
   const durationMs = Date.now() - startedAt;
