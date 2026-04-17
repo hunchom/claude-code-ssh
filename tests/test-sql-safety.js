@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Tests for src/tools/sql-safety.js -- the replacement for the buggy
- * `isSafeQuery` in database-manager.js.
+ * Tests for src/tools/sql-safety.js -- guards the `ssh_db_query` path
+ * against multi-statement smuggling, comment-hidden mutations, and
+ * INTO OUTFILE write attempts.
  *
  * Goals (per the task spec):
  *   - No false positives on common column names: deleted_at, update_count, drop_box.

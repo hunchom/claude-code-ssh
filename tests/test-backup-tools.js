@@ -292,5 +292,29 @@ await test('backup_schedule: preview for DB without password produces cron line 
     'cron line must not embed password env prefix');
 });
 
+await test('backup_schedule: mongodb without password installs cron line with anonymous URI (regression: B1)', async () => {
+  const r = await handleSshBackupSchedule({
+    getConnection: async () => { throw new Error('should not call'); },
+    args: {
+      server: 's', cron: '15 4 * * *',
+      backup_type: 'mongodb', database: 'app',
+      preview: true, format: 'json',
+    },
+  });
+  const parsed = JSON.parse(r.content[0].text);
+  // Previously this returned the internal defense-in-depth failure because
+  // mongo's MCP_BACKUP_URI env prefix was treated as a secret-bearing.
+  // Fix: classify env prefix as secret only when password was supplied.
+  assert.strictEqual(parsed.success, true, parsed.error);
+  assert(parsed.data.plan.cron_line, 'cron line should be built');
+  assert(parsed.data.plan.cron_line.includes('MCP_BACKUP_URI='),
+    'mongo cron line should carry URI env var');
+  // URI must have no userinfo (no `@`) because no password was supplied.
+  const uriMatch = parsed.data.plan.cron_line.match(/MCP_BACKUP_URI=([^ ]+)/);
+  assert(uriMatch, 'MCP_BACKUP_URI= present in cron line');
+  assert(!uriMatch[1].includes('@'),
+    `anonymous mongo URI must have no userinfo; got ${uriMatch[1]}`);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }

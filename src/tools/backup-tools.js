@@ -62,11 +62,18 @@ function defaultOutputPath(type, name, { gzip, backupDir = DEFAULT_BACKUP_DIR, b
  * `outputPath` must already be shQuoted by caller when fed into the command,
  * but we receive the raw path and shQuote internally.
  *
- * Returns { command, envPrefix } -- envPrefix must be prepended verbatim by caller.
+ * Returns { command, envPrefix, envCarriesSecret }:
+ *   - command: the shell command body
+ *   - envPrefix: `VAR=... VAR=... ` that must be prepended by caller
+ *   - envCarriesSecret: true iff envPrefix encodes a credential that must
+ *     NOT be written to persistent locations (crontab, scripts, logs).
+ *     mongo's MCP_BACKUP_URI may or may not carry a password -- set based on
+ *     whether a password was actually supplied.
  */
 export function buildBackupCommand({ backup_type, database, paths, user, password, host, port, outputPath, gzip = true }) {
   const out = shQuote(outputPath);
   const ensureDir = `mkdir -p ${shQuote(dirnameOf(outputPath))} && `;
+  const hasPassword = password != null && password !== '';
   switch (backup_type) {
     case 'mysql': {
       const parts = ['mysqldump', '--single-transaction', '--routines', '--triggers'];
@@ -76,7 +83,7 @@ export function buildBackupCommand({ backup_type, database, paths, user, passwor
       if (database) parts.push(shQuote(database));
       const core = `MYSQL_PWD="$MCP_BACKUP_PASS" ${parts.join(' ')}`;
       const cmd = gzip ? `${core} | gzip > ${out}` : `${core} > ${out}`;
-      return { command: ensureDir + cmd, envPrefix: envFor(password) };
+      return { command: ensureDir + cmd, envPrefix: envFor(password), envCarriesSecret: hasPassword };
     }
     case 'postgresql': {
       const parts = ['pg_dump', '--format=custom', '--clean', '--if-exists'];
@@ -86,18 +93,20 @@ export function buildBackupCommand({ backup_type, database, paths, user, passwor
       if (database) parts.push(shQuote(database));
       const core = `PGPASSWORD="$MCP_BACKUP_PASS" ${parts.join(' ')}`;
       const cmd = gzip ? `${core} | gzip > ${out}` : `${core} > ${out}`;
-      return { command: ensureDir + cmd, envPrefix: envFor(password) };
+      return { command: ensureDir + cmd, envPrefix: envFor(password), envCarriesSecret: hasPassword };
     }
     case 'mongodb': {
       // mongodump --archive (no value) writes the single-stream archive to
       // stdout; we then pipe / redirect to `out` (shQuoted). URI is carried
       // via MCP_BACKUP_URI so user/pass/host/port/db never appear in argv.
+      // The URI only carries a secret if a password was actually supplied;
+      // a plain `mongodb://localhost:27017/db` URI is fine to persist.
       const uri = buildMongoUri({ user, password, host, port, database });
       const envPrefix = `MCP_BACKUP_URI=${shQuote(uri)} `;
       const parts = ['mongodump', '--uri', '"$MCP_BACKUP_URI"', '--archive'];
       if (gzip) parts.push('--gzip');
       const cmd = `${parts.join(' ')} > ${out}`;
-      return { command: ensureDir + cmd, envPrefix };
+      return { command: ensureDir + cmd, envPrefix, envCarriesSecret: hasPassword };
     }
     case 'files': {
       const pathList = (paths || []).map(p => shQuote(p)).join(' ');
@@ -106,7 +115,7 @@ export function buildBackupCommand({ backup_type, database, paths, user, passwor
       // they gave us. This matches the spec: `tar -czf OUTPUT -C / PATH`.
       const flag = gzip ? '-czf' : '-cf';
       const cmd = `tar ${flag} ${out} -C / ${pathList}`;
-      return { command: ensureDir + cmd, envPrefix: '' };
+      return { command: ensureDir + cmd, envPrefix: '', envCarriesSecret: false };
     }
     default:
       throw new Error(`unsupported backup_type: ${backup_type}`);
@@ -674,16 +683,18 @@ export async function handleSshBackupSchedule({ getConnection, args }) {
     return toMcp(fail('ssh_backup_schedule', e.message || String(e), { server }), { format });
   }
 
-  if (cmdBundle.envPrefix) {
-    // Defense in depth: buildBackupCommand returned a non-empty envPrefix even
-    // though we passed password=undefined. Bail rather than write something
-    // surprising to crontab.
+  if (cmdBundle.envCarriesSecret) {
+    // Defense in depth: after we scrubbed the password above, the builder
+    // still reports a secret-bearing env prefix. Bail rather than install
+    // something surprising in crontab.
     return toMcp(fail('ssh_backup_schedule',
       'internal: build returned secret env prefix; refusing to install cron line',
       { server }), { format });
   }
 
-  const fullCmd = cmdBundle.command;
+  // Non-secret env prefix (e.g. an anonymous mongodb URI) is kept so the cron
+  // job can execute correctly; the URI encodes db/host/port, not credentials.
+  const fullCmd = (cmdBundle.envPrefix || '') + cmdBundle.command;
   const marker = `# claude-code-ssh-backup:${backup_type}:${targetName}`;
   const cronLine = `${cron.trim()} ${fullCmd} ${marker}`;
 

@@ -663,16 +663,24 @@ export async function handleSshSessionClose({ args }) {
   const { session_id, format = 'markdown' } = args || {};
 
   if (session_id === 'all') {
+    // Snapshot IDs before we start deleting so mid-iteration mutations
+    // can't cause us to skip entries.
     const ids = Array.from(sessions.keys());
     const closed = [];
     const errors = [];
     for (const id of ids) {
       const s = sessions.get(id);
       if (!s) continue;
+      let errored = false;
       try { await s.close(); }
-      catch (e) { errors.push({ session_id: id, error: e.message || String(e) }); }
+      catch (e) {
+        errored = true;
+        errors.push({ session_id: id, error: e.message || String(e) });
+      }
       sessions.delete(id);
-      closed.push({ session_id: id, server: s.server, command_count: s.commandCount });
+      if (!errored) {
+        closed.push({ session_id: id, server: s.server, command_count: s.commandCount });
+      }
     }
     return toMcp(
       ok('ssh_session_close', {

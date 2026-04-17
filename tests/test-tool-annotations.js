@@ -97,5 +97,20 @@ await test('withAnnotations() does not clobber a caller-provided title', () => {
   assert.strictEqual(out.title, 'Custom');
 });
 
+await test('withAnnotations() caller-provided annotations override map defaults', () => {
+  // ssh_list_servers is annotated readOnlyHint:true, idempotentHint:true.
+  // If a future caller explicitly flips readOnlyHint off, that must win.
+  const base = {
+    description: 'x',
+    inputSchema: {},
+    annotations: { readOnlyHint: false },
+  };
+  const out = withAnnotations('ssh_list_servers', base);
+  assert.strictEqual(out.annotations.readOnlyHint, false,
+    'caller override must beat map default');
+  assert.strictEqual(out.annotations.idempotentHint, true,
+    'non-overridden map defaults still apply');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }

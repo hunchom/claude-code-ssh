@@ -114,6 +114,9 @@ export function withAnnotations(toolName, schema) {
   return {
     ...schema,
     ...(ann.title && !schema.title ? { title: ann.title } : {}),
-    ...(ann.annotations ? { annotations: { ...(schema.annotations || {}), ...ann.annotations } } : {}),
+    // Spread table defaults first, then caller-provided annotations so the
+    // caller can selectively override defaults (e.g. flip openWorldHint off
+    // for a future tool where it doesn't apply).
+    ...(ann.annotations ? { annotations: { ...ann.annotations, ...(schema.annotations || {}) } } : {}),
   };
 }
