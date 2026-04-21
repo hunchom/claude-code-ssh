@@ -20,7 +20,7 @@
 import { streamExecCommand, shQuote } from '../stream-exec.js';
 import { ok, fail, preview, toMcp } from '../structured-result.js';
 import { buildPlan } from '../preview-mode.js';
-import { formatDuration } from '../output-formatter.js';
+import { formatDuration, escapeMdCell } from '../output-formatter.js';
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 // `docker pull` downloads image layers over the network -- a 1 GB image on a
@@ -179,7 +179,7 @@ export function renderDocker(result) {
       lines.push('| --- | --- | --- | --- | --- |');
       for (const c of d.containers) {
         const id = (c.id || '').slice(0, 12);
-        const ports = (c.ports || '').slice(0, 40).replace(/\|/g, '\\|');
+        const ports = escapeMdCell((c.ports || '').slice(0, 40));
         lines.push(`| \`${id}\` | ${c.name ?? '--'} | ${c.image ?? '--'} | ${c.status ?? '--'} | ${ports} |`);
       }
     }

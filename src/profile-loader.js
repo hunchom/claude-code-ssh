@@ -146,12 +146,6 @@ export function setActiveProfile(profileName) {
 export function createProfile(name, config) {
   try {
     const profilePath = path.join(PROFILES_DIR, `${name}.json`);
-
-    // Check if profile already exists
-    if (fs.existsSync(profilePath)) {
-      throw new Error(`Profile '${name}' already exists`);
-    }
-
     const profile = {
       name: name,
       description: config.description || `Custom profile: ${name}`,
@@ -159,10 +153,22 @@ export function createProfile(name, config) {
       hooks: config.hooks || {}
     };
 
-    fs.writeFileSync(profilePath, JSON.stringify(profile, null, 2));
+    // Atomic "create if not exists": open with wx flag so the kernel refuses
+    // to clobber an existing file. Eliminates the check-then-act race that
+    // existsSync() + writeFileSync() would introduce.
+    const fd = fs.openSync(profilePath, 'wx');
+    try {
+      fs.writeSync(fd, JSON.stringify(profile, null, 2));
+    } finally {
+      fs.closeSync(fd);
+    }
     return true;
   } catch (error) {
-    console.error(`Error creating profile: ${error.message}`);
+    if (error.code === 'EEXIST') {
+      console.error(`Error creating profile: Profile '${name}' already exists`);
+    } else {
+      console.error(`Error creating profile: ${error.message}`);
+    }
     return false;
   }
 }

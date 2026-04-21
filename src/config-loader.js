@@ -237,10 +237,13 @@ export class ConfigLoader {
   async saveToCodexConfig(codexConfigPath = path.join(os.homedir(), '.codex', 'config.toml')) {
     let config = {};
 
-    // Load existing config if it exists
-    if (fs.existsSync(codexConfigPath)) {
+    // Load existing config if it exists (read directly, ignore ENOENT -- avoids
+    // the check-then-act race existsSync + readFileSync would introduce).
+    try {
       const content = fs.readFileSync(codexConfigPath, 'utf8');
       config = TOML.parse(content);
+    } catch (e) {
+      if (e.code !== 'ENOENT') throw e;
     }
 
     // Add MCP server configuration

@@ -18,7 +18,7 @@
 import { streamExecCommand, shQuote } from '../stream-exec.js';
 import { ok, fail, preview, toMcp } from '../structured-result.js';
 import { buildPlan } from '../preview-mode.js';
-import { formatBytes, formatDuration } from '../output-formatter.js';
+import { formatBytes, formatDuration, escapeMdCell } from '../output-formatter.js';
 import {
   parseSystemctlShow,
   sdNum,
@@ -256,7 +256,7 @@ export function renderSystemctl(result) {
       lines.push('| unit | load | active | sub | description |');
       lines.push('| --- | --- | --- | --- | --- |');
       for (const u of d.units) {
-        const desc = (u.description || '').slice(0, 60).replace(/\|/g, '\\|');
+        const desc = escapeMdCell((u.description || '').slice(0, 60));
         lines.push(`| \`${u.unit}\` | ${u.load} | ${u.active} | ${u.sub} | ${desc} |`);
       }
     }

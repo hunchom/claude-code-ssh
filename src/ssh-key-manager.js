@@ -154,9 +154,11 @@ export function removeHostKey(host, port = 22) {
  */
 export async function addHostKey(host, port = 22, keyData = null) {
   try {
-    // Backup current known_hosts
-    if (fs.existsSync(KNOWN_HOSTS_PATH)) {
+    // Backup current known_hosts (ignore if not present -- atomic, no TOCTOU).
+    try {
       fs.copyFileSync(KNOWN_HOSTS_PATH, KNOWN_HOSTS_BACKUP);
+    } catch (e) {
+      if (e.code !== 'ENOENT') throw e;
     }
 
     // If no key data provided, fetch it
@@ -168,11 +170,9 @@ export async function addHostKey(host, port = 22, keyData = null) {
       keyData = fingerprints.map(fp => fp.fullKey).join('\n');
     }
 
-    // Ensure .ssh directory exists
+    // Ensure .ssh directory exists (mkdir recursive is idempotent, no TOCTOU).
     const sshDir = path.dirname(KNOWN_HOSTS_PATH);
-    if (!fs.existsSync(sshDir)) {
-      fs.mkdirSync(sshDir, { mode: 0o700, recursive: true });
-    }
+    fs.mkdirSync(sshDir, { mode: 0o700, recursive: true });
 
     // Append to known_hosts
     fs.appendFileSync(KNOWN_HOSTS_PATH, keyData + '\n');

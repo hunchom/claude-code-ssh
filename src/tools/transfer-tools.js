@@ -190,13 +190,13 @@ export async function handleSshUpload({ getConnection, args }) {
 
   // Preview: never touch the remote beyond a stat
   if (isPreview) {
-    let stat = 'unknown';
     let localSize = null;
     try {
       const st = fs.statSync(local_path);
       localSize = st.size;
     } catch (_) { /* local may not exist -- still preview */ }
 
+    let stat;
     try {
       const client = await getConnection(server);
       stat = await remoteStatLine(client, remote_path);
@@ -304,7 +304,7 @@ export async function handleSshDownload({ getConnection, args }) {
   }
 
   if (isPreview) {
-    let stat = 'unknown';
+    let stat;
     try {
       const client = await getConnection(server);
       stat = await remoteStatLine(client, remote_path);
@@ -802,7 +802,7 @@ export async function handleSshEdit({ getConnection, args }) {
   const checker = pickSyntaxChecker(filePath, syntax_check);
 
   if (isPreview) {
-    let stat = 'unknown';
+    let stat;
     try {
       const client = await getConnection(server);
       stat = await remoteStatLine(client, filePath);

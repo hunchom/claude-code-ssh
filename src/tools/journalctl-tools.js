@@ -19,7 +19,7 @@
 
 import { streamExecCommand, shQuote } from '../stream-exec.js';
 import { ok, fail, toMcp } from '../structured-result.js';
-import { formatDuration } from '../output-formatter.js';
+import { formatDuration, escapeMdCell } from '../output-formatter.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_LINES = 100;
@@ -184,7 +184,7 @@ export function renderJournalctl(result) {
       lines.push('| --- | --- | --- | --- |');
       for (const e of d.entries) {
         const t = (e.time ?? '--').toString();
-        const msg = (e.message ?? '').toString().slice(0, 120).replace(/\|/g, '\\|').replace(/\n/g, ' ');
+        const msg = escapeMdCell((e.message ?? '').toString().slice(0, 120));
         lines.push(`| ${t} | ${e.priority ?? '--'} | ${e.unit ?? '--'} | ${msg} |`);
       }
     } else {

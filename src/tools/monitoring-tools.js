@@ -13,7 +13,7 @@
 import { streamExecCommand, shQuote } from '../stream-exec.js';
 import { ok, fail, preview, toMcp } from '../structured-result.js';
 import { buildPlan } from '../preview-mode.js';
-import { formatBytes, formatDuration } from '../output-formatter.js';
+import { formatBytes, formatDuration, escapeMdCell } from '../output-formatter.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -494,7 +494,7 @@ export function renderServiceStatus(result) {
 function renderProcTable(rows) {
   const lines = ['| PID | USER | CPU% | MEM% | CMD |', '| --- | --- | --- | --- | --- |'];
   for (const p of rows) {
-    const cmd = (p.cmd || p.comm || '').slice(0, 80).replace(/\|/g, '\\|');
+    const cmd = escapeMdCell((p.cmd || p.comm || '').slice(0, 80));
     lines.push(`| ${p.pid} | ${p.user ?? '--'} | ${fmtPct(p.cpu_pct)} | ${fmtPct(p.mem_pct)} | \`${cmd}\` |`);
   }
   return lines.join('\n');
