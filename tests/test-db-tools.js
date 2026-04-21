@@ -126,6 +126,35 @@ await test('ssh_db_query: isSafeSelect rejection -> structured fail, NO remote c
   assert.strictEqual(r.isError, true);
 });
 
+await test('ssh_db_query: rejects database/user names with SQL metacharacters (injection guard)', async () => {
+  for (const bad of ['app\'; DROP DATABASE x; --', 'app; DROP', 'a b', 'a`b', 'a\\b']) {
+    const r = await handleSshDbQuery({
+      getConnection: async () => { throw new Error('must not connect'); },
+      args: { server: 's', db_type: 'mysql', database: bad, query: 'SELECT 1', format: 'json' },
+    });
+    assert.strictEqual(r.isError, true, `expected fail for database=${JSON.stringify(bad)}`);
+    const parsed = JSON.parse(r.content[0].text);
+    assert(parsed.error.includes('unsafe characters'),
+      `expected 'unsafe characters' in error, got: ${parsed.error}`);
+  }
+  // user field should be guarded too
+  const r2 = await handleSshDbQuery({
+    getConnection: async () => { throw new Error('must not connect'); },
+    args: { server: 's', db_type: 'mysql', query: 'SELECT 1', user: 'u\'; DROP', format: 'json' },
+  });
+  assert.strictEqual(r2.isError, true);
+});
+
+await test('ssh_db_dump: rejects database names with metacharacters', async () => {
+  const r = await handleSshDbDump({
+    getConnection: async () => { throw new Error('must not connect'); },
+    args: { server: 's', db_type: 'mysql', database: 'x\'; rm -rf /', format: 'json', preview: true },
+  });
+  assert.strictEqual(r.isError, true);
+  const parsed = JSON.parse(r.content[0].text);
+  assert(parsed.error.includes('unsafe characters'));
+});
+
 await test('ssh_db_query: `SELECT deleted_at FROM t` is accepted (old impl would falsely reject)', async () => {
   const client = new FakeClient({ script: () => ({ stdout: 'deleted_at\n2024-01-01\n', code: 0 }) });
   const r = await handleSshDbQuery({

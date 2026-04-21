@@ -256,6 +256,33 @@ await test('backup_schedule: preview shows cron plan', async () => {
   assert(parsed.data.plan.action.includes('schedule'));
 });
 
+await test('backup_schedule: rejects cron with embedded newline (injection guard)', async () => {
+  const r = await handleSshBackupSchedule({
+    getConnection: async () => { throw new Error('should not reach connection'); },
+    args: {
+      server: 's',
+      cron: '0 0 * * *\n* * * * * rm -rf ~',
+      backup_type: 'mysql', database: 'app',
+      preview: true, format: 'json',
+    },
+  });
+  assert.strictEqual(r.isError, true);
+  const parsed = JSON.parse(r.content[0].text);
+  assert(/single line|newline/i.test(parsed.error), `expected newline rejection, got: ${parsed.error}`);
+});
+
+await test('backup_schedule: rejects cron with shell metacharacters', async () => {
+  for (const bad of ['0 0 * * * `id`', '0 0 * * * $(whoami)']) {
+    const r = await handleSshBackupSchedule({
+      getConnection: async () => { throw new Error('should not reach connection'); },
+      args: { server: 's', cron: bad, backup_type: 'mysql', database: 'app', preview: true, format: 'json' },
+    });
+    assert.strictEqual(r.isError, true, `expected fail for ${JSON.stringify(bad)}`);
+    const parsed = JSON.parse(r.content[0].text);
+    assert(/shell metacharacters|\$|`/.test(parsed.error), `expected metachar rejection, got: ${parsed.error}`);
+  }
+});
+
 await test('backup_schedule: refuses password arg for DB backups (no plaintext secret in crontab)', async () => {
   for (const dbType of ['mysql', 'postgresql', 'mongodb']) {
     const r = await handleSshBackupSchedule({

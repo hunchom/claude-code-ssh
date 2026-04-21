@@ -27,6 +27,32 @@ const DEFAULT_LIMIT = 1000;
 const MAX_ALLOWED_LIMIT = 100_000;
 
 /**
+ * Conservative SQL-identifier validator (database / user names).
+ *
+ * shQuote() is correct for SHELL quoting but a value like `app'; DROP DATABASE x; --`
+ * shell-unquotes to a literal SQL string and becomes an INJECTED SQL token when the
+ * outer `-e '<query>'` is parsed by mysql/psql. We don't render idents as SQL string
+ * literals anywhere safe -- `SHOW TABLES FROM 'name'`, `pg_database_size('name')`,
+ * and the parameterless `mysqldump <name>` all treat the value as an identifier.
+ * So we require a syntactic subset that every mainstream DBMS allows for
+ * database/role/schema/table names:
+ *   [A-Za-z0-9_][A-Za-z0-9_.-]{0,63}
+ * Max 64 chars (MySQL cap is 64, PG is 63). `.` allowed so `schema.table` works for
+ * mongodump --db / pg_database_size callers that pass schema-qualified names.
+ * No spaces, no quotes, no semicolons, no backticks, no backslashes.
+ */
+const SQL_IDENT_RE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$/;
+function isSafeSqlIdent(s) {
+  return typeof s === 'string' && SQL_IDENT_RE.test(s);
+}
+function rejectBadIdent(tool, field, value, { server, format }) {
+  return toMcp(
+    fail(tool, `${field} contains unsafe characters (must match [A-Za-z0-9_][A-Za-z0-9_.-]{0,63})`, { server }),
+    { format },
+  );
+}
+
+/**
  * Assemble a MongoDB URI for the `mongo` family so we can hand it to mongosh
  * via env var instead of argv. Defaults to localhost:27017 because the SSH
  * server IS typically the DB host in this deployment model.
@@ -284,6 +310,12 @@ export async function handleSshDbQuery({ getConnection, args }) {
   if (!query || typeof query !== 'string') {
     return toMcp(fail('ssh_db_query', 'query is required'), { format });
   }
+  if (database != null && !isSafeSqlIdent(database)) {
+    return rejectBadIdent('ssh_db_query', 'database', database, { server, format });
+  }
+  if (user != null && !isSafeSqlIdent(user)) {
+    return rejectBadIdent('ssh_db_query', 'user', user, { server, format });
+  }
 
   const cappedLimit = safeInt(limit, { min: 1, max: MAX_ALLOWED_LIMIT, fallback: DEFAULT_LIMIT });
 
@@ -428,6 +460,12 @@ export async function handleSshDbList({ getConnection, args }) {
   if (!['mysql', 'postgresql', 'mongodb'].includes(db_type)) {
     return toMcp(fail('ssh_db_list', `unsupported db_type: ${db_type}`), { format });
   }
+  if (database != null && !isSafeSqlIdent(database)) {
+    return rejectBadIdent('ssh_db_list', 'database', database, { server, format });
+  }
+  if (user != null && !isSafeSqlIdent(user)) {
+    return rejectBadIdent('ssh_db_list', 'user', user, { server, format });
+  }
 
   let cmd;
   if (db_type === 'mysql') cmd = buildMySqlListCommand({ database, user });
@@ -500,6 +538,12 @@ export async function handleSshDbDump({ getConnection, args }) {
     return toMcp(fail('ssh_db_dump', `unsupported db_type: ${db_type}`), { format });
   }
   if (!database) return toMcp(fail('ssh_db_dump', 'database is required'), { format });
+  if (!isSafeSqlIdent(database)) {
+    return rejectBadIdent('ssh_db_dump', 'database', database, { server, format });
+  }
+  if (user != null && !isSafeSqlIdent(user)) {
+    return rejectBadIdent('ssh_db_dump', 'user', user, { server, format });
+  }
 
   const outPath = output_path ||
     `/tmp/${database}-${Date.now()}.${db_type === 'mongodb' ? 'archive' : 'sql'}${gzip ? '.gz' : ''}`;
@@ -593,6 +637,12 @@ export async function handleSshDbImport({ getConnection, args }) {
     return toMcp(fail('ssh_db_import', `unsupported db_type: ${db_type}`), { format });
   }
   if (!database) return toMcp(fail('ssh_db_import', 'database is required'), { format });
+  if (!isSafeSqlIdent(database)) {
+    return rejectBadIdent('ssh_db_import', 'database', database, { server, format });
+  }
+  if (user != null && !isSafeSqlIdent(user)) {
+    return rejectBadIdent('ssh_db_import', 'user', user, { server, format });
+  }
   if (!input_path) return toMcp(fail('ssh_db_import', 'input_path is required'), { format });
 
   if (isPreview) {

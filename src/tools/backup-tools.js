@@ -647,8 +647,29 @@ export async function handleSshBackupSchedule({ getConnection, args }) {
   if (!VALID_TYPES.has(backup_type)) {
     return toMcp(fail('ssh_backup_schedule', `invalid backup_type: ${backup_type}`, { server }), { format });
   }
-  if (!cron || typeof cron !== 'string' || cron.trim().split(/\s+/).length < 5) {
+  if (!cron || typeof cron !== 'string') {
     return toMcp(fail('ssh_backup_schedule', 'cron is required (e.g. "0 2 * * *")', { server }), { format });
+  }
+  const cronTrimmed = cron.trim();
+  // Reject embedded newlines/CR/tab -- cron must be a single line. Without this,
+  // a caller could smuggle extra crontab entries via "0 0 * * *\nMALICIOUS\n".
+  if (/[\r\n\t]/.test(cronTrimmed)) {
+    return toMcp(fail('ssh_backup_schedule',
+      'cron must be a single line (no newlines/tabs)', { server }), { format });
+  }
+  // Reject anything that looks like it came through a shell expansion break
+  // (backticks, $() etc) even though shQuote would neutralize them --
+  // defense in depth + clearer UX on malformed input.
+  if (/[`$]/.test(cronTrimmed)) {
+    return toMcp(fail('ssh_backup_schedule',
+      'cron cannot contain shell metacharacters ($, `)', { server }), { format });
+  }
+  // A cron expression is 5 (or 6 with seconds) whitespace-separated time fields.
+  // Split on literal space only -- newlines were already rejected above.
+  const fields = cronTrimmed.split(/ +/);
+  if (fields.length < 5) {
+    return toMcp(fail('ssh_backup_schedule',
+      'cron must have at least 5 time fields (e.g. "0 2 * * *")', { server }), { format });
   }
 
   // Refuse to schedule if a password was passed -- writing it into crontab
@@ -696,14 +717,14 @@ export async function handleSshBackupSchedule({ getConnection, args }) {
   // job can execute correctly; the URI encodes db/host/port, not credentials.
   const fullCmd = (cmdBundle.envPrefix || '') + cmdBundle.command;
   const marker = `# claude-code-ssh-backup:${backup_type}:${targetName}`;
-  const cronLine = `${cron.trim()} ${fullCmd} ${marker}`;
+  const cronLine = `${cronTrimmed} ${fullCmd} ${marker}`;
 
   if (isPreview) {
     const plan = buildPlan({
       action: 'backup-schedule',
       target: `${server}:crontab`,
       effects: [
-        `cron: \`${cron.trim()}\``,
+        `cron: \`${cronTrimmed}\``,
         `backup_type: \`${backup_type}\``,
         backup_type === 'files'
           ? `paths: ${(paths || []).map(p => `\`${p}\``).join(', ')}`
@@ -745,7 +766,7 @@ export async function handleSshBackupSchedule({ getConnection, args }) {
 
   return toMcp(
     ok('ssh_backup_schedule', {
-      cron: cron.trim(),
+      cron: cronTrimmed,
       cron_line: cronLine,
       marker,
       backup_type,
