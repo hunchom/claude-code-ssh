@@ -1,0 +1,20 @@
+name: claude-code-ssh CodeQL config
+
+# Queries to run: GitHub's security-extended + code-quality suites.
+# (Must be kept in sync with the `queries:` arg in .github/workflows/codeql.yml;
+#  if set here it overrides the workflow value.)
+queries:
+  - uses: security-extended
+  - uses: security-and-quality
+
+# Paths explicitly excluded from analysis.
+# - examples/ holds illustrative JS that references external symbols a user
+#   would define themselves (createBackup, deploy, healthCheck, ...). CodeQL
+#   cannot see those and reports js/call-to-non-callable + unused-local-variable.
+# - debug/ holds ad-hoc connection/logger smoke scripts; they are not shipped.
+# - node_modules/ is tooling, never us.
+paths-ignore:
+  - examples
+  - debug
+  - node_modules
+  - scripts
