@@ -38,6 +38,54 @@ test('fail: error from string preserved verbatim', () => {
   assert.strictEqual(r.error, 'unsafe query');
 });
 
+// --- fail() hardening (Wave 2 H3) ---------------------------------------
+test('fail: null error normalizes to "unknown error" (no [object Object])', () => {
+  const r = fail('t', null);
+  assert.strictEqual(r.error, 'unknown error');
+});
+
+test('fail: undefined error normalizes to "unknown error"', () => {
+  const r = fail('t', undefined);
+  assert.strictEqual(r.error, 'unknown error');
+});
+
+test('fail: plain object without .message is JSON-stringified, not [object Object]', () => {
+  const r = fail('t', { code: -1, signal: 'TIMEOUT' });
+  assert.notStrictEqual(r.error, '[object Object]');
+  assert(r.error.includes('-1') && r.error.includes('TIMEOUT'));
+});
+
+test('fail: plain object with .message uses the message', () => {
+  const r = fail('t', { message: 'connection lost', retryable: true });
+  assert.strictEqual(r.error, 'connection lost');
+});
+
+test('fail: Error stack is hidden unless MCP_SSH_INCLUDE_STACK=1', () => {
+  const r = fail('t', new Error('boom'));
+  assert.strictEqual(r.error_stack, undefined,
+    'stack must not leak by default -- opt-in only');
+});
+
+test('fail: Error stack is exposed when MCP_SSH_INCLUDE_STACK=1', () => {
+  const prev = process.env.MCP_SSH_INCLUDE_STACK;
+  process.env.MCP_SSH_INCLUDE_STACK = '1';
+  try {
+    const r = fail('t', new Error('boom'));
+    assert(typeof r.error_stack === 'string' && r.error_stack.includes('Error: boom'));
+  } finally {
+    if (prev === undefined) delete process.env.MCP_SSH_INCLUDE_STACK;
+    else process.env.MCP_SSH_INCLUDE_STACK = prev;
+  }
+});
+
+test('fail: circular object falls back to String() without throwing', () => {
+  const obj = { a: 1 };
+  obj.self = obj;
+  const r = fail('t', obj);
+  assert(typeof r.error === 'string');
+  assert.notStrictEqual(r.error, undefined);
+});
+
 test('preview: data carries preview:true + plan', () => {
   const r = preview('ssh_upload', { action: 'upload', target: 'prod01:/x' }, { server: 'prod01' });
   assert.strictEqual(r.success, true);

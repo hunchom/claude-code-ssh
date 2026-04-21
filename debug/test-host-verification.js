@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import SSHManager from '../src/ssh-manager.js';
-import { isHostKnown, getCurrentHostKey, removeHostKey } from '../src/ssh-key-manager.js';
+import { isHostKnown, getCurrentHostKey } from '../src/ssh-key-manager.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -12,7 +12,6 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 // Test configuration
-const testServer = 'efaje_staging';
 const config = {
   host: process.env.SSH_SERVER_EFAJE_STAGING_HOST || '35.198.113.119',
   port: parseInt(process.env.SSH_SERVER_EFAJE_STAGING_PORT) || 14072,

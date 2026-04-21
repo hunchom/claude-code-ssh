@@ -13,12 +13,18 @@
     "linebreak-style": ["error", "unix"],
     "quotes": ["error", "single"],
     "semi": ["error", "always"],
-    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_", "caughtErrorsIgnorePattern": "^_" }],
+    "no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_", "caughtErrorsIgnorePattern": "^_" }],
     "no-console": ["warn", { "allow": ["warn", "error"] }],
     "no-trailing-spaces": ["error"],
     "eol-last": ["error", "always"],
     "comma-dangle": ["error", "only-multiline"],
     "object-curly-spacing": ["error", "always"],
     "array-bracket-spacing": ["error", "never"]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["tests/**/*.js", "examples/**/*.js", "debug/**/*.js", "scripts/**/*.{js,mjs,cjs}"],
+      "rules": { "no-console": "off" }
+    }
+  ]
 }

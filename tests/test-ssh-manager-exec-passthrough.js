@@ -42,7 +42,7 @@ assert(typeof captured?.maybeCb === 'function', 'exec forwards callback as 3rd a
 // --- sftp passthrough ---
 assert(typeof mgr.sftp === 'function', 'SSHManager.sftp is a function');
 captured = null;
-const sftpCb = (err, sftp) => {};
+const sftpCb = (_err, _sftp) => {};
 mgr.sftp(sftpCb);
 assert(captured?.sftpCb === sftpCb, 'sftp forwards callback to underlying client');
 
@@ -67,7 +67,7 @@ assert(captured?.srcA === '127.0.0.1' && captured?.dstP === 22, 'forwardOut call
 
 // --- forwardOut Promise-style (used by index.js for proxy jumps) ---
 let resolvedStream = null;
-mgr.client.forwardOut = (srcA, srcP, dstA, dstP, cb) => cb(null, { tag: 'mockStream' });
+mgr.client.forwardOut = (_srcA, _srcP, _dstA, _dstP, cb) => cb(null, { tag: 'mockStream' });
 const promise = mgr.forwardOut('127.0.0.1', 0, 'jump.host', 22);
 assert(promise && typeof promise.then === 'function', 'forwardOut Promise-style returns a Promise');
 await promise.then(s => { resolvedStream = s; });

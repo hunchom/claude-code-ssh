@@ -51,7 +51,7 @@ Persistent shells. The session keeps its cwd, env, and shell state across multip
 | `ssh_process_manager` | list / filter / kill processes |
 | `ssh_tail` | real-time log tail with regex filter |
 | `ssh_monitor` | CPU / RAM / disk / net snapshot |
-| `ssh_alert_setup` | configure threshold alerts |
+| `ssh_alert_setup` | set / get / check threshold alerts (CPU, memory, per-mount disk) |
 | `ssh_history` | per-server command history |
 
 ## backup (4)

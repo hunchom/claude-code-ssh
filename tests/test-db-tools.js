@@ -64,8 +64,8 @@ await test('buildMySqlQueryCommand: uses MYSQL_PWD env, NOT -p argv', () => {
   assert(cmd.startsWith('MYSQL_PWD='), `expected MYSQL_PWD prefix, got: ${cmd}`);
   assert(cmd.includes('mysql'));
   assert(!cmd.includes('-p'), `password flag must NOT appear, got: ${cmd}`);
-  assert(cmd.includes("-D 'app'"));
-  assert(cmd.includes("'SELECT 1'"));
+  assert(cmd.includes('-D \'app\''));
+  assert(cmd.includes('\'SELECT 1\''));
 });
 
 await test('buildPostgresQueryCommand: uses PGPASSWORD env, NOT password in argv', () => {
@@ -75,19 +75,35 @@ await test('buildPostgresQueryCommand: uses PGPASSWORD env, NOT password in argv
   // psql password arg `-W` would trigger a prompt; `-w` means no-password -- neither should appear with a value.
   // But we should not have any flag that carries a literal password.
   assert(!/--password\s*=?\s*\S/.test(cmd), 'psql --password flag must NOT carry a value');
-  assert(cmd.includes("-U 'alice'"));
-  assert(cmd.includes("-d 'app'"));
+  assert(cmd.includes('-U \'alice\''));
+  assert(cmd.includes('-d \'app\''));
 });
 
-await test('buildMongoQueryCommand: escapes eval snippet', () => {
+await test('buildMongoQueryCommand: uses --nodb + env-URI, escapes eval, names db via getSiblingDB', () => {
   const cmd = buildMongoQueryCommand({
     database: 'app',
-    query: "db.users.find({name: \"O'Brien\"}).toArray()",
+    query: 'db.users.find({name: "O\'Brien"}).toArray()',
   });
   assert(cmd.startsWith('mongosh'));
-  assert(cmd.includes("'app'"));
+  assert(cmd.includes('--nodb'),
+    '--nodb is required so mongosh does NOT auto-connect from argv/URI');
+  assert(cmd.includes('getDB("app")'),
+    'target db must be selected via Mongo().getDB(), not as a positional URI arg');
+  assert(cmd.includes('process.env.SSH_MGR_DB_URI'),
+    'connection URI must be read from env, never argv');
   // Single quotes inside the query get POSIX-escaped: '\''
-  assert(cmd.includes("'\\''"), 'single-quote inside eval must be POSIX-escaped');
+  assert(cmd.includes('\'\\\'\''), 'single-quote inside eval must be POSIX-escaped');
+});
+
+await test('buildMongoQueryCommand: no user/credentials appear in argv (regression: H8)', () => {
+  const cmd = buildMongoQueryCommand({
+    database: 'app',
+    query: 'db.x.find({}).toArray()',
+    user: 'alice',
+  });
+  // Neither `-u` nor `-p` should appear -- those leak via `ps aux`.
+  assert(!/\s-u\s/.test(cmd), 'mongo query must not put `-u` user in argv');
+  assert(!/\s-p\s/.test(cmd), 'mongo query must not put `-p` password in argv');
 });
 
 // --------------------------------------------------------------------------
@@ -108,6 +124,35 @@ await test('ssh_db_query: isSafeSelect rejection -> structured fail, NO remote c
   assert.strictEqual(parsed.success, false);
   assert(parsed.error.includes('unsafe query') || parsed.error.toLowerCase().includes('must start with'));
   assert.strictEqual(r.isError, true);
+});
+
+await test('ssh_db_query: rejects database/user names with SQL metacharacters (injection guard)', async () => {
+  for (const bad of ['app\'; DROP DATABASE x; --', 'app; DROP', 'a b', 'a`b', 'a\\b']) {
+    const r = await handleSshDbQuery({
+      getConnection: async () => { throw new Error('must not connect'); },
+      args: { server: 's', db_type: 'mysql', database: bad, query: 'SELECT 1', format: 'json' },
+    });
+    assert.strictEqual(r.isError, true, `expected fail for database=${JSON.stringify(bad)}`);
+    const parsed = JSON.parse(r.content[0].text);
+    assert(parsed.error.includes('unsafe characters'),
+      `expected 'unsafe characters' in error, got: ${parsed.error}`);
+  }
+  // user field should be guarded too
+  const r2 = await handleSshDbQuery({
+    getConnection: async () => { throw new Error('must not connect'); },
+    args: { server: 's', db_type: 'mysql', query: 'SELECT 1', user: 'u\'; DROP', format: 'json' },
+  });
+  assert.strictEqual(r2.isError, true);
+});
+
+await test('ssh_db_dump: rejects database names with metacharacters', async () => {
+  const r = await handleSshDbDump({
+    getConnection: async () => { throw new Error('must not connect'); },
+    args: { server: 's', db_type: 'mysql', database: 'x\'; rm -rf /', format: 'json', preview: true },
+  });
+  assert.strictEqual(r.isError, true);
+  const parsed = JSON.parse(r.content[0].text);
+  assert(parsed.error.includes('unsafe characters'));
 });
 
 await test('ssh_db_query: `SELECT deleted_at FROM t` is accepted (old impl would falsely reject)', async () => {
@@ -131,7 +176,7 @@ await test('ssh_db_query: `SELECT deleted_at FROM t` is accepted (old impl would
 // handleSshDbQuery -- credential handling
 // --------------------------------------------------------------------------
 await test('ssh_db_query: MySQL password goes via MYSQL_PWD env, never argv', async () => {
-  const secret = "pw-with-'quotes-and-$chars";
+  const secret = 'pw-with-\'quotes-and-$chars';
   const client = new FakeClient({ script: () => ({ stdout: 'id\n1\n', code: 0 }) });
   await handleSshDbQuery({
     getConnection: async () => client,
@@ -177,14 +222,14 @@ await test('ssh_db_query: MongoDB eval properly escaped for POSIX shell', async 
     getConnection: async () => client,
     args: {
       server: 's', db_type: 'mongodb', database: 'app',
-      query: "db.users.find({name: 'alice'}).toArray()",
+      query: 'db.users.find({name: \'alice\'}).toArray()',
       format: 'json',
     },
   });
   const cmd = client.lastCommand;
   assert(cmd.includes('mongosh'));
   // Single-quotes embedded in the query must be POSIX-escaped so the shell doesn't break.
-  assert(cmd.includes("'\\''"), `expected POSIX escape, got: ${cmd}`);
+  assert(cmd.includes('\'\\\'\''), `expected POSIX escape, got: ${cmd}`);
 });
 
 await test('ssh_db_query: Mongo eval rejects obvious mutations', async () => {

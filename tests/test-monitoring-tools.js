@@ -20,7 +20,6 @@ import {
   parsePsInfo,
   parseSystemctlShow,
   sdNum,
-  shapeServiceRecord,
   splitHealthSections,
   computeStatus,
   extractJournalLines,
@@ -540,7 +539,6 @@ await test('ssh_service_status: missing service arg -> structured failure', asyn
     args: { server: 's' },
   });
   assert.strictEqual(r.isError, true);
-  const parsed = JSON.parse(JSON.stringify({ ok: true })); // force assertion style
   assert(r.content[0].text.toLowerCase().includes('service') || r.content[0].text.includes('failed'));
 });
 
@@ -550,10 +548,10 @@ await test('ssh_service_status: service name is shell-quoted in remote command',
   const client = new FakeClient({ script: () => ({ stdout, code: 0 }) });
   await handleSshServiceStatus({
     getConnection: async () => client,
-    args: { server: 's', service: "foo; rm -rf /", format: 'json' },
+    args: { server: 's', service: 'foo; rm -rf /', format: 'json' },
   });
   assert(!client.lastCommand.includes('rm -rf /; '), 'injection must not escape quoting');
-  assert(client.lastCommand.includes("'foo; rm -rf /'"));
+  assert(client.lastCommand.includes('\'foo; rm -rf /\''));
 });
 
 // --- handleSshProcessManager --------------------------------------------

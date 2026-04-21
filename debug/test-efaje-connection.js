@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { Client } from 'ssh2';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';

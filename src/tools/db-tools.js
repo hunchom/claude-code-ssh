@@ -26,6 +26,46 @@ const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_LIMIT = 1000;
 const MAX_ALLOWED_LIMIT = 100_000;
 
+/**
+ * Conservative SQL-identifier validator (database / user names).
+ *
+ * shQuote() is correct for SHELL quoting but a value like `app'; DROP DATABASE x; --`
+ * shell-unquotes to a literal SQL string and becomes an INJECTED SQL token when the
+ * outer `-e '<query>'` is parsed by mysql/psql. We don't render idents as SQL string
+ * literals anywhere safe -- `SHOW TABLES FROM 'name'`, `pg_database_size('name')`,
+ * and the parameterless `mysqldump <name>` all treat the value as an identifier.
+ * So we require a syntactic subset that every mainstream DBMS allows for
+ * database/role/schema/table names:
+ *   [A-Za-z0-9_][A-Za-z0-9_.-]{0,63}
+ * Max 64 chars (MySQL cap is 64, PG is 63). `.` allowed so `schema.table` works for
+ * mongodump --db / pg_database_size callers that pass schema-qualified names.
+ * No spaces, no quotes, no semicolons, no backticks, no backslashes.
+ */
+const SQL_IDENT_RE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$/;
+function isSafeSqlIdent(s) {
+  return typeof s === 'string' && SQL_IDENT_RE.test(s);
+}
+function rejectBadIdent(tool, field, value, { server, format }) {
+  return toMcp(
+    fail(tool, `${field} contains unsafe characters (must match [A-Za-z0-9_][A-Za-z0-9_.-]{0,63})`, { server }),
+    { format },
+  );
+}
+
+/**
+ * Assemble a MongoDB URI for the `mongo` family so we can hand it to mongosh
+ * via env var instead of argv. Defaults to localhost:27017 because the SSH
+ * server IS typically the DB host in this deployment model.
+ */
+function buildMongoConnectionUri({ user, password, host = 'localhost', port = 27017, database, authSource }) {
+  const userinfo = user
+    ? (password ? `${encodeURIComponent(user)}:${encodeURIComponent(password)}@` : `${encodeURIComponent(user)}@`)
+    : '';
+  const db = database ? `/${encodeURIComponent(database)}` : '';
+  const q = authSource ? `?authSource=${encodeURIComponent(authSource)}` : '';
+  return `mongodb://${userinfo}${host}:${port}${db}${q}`;
+}
+
 // --------------------------------------------------------------------------
 // Helpers
 // --------------------------------------------------------------------------
@@ -113,19 +153,24 @@ export function buildPostgresQueryCommand({ database, query, user }) {
 }
 
 /**
- * Build the MongoDB query command. Credentials via URI env var.
- * `query` here is expected to be a JS snippet (e.g. 'db.users.find({active:true}).limit(100).toArray()').
+ * Build the MongoDB query command. Credentials via SSH_MGR_DB_URI env var
+ * (never argv). `query` is a JS snippet; the db is switched via
+ * `db.getSiblingDB(...)` inside the eval so we don't rely on mongosh's
+ * positional-URI parsing.
  */
-export function buildMongoQueryCommand({ database, query, user }) {
-  // MONGO_URL carried via env var; mongosh accepts `mongodb://user:pw@host/db`.
-  // We fall back to plain mongosh against localhost when no URL is configured.
-  const parts = ['mongosh', '--quiet'];
-  if (database) parts.push(shQuote(database));
-  parts.push('--eval', shQuote(query));
-  if (user) {
-    parts.splice(2, 0, '-u', shQuote(user), '-p', '"$SSH_MGR_DB_PASS"');
-  }
-  return parts.join(' ');
+export function buildMongoQueryCommand({ database, query, user: _user }) {
+  // Assemble a single eval that: (a) connects via URI read from env (so no
+  // credentials appear in argv on the target host), (b) selects the target
+  // database via getSiblingDB instead of a positional, (c) runs the caller's
+  // snippet with the correct `db` binding.
+  const dbLit = JSON.stringify(database || 'admin');
+  const wrappedEval =
+    'const __mgr_conn = new Mongo(process.env.SSH_MGR_DB_URI); ' +
+    `const db = __mgr_conn.getDB(${dbLit}); ` +
+    query;
+  // --nodb tells mongosh NOT to auto-connect; we build the connection in the
+  // eval so mongosh never sees a URI in argv.
+  return `mongosh --quiet --nodb --eval ${shQuote(wrappedEval)}`;
 }
 
 // --------------------------------------------------------------------------
@@ -212,7 +257,8 @@ export function buildImportCommand({ db_type, database, input_path, user }) {
   if (db_type === 'mongodb') {
     const userArgs = user ? ` -u ${shQuote(user)} -p "$SSH_MGR_DB_PASS"` : '';
     const gzipFlag = gz || String(input_path).endsWith('.archive.gz') ? ' --gzip' : '';
-    return `mongorestore${userArgs} --db ${shQuote(database)}${gzipFlag} --archive=${input_path.replace(/'/g, '\'\\\'\'')}`;
+    // shQuote wraps in single quotes: --archive='/path with spaces/db.archive'
+    return `mongorestore${userArgs} --db ${shQuote(database)}${gzipFlag} --archive=${shQuote(input_path)}`;
   }
   return '';
 }
@@ -264,6 +310,12 @@ export async function handleSshDbQuery({ getConnection, args }) {
   if (!query || typeof query !== 'string') {
     return toMcp(fail('ssh_db_query', 'query is required'), { format });
   }
+  if (database != null && !isSafeSqlIdent(database)) {
+    return rejectBadIdent('ssh_db_query', 'database', database, { server, format });
+  }
+  if (user != null && !isSafeSqlIdent(user)) {
+    return rejectBadIdent('ssh_db_query', 'user', user, { server, format });
+  }
 
   const cappedLimit = safeInt(limit, { min: 1, max: MAX_ALLOWED_LIMIT, fallback: DEFAULT_LIMIT });
 
@@ -310,14 +362,19 @@ export async function handleSshDbQuery({ getConnection, args }) {
 
   // Build command
   let cmd;
-  if (db_type === 'mysql') cmd = buildMySqlQueryCommand({ database, query: finalQuery, user });
-  else if (db_type === 'postgresql') cmd = buildPostgresQueryCommand({ database, query: finalQuery, user });
-  else cmd = buildMongoQueryCommand({ database, query: finalQuery, user });
-
-  // Wrap with env-var password injection so the secret never touches argv.
-  // `SSH_MGR_DB_PASS` is set inline before the command; shell exports it to
-  // the child (mysql/psql/mongosh) via MYSQL_PWD/PGPASSWORD.
-  const envPrefix = `SSH_MGR_DB_PASS=${shQuote(password)} `;
+  let envPrefix;
+  if (db_type === 'mysql') {
+    cmd = buildMySqlQueryCommand({ database, query: finalQuery, user });
+    envPrefix = `SSH_MGR_DB_PASS=${shQuote(password)} `;
+  } else if (db_type === 'postgresql') {
+    cmd = buildPostgresQueryCommand({ database, query: finalQuery, user });
+    envPrefix = `SSH_MGR_DB_PASS=${shQuote(password)} `;
+  } else {
+    // mongo: URI via env so the password never enters argv on the target host.
+    cmd = buildMongoQueryCommand({ database, query: finalQuery, user });
+    const uri = buildMongoConnectionUri({ user, password, database });
+    envPrefix = `SSH_MGR_DB_URI=${shQuote(uri)} `;
+  }
   const fullCmd = envPrefix + cmd;
 
   const startedAt = Date.now();
@@ -403,6 +460,12 @@ export async function handleSshDbList({ getConnection, args }) {
   if (!['mysql', 'postgresql', 'mongodb'].includes(db_type)) {
     return toMcp(fail('ssh_db_list', `unsupported db_type: ${db_type}`), { format });
   }
+  if (database != null && !isSafeSqlIdent(database)) {
+    return rejectBadIdent('ssh_db_list', 'database', database, { server, format });
+  }
+  if (user != null && !isSafeSqlIdent(user)) {
+    return rejectBadIdent('ssh_db_list', 'user', user, { server, format });
+  }
 
   let cmd;
   if (db_type === 'mysql') cmd = buildMySqlListCommand({ database, user });
@@ -475,6 +538,12 @@ export async function handleSshDbDump({ getConnection, args }) {
     return toMcp(fail('ssh_db_dump', `unsupported db_type: ${db_type}`), { format });
   }
   if (!database) return toMcp(fail('ssh_db_dump', 'database is required'), { format });
+  if (!isSafeSqlIdent(database)) {
+    return rejectBadIdent('ssh_db_dump', 'database', database, { server, format });
+  }
+  if (user != null && !isSafeSqlIdent(user)) {
+    return rejectBadIdent('ssh_db_dump', 'user', user, { server, format });
+  }
 
   const outPath = output_path ||
     `/tmp/${database}-${Date.now()}.${db_type === 'mongodb' ? 'archive' : 'sql'}${gzip ? '.gz' : ''}`;
@@ -568,6 +637,12 @@ export async function handleSshDbImport({ getConnection, args }) {
     return toMcp(fail('ssh_db_import', `unsupported db_type: ${db_type}`), { format });
   }
   if (!database) return toMcp(fail('ssh_db_import', 'database is required'), { format });
+  if (!isSafeSqlIdent(database)) {
+    return rejectBadIdent('ssh_db_import', 'database', database, { server, format });
+  }
+  if (user != null && !isSafeSqlIdent(user)) {
+    return rejectBadIdent('ssh_db_import', 'user', user, { server, format });
+  }
   if (!input_path) return toMcp(fail('ssh_db_import', 'input_path is required'), { format });
 
   if (isPreview) {

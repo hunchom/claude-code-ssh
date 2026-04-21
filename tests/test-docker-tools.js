@@ -3,8 +3,7 @@
 import assert from 'assert';
 import { EventEmitter } from 'events';
 import {
-  ALLOWED_ACTIONS, MUTATING_ACTIONS, REVERSIBILITY, RISK_MAP,
-  CONTAINER_NAME_RE, CONTAINER_ID_RE, IMAGE_REF_RE,
+  REVERSIBILITY, RISK_MAP,
   isValidContainer, isValidImage,
   parseDockerPs, parseDockerInspect,
   handleSshDocker,
@@ -171,12 +170,12 @@ await test('handleSshDocker: exec is command-shQuoted', async () => {
   const client = new FakeClient({ script: () => ({ stdout: 'hi', code: 0 }) });
   await handleSshDocker({
     getConnection: async () => client,
-    args: { server: 's', action: 'exec', container: 'myapp', command: "echo 'hi'; rm -rf /" },
+    args: { server: 's', action: 'exec', container: 'myapp', command: 'echo \'hi\'; rm -rf /' },
   });
   const lastCmd = client.commands[client.commands.length - 1];
   assert(lastCmd.includes('docker exec'));
   // The injection attempt should be inside quotes
-  assert(lastCmd.includes("'echo '\\''hi'\\''; rm -rf /'") || lastCmd.includes("'echo 'hi'; rm -rf /'") || /docker exec.*myapp.*sh -c/.test(lastCmd));
+  assert(lastCmd.includes('\'echo \'\\\'\'hi\'\\\'\'; rm -rf /\'') || lastCmd.includes('\'echo \'hi\'; rm -rf /\'') || /docker exec.*myapp.*sh -c/.test(lastCmd));
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -6,7 +6,13 @@
  * no emoji, single-char dividers.
  *
  * Callers build an ExecResult, then choose MCP content via makeMcpContent().
+ *
+ * Truncation cap defaults to OUTPUT_LIMITS.MAX_OUTPUT_LENGTH (tunable via
+ * MCP_SSH_MAX_OUTPUT_LENGTH env var). Tool handlers may still pass an
+ * explicit maxLen -- it overrides the env default.
  */
+
+import { OUTPUT_LIMITS } from './config.js';
 
 // ANSI CSI / OSC stripping. Covers color, cursor, title sequences.
 // eslint-disable-next-line no-control-regex
@@ -22,12 +28,31 @@ export function stripAnsi(s) {
 }
 
 /**
+ * Escape a cell value for a GitHub-Flavored Markdown table.
+ *
+ * NOT a security sanitizer -- we escape only what breaks the table layout:
+ *   backslash first (so it doesn't double-up our own escape), then pipe
+ *   (column delimiter), then newlines (collapsed to spaces so a single
+ *   value can't break the row).
+ *
+ * Callers pass strings that are already untrusted remote content -- the
+ * table is rendered into a chat client's markdown view, not executed.
+ */
+export function escapeMdCell(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/\\/g, '\\\\')
+    .replace(/\|/g, '\\|')
+    .replace(/\r?\n/g, ' ');
+}
+
+/**
  * Truncate a string keeping head and tail, middle elided.
  * Returns { text, originalBytes, truncatedBytes }.
  * - If input fits, truncatedBytes = 0 and text is unchanged.
  * - Else keeps max/2 chars from head and from tail.
  */
-export function truncateHeadTail(s, max = 10_000) {
+export function truncateHeadTail(s, max = OUTPUT_LIMITS.MAX_OUTPUT_LENGTH) {
   const input = s == null ? '' : String(s);
   const originalBytes = input.length;
   if (originalBytes <= max) {
@@ -58,7 +83,7 @@ export function formatExecResult({
   stderr,
   code,
   durationMs,
-  maxLen = 10_000,
+  maxLen = OUTPUT_LIMITS.MAX_OUTPUT_LENGTH,
 }) {
   const out = truncateHeadTail(stripAnsi(stdout), maxLen);
   const err = truncateHeadTail(stripAnsi(stderr), maxLen);

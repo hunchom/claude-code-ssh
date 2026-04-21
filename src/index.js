@@ -48,111 +48,17 @@ import {
   deleteGroup,
   addServersToGroup,
   removeServersFromGroup,
-  listGroups,
-  executeOnGroup,
-  EXECUTION_STRATEGIES
+  listGroups
 } from './server-groups.js';
-import {
-  createTunnel,
-  getTunnel,
-  listTunnels,
-  closeTunnel,
-  closeServerTunnels,
-  TUNNEL_TYPES
-} from './tunnel-manager.js';
-import {
-  getHostKeyFingerprint,
-  isHostKnown,
-  getCurrentHostKey,
-  removeHostKey,
-  addHostKey,
-  updateHostKey,
-  hasHostKeyChanged,
-  listKnownHosts,
-  detectSSHKeyError,
-  extractHostFromSSHError
-} from './ssh-key-manager.js';
-import {
-  BACKUP_TYPES,
-  DEFAULT_BACKUP_DIR,
-  generateBackupId,
-  getBackupMetadataPath,
-  getBackupFilePath,
-  buildMySQLDumpCommand,
-  buildPostgreSQLDumpCommand,
-  buildMongoDBDumpCommand,
-  buildFilesBackupCommand,
-  buildRestoreCommand,
-  createBackupMetadata,
-  buildSaveMetadataCommand,
-  buildListBackupsCommand,
-  parseBackupsList,
-  buildCleanupCommand,
-  buildCronScheduleCommand,
-  parseCronJobs
-} from './backup-manager.js';
-import {
-  HEALTH_STATUS,
-  COMMON_SERVICES,
-  buildCPUCheckCommand,
-  buildMemoryCheckCommand,
-  buildDiskCheckCommand,
-  buildNetworkCheckCommand,
-  buildLoadAverageCommand,
-  buildUptimeCommand,
-  parseCPUUsage,
-  parseMemoryUsage,
-  parseDiskUsage,
-  parseNetworkStats,
-  determineOverallHealth,
-  buildServiceStatusCommand,
-  parseServiceStatus,
-  buildProcessListCommand,
-  parseProcessList,
-  buildKillProcessCommand,
-  buildProcessInfoCommand,
-  createAlertConfig,
-  buildSaveAlertConfigCommand,
-  buildLoadAlertConfigCommand,
-  checkAlertThresholds,
-  buildComprehensiveHealthCheckCommand,
-  parseComprehensiveHealthCheck,
-  getCommonServices,
-  resolveServiceName
-} from './health-monitor.js';
-import {
-  DB_TYPES,
-  DB_PORTS,
-  buildMySQLDumpCommand as buildDBMySQLDumpCommand,
-  buildPostgreSQLDumpCommand as buildDBPostgreSQLDumpCommand,
-  buildMongoDBDumpCommand as buildDBMongoDBDumpCommand,
-  buildMySQLImportCommand,
-  buildPostgreSQLImportCommand,
-  buildMongoDBRestoreCommand,
-  buildMySQLListDatabasesCommand,
-  buildMySQLListTablesCommand,
-  buildPostgreSQLListDatabasesCommand,
-  buildPostgreSQLListTablesCommand,
-  buildMongoDBListDatabasesCommand,
-  buildMongoDBListCollectionsCommand,
-  buildMySQLQueryCommand,
-  buildPostgreSQLQueryCommand,
-  buildMongoDBQueryCommand,
-  isSafeQuery,
-  parseDatabaseList,
-  parseTableList,
-  buildEstimateSizeCommand,
-  parseSize,
-  formatBytes,
-  getConnectionInfo
-} from './database-manager.js';
 import { loadToolConfig, isToolEnabled } from './tool-config-manager.js';
+import { withAnnotations } from './tool-annotations.js';
 
 // Modularized tool handlers (src/tools/*.js) -- 10/10 "gamechanger" versions
 import { handleSshExecute, handleSshExecuteSudo, handleSshExecuteGroup } from './tools/exec-tools.js';
 import { handleSshUpload, handleSshDownload, handleSshSync, handleSshDiff, handleSshEdit } from './tools/transfer-tools.js';
 import { handleSshTail, handleSshTailStart, handleSshTailRead, handleSshTailStop } from './tools/tail-tools.js';
 import { handleSshHealthCheck, handleSshMonitor, handleSshServiceStatus, handleSshProcessManager } from './tools/monitoring-tools.js';
+import { handleSshAlertSetup } from './tools/alerts-tools.js';
 import { handleSshDbQuery, handleSshDbList, handleSshDbDump, handleSshDbImport } from './tools/db-tools.js';
 import { handleSshBackupCreate, handleSshBackupList, handleSshBackupRestore, handleSshBackupSchedule } from './tools/backup-tools.js';
 import { handleSshDeploy } from './tools/deploy-tools.js';
@@ -503,13 +409,17 @@ async function getConnection(serverName) {
   return connections.get(normalizedName);
 }
 
-// Create MCP server
+// Create MCP server. Version pulled from package.json so the wire version
+// never drifts from the released build.
+const __pkgDir = path.dirname(fileURLToPath(import.meta.url));
+const __pkgJson = JSON.parse(fs.readFileSync(path.join(__pkgDir, '..', 'package.json'), 'utf8'));
+const SERVER_VERSION = __pkgJson.version;
 const server = new McpServer({
   name: 'claude-code-ssh',
-  version: '3.2.2',
+  version: SERVER_VERSION,
 });
 
-logger.info('MCP Server initialized', { version: '3.2.2' });
+logger.info('MCP Server initialized', { version: SERVER_VERSION });
 
 /**
  * Helper function to conditionally register tools based on configuration
@@ -518,12 +428,23 @@ logger.info('MCP Server initialized', { version: '3.2.2' });
  * @param {Function} handler - Tool handler function
  */
 function registerToolConditional(toolName, schema, handler) {
-  if (isToolEnabled(toolName)) {
-    server.registerTool(toolName, schema, handler);
-    logger.debug(`Registered tool: ${toolName}`);
-  } else {
+  if (!isToolEnabled(toolName)) {
     logger.debug(`Skipped disabled tool: ${toolName}`);
+    return;
   }
+  // Thread MCP cancellation through to the tool handler. The SDK delivers an
+  // AbortSignal at `extra.signal`; tools surface it as `args.abortSignal`
+  // (which streamExecCommand already accepts) so long-running remote commands
+  // stop when the client hits Esc instead of running to completion on the
+  // target host.
+  const wrapped = async (args, extra) => {
+    const mergedArgs = extra && extra.signal
+      ? { ...args, abortSignal: extra.signal }
+      : args;
+    return handler(mergedArgs, extra);
+  };
+  server.registerTool(toolName, withAnnotations(toolName, schema), wrapped);
+  logger.debug(`Registered tool: ${toolName}`);
 }
 
 // Register available tools
@@ -538,7 +459,9 @@ registerToolConditional(
     description: 'Execute command on remote SSH server (streaming, UTF-8 safe, ANSI-clean markdown)',
     inputSchema: {
       server: z.string().describe('Server name from configuration'),
-      command: z.string().describe('Command to execute'),
+      // Cap at 512 KB -- keeps us well under every UNIX ARG_MAX (typical 128KB-2MB)
+      // even after shQuote expansion, which can ~2x the size for quote-heavy input.
+      command: z.string().min(1).max(524_288).describe('Command to execute (max 512 KB)'),
       cwd: z.string().optional().describe('Working directory (uses default_dir if configured)'),
       timeout: z.number().optional().describe('Command timeout in ms (default 120000, max 300000)'),
       format: z.enum(['markdown', 'json']).optional().describe('Output format')
@@ -758,7 +681,8 @@ registerToolConditional(
             type: 'text',
             text: `[err] Error retrieving history: ${error.message}`
           }
-        ]
+        ],
+        isError: true
       };
     }
   }
@@ -822,17 +746,6 @@ registerToolConditional(
     args: { ...args, session_id: args.session_id || args.session }
   })
 );
-
-// Helper function to format duration
-function formatDuration(seconds) {
-  if (seconds < 60) {
-    return `${seconds}s`;
-  } else if (seconds < 3600) {
-    return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-  } else {
-    return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
-  }
-}
 
 // Server Group Management Tools
 
@@ -990,7 +903,8 @@ registerToolConditional(
             type: 'text',
             text: `[err] Group management error: ${error.message}`
           }
-        ]
+        ],
+        isError: true
       };
     }
   }
@@ -1123,6 +1037,7 @@ registerToolConditional(
             text: `[err] Deployment failed: ${error.message}`,
           },
         ],
+        isError: true,
       };
     }
   }
@@ -1245,6 +1160,7 @@ registerToolConditional(
             text: `[err] Command alias operation failed: ${error.message}`,
           },
         ],
+        isError: true,
       };
     }
   }
@@ -1308,7 +1224,7 @@ registerToolConditional(
             content: [
               {
                 type: 'text',
-                text: `[err] Hook disabled: ${hook}`,
+                text: `[ok] Hook disabled: ${hook}`,
               },
             ],
           };
@@ -1337,6 +1253,7 @@ registerToolConditional(
             text: `[err] Hook operation failed: ${error.message}`,
           },
         ],
+        isError: true,
       };
     }
   }
@@ -1417,6 +1334,7 @@ registerToolConditional(
             text: `[err] Profile operation failed: ${error.message}`,
           },
         ],
+        isError: true,
       };
     }
   }
@@ -1534,6 +1452,7 @@ registerToolConditional(
             text: `[err] Connection management failed: ${error.message}`,
           },
         ],
+        isError: true,
       };
     }
   }
@@ -1546,7 +1465,7 @@ registerToolConditional(
     description: 'Create SSH tunnel (DNS+TCP reachability preview, typed state)',
     inputSchema: {
       server: z.string().describe('Server name or alias'),
-      type: z.enum(['local', 'remote', 'dynamic']).describe('Tunnel type'),
+      type: z.enum(['local', 'remote', 'dynamic']).describe('local port forward, remote reverse tunnel, or dynamic SOCKS5 proxy'),
       localHost: z.string().optional().describe('Local host (alias for local_host)'),
       local_host: z.string().optional().describe('Local host'),
       localPort: z.number().optional().describe('Local port (alias for local_port)'),
@@ -1703,6 +1622,7 @@ registerToolConditional(
             text: `[err] Alias operation failed: ${error.message}`,
           },
         ],
+        isError: true,
       };
     }
   }
@@ -1903,181 +1823,18 @@ registerToolConditional(
 registerToolConditional(
   'ssh_alert_setup',
   {
-    description: 'Configure health monitoring alerts and thresholds',
+    description: 'Configure and check health-threshold alerts. Stores config per server on the operator machine; `check` compares current health_check metrics to thresholds. No background runner -- wire `check` into cron or ssh_hooks for continuous monitoring.',
     inputSchema: {
       server: z.string().describe('Server name'),
-      action: z.enum(['set', 'get', 'check'])
-        .describe('Action: set thresholds, get config, or check current metrics against thresholds'),
-      cpuThreshold: z.number().optional()
-        .describe('CPU usage threshold percentage (e.g., 80)'),
-      memoryThreshold: z.number().optional()
-        .describe('Memory usage threshold percentage (e.g., 90)'),
-      diskThreshold: z.number().optional()
-        .describe('Disk usage threshold percentage (e.g., 85)'),
-      enabled: z.boolean().optional()
-        .describe('Enable or disable alerts (default: true)')
+      action: z.enum(['set', 'get', 'check']).describe('set thresholds, get config, or check current metrics against thresholds'),
+      cpuThreshold: z.number().min(0).max(100).optional().describe('CPU usage threshold percent (0-100)'),
+      memoryThreshold: z.number().min(0).max(100).optional().describe('Memory usage threshold percent (0-100)'),
+      diskThreshold: z.number().min(0).max(100).optional().describe('Disk usage threshold percent applied to every mount (0-100)'),
+      enabled: z.boolean().optional().describe('Enable or disable alert evaluation (default true)'),
+      format: z.enum(['markdown', 'json']).optional().describe('Output format'),
     }
   },
-  async ({ server: serverName, action, cpuThreshold, memoryThreshold, diskThreshold, enabled = true }) => {
-    try {
-      const ssh = await getConnection(serverName);
-      const configPath = '/etc/ssh-manager-alerts.json';
-
-      logger.info(`Alert setup action: ${action}`, {
-        server: serverName
-      });
-
-      let response;
-
-      switch (action) {
-        case 'set': {
-        // Create alert configuration
-          const config = createAlertConfig({
-            cpu: cpuThreshold,
-            memory: memoryThreshold,
-            disk: diskThreshold,
-            enabled
-          });
-
-          // Save to server
-          const saveCommand = buildSaveAlertConfigCommand(config, configPath);
-          const saveResult = await ssh.execCommand(saveCommand);
-
-          if (saveResult.code !== 0) {
-            throw new Error(`Failed to save alert config: ${saveResult.stderr}`);
-          }
-
-          response = {
-            server: serverName,
-            action: 'set',
-            config,
-            config_path: configPath,
-            success: true
-          };
-
-          logger.info('Alert thresholds configured', {
-            server: serverName,
-            thresholds: config
-          });
-          break;
-        }
-
-        case 'get': {
-        // Load configuration
-          const loadCommand = buildLoadAlertConfigCommand(configPath);
-          const result = await ssh.execCommand(loadCommand);
-
-          let config = {};
-          if (result.stdout && result.stdout.trim()) {
-            try {
-              config = JSON.parse(result.stdout);
-            } catch (e) {
-              config = { error: 'Failed to parse config' };
-            }
-          }
-
-          response = {
-            server: serverName,
-            action: 'get',
-            config,
-            config_path: configPath
-          };
-          break;
-        }
-
-        case 'check': {
-        // Load thresholds
-          const loadCommand = buildLoadAlertConfigCommand(configPath);
-          const loadResult = await ssh.execCommand(loadCommand);
-
-          let thresholds = {};
-          if (loadResult.stdout && loadResult.stdout.trim()) {
-            try {
-              thresholds = JSON.parse(loadResult.stdout);
-            } catch (e) {
-              throw new Error('No alert configuration found. Use action=set to configure.');
-            }
-          } else {
-            throw new Error('No alert configuration found. Use action=set to configure.');
-          }
-
-          if (!thresholds.enabled) {
-            response = {
-              server: serverName,
-              action: 'check',
-              message: 'Alerts are disabled',
-              thresholds
-            };
-            break;
-          }
-
-          // Get current metrics
-          const healthCommand = buildComprehensiveHealthCheckCommand();
-          const healthResult = await ssh.execCommand(healthCommand);
-
-          if (healthResult.code !== 0) {
-            throw new Error('Failed to get current metrics');
-          }
-
-          const metrics = parseComprehensiveHealthCheck(healthResult.stdout);
-
-          // Check thresholds
-          const alerts = checkAlertThresholds(metrics, thresholds);
-
-          response = {
-            server: serverName,
-            action: 'check',
-            thresholds,
-            current_metrics: {
-              cpu: metrics.cpu,
-              memory: metrics.memory,
-              disks: metrics.disks
-            },
-            alerts,
-            alert_count: alerts.length,
-            status: alerts.length === 0 ? 'ok' : 'alerts_triggered'
-          };
-
-          if (alerts.length > 0) {
-            logger.warn('Health alerts triggered', {
-              server: serverName,
-              alert_count: alerts.length,
-              alerts
-            });
-          }
-          break;
-        }
-
-        default:
-          throw new Error(`Unknown action: ${action}`);
-      }
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(response, null, 2)
-          }
-        ]
-      };
-
-    } catch (error) {
-      logger.error('Alert setup failed', {
-        server: serverName,
-        action,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `[err] Alert setup failed: ${error.message}`
-          }
-        ]
-      };
-    }
-  }
+  async (args) => handleSshAlertSetup({ getConnection, args })
 );
 
 // ============================================================================

@@ -43,14 +43,14 @@ await test('buildBackupCommand: mysql uses MYSQL_PWD env, not -p flag', () => {
     password: 'sekret', outputPath: '/backups/app.sql.gz', gzip: true,
   });
   assert(envPrefix.includes('MCP_BACKUP_PASS='), 'env prefix contains pass');
-  assert(envPrefix.includes("'sekret'"), 'password shQuoted in env');
+  assert(envPrefix.includes('\'sekret\''), 'password shQuoted in env');
   assert(!command.includes('sekret'), 'password NOT in command body');
   // No password-flag: mysqldump -p<pass> or -p <pass>. (mkdir's -p is fine -- different tool.)
   assert(!/mysqldump[^|]*\s-p[\s'"]/.test(command), 'no mysqldump -p flag with password');
   assert(command.includes('MYSQL_PWD="$MCP_BACKUP_PASS"'));
   assert(command.includes('mysqldump'));
   assert(command.includes('| gzip > '));
-  assert(command.includes("/backups/app.sql.gz"));
+  assert(command.includes('/backups/app.sql.gz'));
 });
 
 await test('buildBackupCommand: postgres uses PGPASSWORD env', () => {
@@ -84,9 +84,9 @@ await test('buildBackupCommand: files uses tar with shQuote', () => {
     gzip: true,
   });
   assert(command.includes('tar -czf'));
-  assert(command.includes("'/etc/nginx'"));
+  assert(command.includes('\'/etc/nginx\''));
   // Injection attempt wrapped in quotes
-  assert(command.includes("'/var/log; rm -rf /'"));
+  assert(command.includes('\'/var/log; rm -rf /\''));
   // Ensure the dangerous substring is NOT floating free
   assert(!/\s\/var\/log;\s*rm/.test(command));
 });
@@ -140,9 +140,9 @@ await test('backup_create: happy path generates meta + returns typed', async () 
   const FAKE_HASH = 'abc123abc123abc123abc123abc123abc123abc123abc123abc123abc123abcd';
   const client = new FakeClient({ script: (cmd) => {
     if (cmd.includes('sha256sum')) return { stdout: `${FAKE_HASH}\n`, code: 0 };
-    if (cmd.includes("stat -c '%s'")) return { stdout: '12345\n', code: 0 };
+    if (cmd.includes('stat -c \'%s\'')) return { stdout: '12345\n', code: 0 };
     return { stdout: '', code: 0 };
-  }});
+  } });
   const r = await handleSshBackupCreate({
     getConnection: async () => client,
     args: {
@@ -203,7 +203,7 @@ await test('backup_restore: sha256 mismatch -> refuse restore', async () => {
     if (cmd.startsWith('cat ')) return { stdout: metaJson, code: 0 };
     if (cmd.includes('sha256sum')) return { stdout: 'DIFFERENT-HASH\n', code: 0 };
     return { stdout: '', code: 0 };
-  }});
+  } });
   const r = await handleSshBackupRestore({
     getConnection: async () => client,
     args: { server: 's', backup_id: 'id1', verify: true, format: 'json' },
@@ -219,7 +219,7 @@ await test('backup_restore: preview loads meta and shows high-risk plan', async 
     if (cmd.includes('find ')) return { stdout: '/b/1.tgz.meta\n', code: 0 };
     if (cmd.startsWith('cat ')) return { stdout: JSON.stringify(meta), code: 0 };
     return { stdout: '', code: 0 };
-  }});
+  } });
   const r = await handleSshBackupRestore({
     getConnection: async () => client,
     args: { server: 's', backup_id: 'id1', preview: true, format: 'json' },
@@ -254,6 +254,93 @@ await test('backup_schedule: preview shows cron plan', async () => {
   const parsed = JSON.parse(r.content[0].text);
   assert.strictEqual(parsed.success, true);
   assert(parsed.data.plan.action.includes('schedule'));
+});
+
+await test('backup_schedule: rejects cron with embedded newline (injection guard)', async () => {
+  const r = await handleSshBackupSchedule({
+    getConnection: async () => { throw new Error('should not reach connection'); },
+    args: {
+      server: 's',
+      cron: '0 0 * * *\n* * * * * rm -rf ~',
+      backup_type: 'mysql', database: 'app',
+      preview: true, format: 'json',
+    },
+  });
+  assert.strictEqual(r.isError, true);
+  const parsed = JSON.parse(r.content[0].text);
+  assert(/single line|newline/i.test(parsed.error), `expected newline rejection, got: ${parsed.error}`);
+});
+
+await test('backup_schedule: rejects cron with shell metacharacters', async () => {
+  for (const bad of ['0 0 * * * `id`', '0 0 * * * $(whoami)']) {
+    const r = await handleSshBackupSchedule({
+      getConnection: async () => { throw new Error('should not reach connection'); },
+      args: { server: 's', cron: bad, backup_type: 'mysql', database: 'app', preview: true, format: 'json' },
+    });
+    assert.strictEqual(r.isError, true, `expected fail for ${JSON.stringify(bad)}`);
+    const parsed = JSON.parse(r.content[0].text);
+    assert(/shell metacharacters|\$|`/.test(parsed.error), `expected metachar rejection, got: ${parsed.error}`);
+  }
+});
+
+await test('backup_schedule: refuses password arg for DB backups (no plaintext secret in crontab)', async () => {
+  for (const dbType of ['mysql', 'postgresql', 'mongodb']) {
+    const r = await handleSshBackupSchedule({
+      getConnection: async () => { throw new Error('should not reach connection'); },
+      args: {
+        server: 's', cron: '0 2 * * *',
+        backup_type: dbType, database: 'app', user: 'u', password: 'sekret',
+        preview: true, format: 'json',
+      },
+    });
+    assert.strictEqual(r.isError, true, `${dbType}: expected fail response when password present`);
+    const parsed = JSON.parse(r.content[0].text);
+    assert(parsed.error.includes('refusing to embed password'),
+      `${dbType}: expected explicit refusal, got: ${parsed.error}`);
+    // Secret must not appear anywhere in the response
+    assert(!JSON.stringify(parsed).includes('sekret'),
+      `${dbType}: password leaked into response`);
+  }
+});
+
+await test('backup_schedule: preview for DB without password produces cron line with no secret', async () => {
+  const r = await handleSshBackupSchedule({
+    getConnection: async () => { throw new Error('should not call'); },
+    args: {
+      server: 's', cron: '30 3 * * *',
+      backup_type: 'mysql', database: 'app', user: 'u',
+      preview: true, format: 'json',
+    },
+  });
+  const parsed = JSON.parse(r.content[0].text);
+  assert.strictEqual(parsed.success, true, parsed.error);
+  assert(parsed.data.plan.cron_line);
+  assert(!parsed.data.plan.cron_line.includes('MCP_BACKUP_PASS='),
+    'cron line must not embed password env prefix');
+});
+
+await test('backup_schedule: mongodb without password installs cron line with anonymous URI (regression: B1)', async () => {
+  const r = await handleSshBackupSchedule({
+    getConnection: async () => { throw new Error('should not call'); },
+    args: {
+      server: 's', cron: '15 4 * * *',
+      backup_type: 'mongodb', database: 'app',
+      preview: true, format: 'json',
+    },
+  });
+  const parsed = JSON.parse(r.content[0].text);
+  // Previously this returned the internal defense-in-depth failure because
+  // mongo's MCP_BACKUP_URI env prefix was treated as a secret-bearing.
+  // Fix: classify env prefix as secret only when password was supplied.
+  assert.strictEqual(parsed.success, true, parsed.error);
+  assert(parsed.data.plan.cron_line, 'cron line should be built');
+  assert(parsed.data.plan.cron_line.includes('MCP_BACKUP_URI='),
+    'mongo cron line should carry URI env var');
+  // URI must have no userinfo (no `@`) because no password was supplied.
+  const uriMatch = parsed.data.plan.cron_line.match(/MCP_BACKUP_URI=([^ ]+)/);
+  assert(uriMatch, 'MCP_BACKUP_URI= present in cron line');
+  assert(!uriMatch[1].includes('@'),
+    `anonymous mongo URI must have no userinfo; got ${uriMatch[1]}`);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

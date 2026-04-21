@@ -4,7 +4,7 @@ import assert from 'assert';
 import { EventEmitter } from 'events';
 import {
   normalizePriority, safeLines, buildJournalctlCommand, parseJournalJsonl,
-  handleSshJournalctl, ALLOWED_PRIORITIES, PRIORITY_NAMES,
+  handleSshJournalctl,
 } from '../src/tools/journalctl-tools.js';
 
 let passed = 0, failed = 0; const fails = [];
@@ -61,10 +61,10 @@ await test('buildJournalctlCommand: defaults', () => {
 });
 
 await test('buildJournalctlCommand: unit and since/until are shell-quoted', () => {
-  const cmd = buildJournalctlCommand({ unit: 'nginx; rm -rf /', since: "2024-01-01'; DROP", until: '1h' });
-  assert(cmd.includes("-u 'nginx; rm -rf /'"));
-  assert(cmd.includes("--since '2024-01-01'\\''; DROP'"));
-  assert(cmd.includes("--until '1h'"));
+  const cmd = buildJournalctlCommand({ unit: 'nginx; rm -rf /', since: '2024-01-01\'; DROP', until: '1h' });
+  assert(cmd.includes('-u \'nginx; rm -rf /\''));
+  assert(cmd.includes('--since \'2024-01-01\'\\\'\'; DROP\''));
+  assert(cmd.includes('--until \'1h\''));
 });
 
 await test('buildJournalctlCommand: json:false omits --output=json', () => {
@@ -72,8 +72,8 @@ await test('buildJournalctlCommand: json:false omits --output=json', () => {
 });
 
 await test('buildJournalctlCommand: grep pattern appended safely', () => {
-  const cmd = buildJournalctlCommand({ grep: "ERROR'; rm" });
-  assert(cmd.includes("| grep -E 'ERROR'\\''; rm'"));
+  const cmd = buildJournalctlCommand({ grep: 'ERROR\'; rm' });
+  assert(cmd.includes('| grep -E \'ERROR\'\\\'\'; rm\''));
 });
 
 // --- parseJournalJsonl --------------------------------------------------

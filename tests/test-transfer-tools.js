@@ -150,13 +150,13 @@ await test('ssh_upload: verify=true calls sha256sum with shell-quoted path', asy
     });
     await handleSshUpload({
       getConnection: async () => client,
-      args: { server: 's', local_path: t.path, remote_path: "/etc/odd'name", format: 'json' },
+      args: { server: 's', local_path: t.path, remote_path: '/etc/odd\'name', format: 'json' },
     });
     // The hash command should contain the quoted remote path (single-quoted with escape)
     const hashCmd = client.commands.find(c => c.startsWith('sha256sum '));
     assert(hashCmd, 'expected sha256sum command');
-    assert(hashCmd.includes("'/etc/odd'\\''name'"), `quote not applied: ${hashCmd}`);
-    assert(hashCmd.endsWith("awk '{print $1}'"));
+    assert(hashCmd.includes('\'/etc/odd\'\\\'\'name\''), `quote not applied: ${hashCmd}`);
+    assert(hashCmd.endsWith('awk \'{print $1}\''));
   } finally { cleanupPath(t.dir); }
 });
 
@@ -215,7 +215,7 @@ await test('ssh_upload: preview shows remote stat + never calls sftp/fastPut', a
     // stat uses `stat -c '%s %Y' REMOTE 2>/dev/null || echo "new file"`
     const statCmd = client.commands.find(c => c.startsWith('stat '));
     assert(statCmd, 'expected stat command');
-    assert(statCmd.includes("'/target'"));
+    assert(statCmd.includes('\'/target\''));
   } finally { cleanupPath(t.dir); }
 });
 
@@ -254,9 +254,8 @@ await test('ssh_upload: preview never calls getConnection for sftp (no fastPut)'
 });
 
 await test('ssh_upload: missing local_path returns structured failure (no connection)', async () => {
-  let called = false;
   const r = await handleSshUpload({
-    getConnection: async () => { called = true; throw new Error('should not connect'); },
+    getConnection: async () => { throw new Error('should not connect'); },
     args: { server: 's', local_path: '/does/not/exist/here.bin', remote_path: '/x', format: 'json' },
   });
   assert.strictEqual(r.isError, true);
@@ -285,7 +284,7 @@ await test('ssh_download: happy path calls fastGet(remote,local) in that order',
   const localDest = path.join(dir, 'out');
   try {
     const sftp = new FakeSftp();
-    sftp.fastGetImpl = (remote, local, cb) => {
+    sftp.fastGetImpl = (_remote, local, cb) => {
       fs.writeFileSync(local, content);
       cb(null);
     };
@@ -312,7 +311,7 @@ await test('ssh_download: sha256 mismatch -> isError with diagnostic', async () 
   const localDest = path.join(dir, 'out');
   try {
     const sftp = new FakeSftp();
-    sftp.fastGetImpl = (remote, local, cb) => {
+    sftp.fastGetImpl = (_remote, local, cb) => {
       fs.writeFileSync(local, 'actual');
       cb(null);
     };
@@ -351,7 +350,7 @@ await test('ssh_download: verify=false skips sha256 entirely', async () => {
   const localDest = path.join(dir, 'f');
   try {
     const sftp = new FakeSftp();
-    sftp.fastGetImpl = (remote, local, cb) => {
+    sftp.fastGetImpl = (_remote, local, cb) => {
       fs.writeFileSync(local, 'data');
       cb(null);
     };
@@ -368,7 +367,7 @@ await test('ssh_download: verify=false skips sha256 entirely', async () => {
 
 await test('ssh_download: fastGet error -> isError', async () => {
   const sftp = new FakeSftp();
-  sftp.fastGetImpl = (remote, local, cb) => cb(new Error('remote missing'));
+  sftp.fastGetImpl = (_remote, _local, cb) => cb(new Error('remote missing'));
   const client = new FakeClient({ sftp, script: () => ({ stdout: 'hash', code: 0 }) });
   const r = await handleSshDownload({
     getConnection: async () => client,
@@ -382,9 +381,9 @@ await test('ssh_download: fastGet error -> isError', async () => {
 // --------------------------------------------------------------------------
 // ssh_sync
 // --------------------------------------------------------------------------
-await test('buildRsyncArgv: keypath auth yields direct rsync with -i key', () => {
+await test('buildRsyncArgv: keyPath auth yields direct rsync with -i key (canonical field)', () => {
   const argv = buildRsyncArgv({
-    serverConfig: { user: 'u', host: 'h', keypath: '/k' },
+    serverConfig: { user: 'u', host: 'h', keyPath: '/k' },
     direction: 'push', localPath: '/src', remotePath: '/dst',
     exclude: [], dry_run: false, delete: false, compress: true,
   });
@@ -398,14 +397,28 @@ await test('buildRsyncArgv: keypath auth yields direct rsync with -i key', () =>
   assert(argv[argv.length - 1] === 'u@h:/dst');
 });
 
-await test('buildRsyncArgv: password auth prepends -p + rsync', () => {
+await test('buildRsyncArgv: keypath (legacy alias) still accepted for backward compat', () => {
+  const argv = buildRsyncArgv({
+    serverConfig: { user: 'u', host: 'h', keypath: '/legacy' },
+    direction: 'push', localPath: '/s', remotePath: '/d',
+  });
+  const eIdx = argv.indexOf('-e');
+  assert(argv[eIdx + 1].includes('-i /legacy'),
+    'legacy lowercase keypath field should resolve the same as keyPath');
+});
+
+await test('buildRsyncArgv: password auth is NOT embedded in argv (regression: no secret leak via ps aux)', () => {
   const argv = buildRsyncArgv({
     serverConfig: { user: 'u', host: 'h', password: 'sekret' },
     direction: 'push', localPath: '/s', remotePath: '/d',
   });
-  assert.strictEqual(argv[0], '-p');
-  assert.strictEqual(argv[1], 'sekret');
-  assert.strictEqual(argv[2], 'rsync');
+  // Password must not appear anywhere in the rsync argv. The handler uses
+  // `sshpass -e` + SSHPASS env var -- proven by the ssh_sync test below.
+  for (const v of argv) {
+    assert(!String(v).includes('sekret'),
+      `password leaked into rsync argv: ${JSON.stringify(argv)}`);
+  }
+  assert.strictEqual(argv[0], '-avz'); // pure rsync flags, no sshpass prefix
 });
 
 await test('buildRsyncArgv: exclude + dry_run + delete flags honored', () => {
@@ -523,10 +536,10 @@ await test('ssh_sync: same-prefix source/dest rejected with helpful error', asyn
   assert(parsed.error.includes('one local + one remote'));
 });
 
-await test('ssh_sync: password config drives sshpass command', async () => {
+await test('ssh_sync: password config drives `sshpass -e rsync ...` with SSHPASS env (no secret in argv)', async () => {
   const spawnCalls = [];
-  const fakeSpawn = (cmd, args) => {
-    spawnCalls.push({ cmd, args });
+  const fakeSpawn = (cmd, args, opts) => {
+    spawnCalls.push({ cmd, args, opts });
     const proc = new EventEmitter();
     proc.stdout = new EventEmitter();
     proc.stderr = new EventEmitter();
@@ -542,10 +555,15 @@ await test('ssh_sync: password config drives sshpass command', async () => {
       format: 'json', spawnFn: fakeSpawn,
     },
   });
-  assert.strictEqual(spawnCalls[0].cmd, 'sshpass');
-  assert.strictEqual(spawnCalls[0].args[0], '-p');
-  assert.strictEqual(spawnCalls[0].args[1], 'pw');
-  assert.strictEqual(spawnCalls[0].args[2], 'rsync');
+  const call = spawnCalls[0];
+  assert.strictEqual(call.cmd, 'sshpass');
+  assert.strictEqual(call.args[0], '-e', 'sshpass must read password from SSHPASS env, not argv');
+  assert.strictEqual(call.args[1], 'rsync');
+  // Password must not be in argv at all
+  for (const a of call.args) {
+    assert(!String(a).includes('pw'), `password leaked into argv: ${JSON.stringify(call.args)}`);
+  }
+  assert.strictEqual(call.opts.env.SSHPASS, 'pw', 'SSHPASS must be set in spawn env');
 });
 
 // --------------------------------------------------------------------------
@@ -563,7 +581,7 @@ await test('ssh_diff: same-server builds `diff -u A B` with quoted paths', async
   assert.strictEqual(parsed.success, true);
   assert.strictEqual(parsed.data.mode, 'same-server');
   assert.strictEqual(parsed.data.identical, false);
-  assert(client.commands[0].startsWith("diff -u '/etc/a.conf' '/etc/b.conf'"));
+  assert(client.commands[0].startsWith('diff -u \'/etc/a.conf\' \'/etc/b.conf\''));
 });
 
 await test('ssh_diff: identical files -> identical:true on exit 0', async () => {
@@ -581,9 +599,9 @@ await test('ssh_diff: cross-server downloads both paths via sftp', async () => {
   const dirB = fs.mkdtempSync(path.join(os.tmpdir(), 'diffB-'));
   try {
     const sftpA = new FakeSftp();
-    sftpA.fastGetImpl = (remote, local, cb) => { fs.writeFileSync(local, 'A-content\n'); cb(null); };
+    sftpA.fastGetImpl = (_remote, local, cb) => { fs.writeFileSync(local, 'A-content\n'); cb(null); };
     const sftpB = new FakeSftp();
-    sftpB.fastGetImpl = (remote, local, cb) => { fs.writeFileSync(local, 'B-content\n'); cb(null); };
+    sftpB.fastGetImpl = (_remote, local, cb) => { fs.writeFileSync(local, 'B-content\n'); cb(null); };
     const clients = {
       srv1: new FakeClient({ sftp: sftpA, script: () => ({ stdout: '', code: 0 }) }),
       srv2: new FakeClient({ sftp: sftpB, script: () => ({ stdout: '', code: 0 }) }),
@@ -659,7 +677,7 @@ await test('ssh_edit: preview shows plan + stat + bytes, never mutates', async (
 await test('ssh_edit: full-replace flow writes tmp via base64, cp backup, then mv', async () => {
   const client = new FakeClient({
     script: (cmd) => {
-      if (cmd.startsWith(`cat `)) return { stdout: '{"old":true}\n', code: 0 };
+      if (cmd.startsWith('cat ')) return { stdout: '{"old":true}\n', code: 0 };
       return { stdout: '', code: 0 };
     },
   });
@@ -696,14 +714,10 @@ await test('ssh_edit: full-replace flow writes tmp via base64, cp backup, then m
 });
 
 await test('ssh_edit: json path triggers python3 json syntax check; failure aborts + cleans tmp', async () => {
-  let tmpPath = null;
   const client = new FakeClient({
     script: (cmd) => {
       if (cmd.startsWith('cat ')) return { stdout: '{}', code: 0 };
       if (cmd.includes('base64 -d >')) {
-        // capture the tmp path from the command
-        const m = cmd.match(/base64 -d > '([^']+)'/);
-        if (m) tmpPath = m[1];
         return { stdout: '', code: 0 };
       }
       if (cmd.includes('python3 -c') && cmd.includes('json')) {
@@ -793,7 +807,7 @@ await test('ssh_edit: missing new_content AND patch -> structured failure', asyn
 });
 
 await test('ssh_edit: path with shell metachars is single-quoted in every remote command', async () => {
-  const evil = "/etc/my'cfg; rm -rf /.conf";
+  const evil = '/etc/my\'cfg; rm -rf /.conf';
   const client = new FakeClient({
     script: (cmd) => cmd.startsWith('cat ')
       ? { stdout: 'x', code: 0 }
@@ -815,8 +829,8 @@ await test('ssh_edit: path with shell metachars is single-quoted in every remote
   // before the closing quote). The NAKED unescaped form must never appear --
   // if it did, the embedded single quote would terminate the shell literal
   // and the trailing `; rm -rf /` would parse as a new command.
-  const quotedPrefix = "'/etc/my'\\''cfg; rm -rf /.conf";
-  const naked = "/etc/my'cfg; rm -rf /.conf";
+  const quotedPrefix = '\'/etc/my\'\\\'\'cfg; rm -rf /.conf';
+  const naked = '/etc/my\'cfg; rm -rf /.conf';
   const remoteCommands = client.commands.filter(c => c.includes('/etc/my'));
   assert(remoteCommands.length > 0, 'at least one command should reference the path');
   for (const cmd of remoteCommands) {

@@ -16,8 +16,6 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log(`[ok] ${name}`); }
   catch (e) { failed++; fails.push({ name, err: e }); console.error(`[err] ${name}: ${e.message}`); }
 }
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-
 // --- Fake ssh2 client ----------------------------------------------------
 class FakeStream extends EventEmitter {
   constructor() {
@@ -78,7 +76,7 @@ await test('ssh_execute: cwd shell-safely quoted in remote command', async () =>
     getConnection: async () => client,
     args: { server: 's', command: 'ls', cwd: '/tmp; rm -rf /' },
   });
-  assert.strictEqual(client.lastCommand, "cd '/tmp; rm -rf /' && ls");
+  assert.strictEqual(client.lastCommand, 'cd \'/tmp; rm -rf /\' && ls');
 });
 
 await test('ssh_execute: non-zero exit renders [err] marker (not isError)', async () => {
@@ -259,7 +257,7 @@ await test('ssh_execute_group: connection failure on one server reported as per-
 await test('ssh_execute_group: concurrency caps parallelism', async () => {
   let inFlight = 0, peak = 0;
   const mkClient = () => ({
-    exec(cmd, cb) {
+    exec(_cmd, cb) {
       inFlight++; peak = Math.max(peak, inFlight);
       const s = new FakeStream();
       setImmediate(() => {

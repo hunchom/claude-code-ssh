@@ -81,15 +81,15 @@ console.log('[test] Testing stream-exec\n');
 
 // --- shQuote / buildRemoteCommand ----------------------------------------
 await test('shQuote: simple path', () => {
-  assert.strictEqual(shQuote('/var/app'), "'/var/app'");
+  assert.strictEqual(shQuote('/var/app'), '\'/var/app\'');
 });
 
 await test('shQuote: path with space', () => {
-  assert.strictEqual(shQuote('/home/my user'), "'/home/my user'");
+  assert.strictEqual(shQuote('/home/my user'), '\'/home/my user\'');
 });
 
 await test('shQuote: path with single-quote escapes correctly', () => {
-  assert.strictEqual(shQuote("it's"), "'it'\\''s'");
+  assert.strictEqual(shQuote('it\'s'), '\'it\'\\\'\'s\'');
 });
 
 await test('shQuote: path with injection attempt stays literal', () => {
@@ -97,15 +97,15 @@ await test('shQuote: path with injection attempt stays literal', () => {
   const dangerous = '/tmp; rm -rf /';
   const quoted = shQuote(dangerous);
   // The quoted form wraps in single quotes -- bash treats `;` as literal inside.
-  assert.strictEqual(quoted, "'/tmp; rm -rf /'");
+  assert.strictEqual(quoted, '\'/tmp; rm -rf /\'');
 });
 
 await test('shQuote: close-quote injection attempt is neutralized', () => {
   // Attempt to break out of single quotes: evil'; rm -rf /; echo '
-  const dangerous = "evil'; rm -rf /; echo '";
+  const dangerous = 'evil\'; rm -rf /; echo \'';
   const quoted = shQuote(dangerous);
   // Must escape the internal quote to close-escape-reopen.
-  assert.strictEqual(quoted, "'evil'\\''; rm -rf /; echo '\\'''");
+  assert.strictEqual(quoted, '\'evil\'\\\'\'; rm -rf /; echo \'\\\'\'\'');
 });
 
 await test('buildRemoteCommand: no cwd returns command unchanged', () => {
@@ -115,13 +115,13 @@ await test('buildRemoteCommand: no cwd returns command unchanged', () => {
 });
 
 await test('buildRemoteCommand: cwd is quoted', () => {
-  assert.strictEqual(buildRemoteCommand('ls', '/var/app'), "cd '/var/app' && ls");
+  assert.strictEqual(buildRemoteCommand('ls', '/var/app'), 'cd \'/var/app\' && ls');
 });
 
 await test('buildRemoteCommand: shell-injection in cwd neutralized', () => {
   const cmd = buildRemoteCommand('ls', '/tmp; rm -rf /');
   // After quoting, `;` is inside single quotes -> bash treats as literal dir name.
-  assert.strictEqual(cmd, "cd '/tmp; rm -rf /' && ls");
+  assert.strictEqual(cmd, 'cd \'/tmp; rm -rf /\' && ls');
 });
 
 // --- Happy path ----------------------------------------------------------
@@ -356,7 +356,7 @@ await test('cwd propagates into the remote command with shell-safe quoting', asy
   await sleep(5);
   assert.strictEqual(
     client.lastCommand,
-    "cd '/srv/my app; rm -rf /' && ls",
+    'cd \'/srv/my app; rm -rf /\' && ls',
   );
   client.streams[0].finish(0);
   await p;

@@ -13,7 +13,7 @@
 import { streamExecCommand, shQuote } from '../stream-exec.js';
 import { ok, fail, preview, toMcp } from '../structured-result.js';
 import { buildPlan } from '../preview-mode.js';
-import { formatBytes, formatDuration } from '../output-formatter.js';
+import { formatBytes, formatDuration, escapeMdCell } from '../output-formatter.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -494,7 +494,7 @@ export function renderServiceStatus(result) {
 function renderProcTable(rows) {
   const lines = ['| PID | USER | CPU% | MEM% | CMD |', '| --- | --- | --- | --- | --- |'];
   for (const p of rows) {
-    const cmd = (p.cmd || p.comm || '').slice(0, 80).replace(/\|/g, '\\|');
+    const cmd = escapeMdCell((p.cmd || p.comm || '').slice(0, 80));
     lines.push(`| ${p.pid} | ${p.user ?? '--'} | ${fmtPct(p.cpu_pct)} | ${fmtPct(p.mem_pct)} | \`${cmd}\` |`);
   }
   return lines.join('\n');
@@ -586,7 +586,10 @@ export async function handleSshHealthCheck({ getConnection, args }) {
     'echo \'---UPTIME---\'', 'cat /proc/uptime',
     'echo \'---CORES---\'', 'nproc || grep -c ^processor /proc/cpuinfo',
   ].join('; ');
-  const remote = `bash -c ${shQuote(command)}`;
+  // LANG=C / LC_ALL=C pins output format for parsers: avoids locale-specific
+  // number formatting (e.g. `1,234.5` vs `1.234,5`) and translated column
+  // headers on non-English hosts.
+  const remote = `LANG=C LC_ALL=C bash -c ${shQuote(command)}`;
 
   const startedAt = Date.now();
   let client;

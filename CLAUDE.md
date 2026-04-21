@@ -97,7 +97,7 @@ The server exposes these tools to Claude Code and OpenAI Codex:
 - `ssh_health_check`: Comprehensive server health check (CPU, RAM, Disk, Network)
 - `ssh_service_status`: Check status of services (nginx, mysql, docker, etc.)
 - `ssh_process_manager`: List, monitor, or kill processes
-- `ssh_alert_setup`: Configure health monitoring alerts and thresholds
+- `ssh_alert_setup`: Configure CPU/memory/disk thresholds per server; `check` action compares live metrics to thresholds
 
 ### Database Management (v2.3+)
 - `ssh_db_dump`: Create database dumps (MySQL, PostgreSQL, MongoDB)
@@ -207,7 +207,7 @@ Configuration is stored in `~/.config/claude-code/claude_code_config.json`
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **claude-code-ssh** (1326 symbols, 3627 relationships, 110 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **claude-code-ssh** (1340 symbols, 3668 relationships, 111 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

@@ -53,13 +53,13 @@ setTimeout(() => {
     },
     id: ++requestId
   };
-  
+
   server.stdin.write(JSON.stringify(initRequest) + '\n');
-  
+
   // Test ssh_list_servers
   setTimeout(() => {
     console.log('\n📋 Testing ssh_list_servers...\n');
-    
+
     const listRequest = {
       jsonrpc: '2.0',
       method: 'tools/call',
@@ -69,13 +69,13 @@ setTimeout(() => {
       },
       id: ++requestId
     };
-    
+
     server.stdin.write(JSON.stringify(listRequest) + '\n');
-    
+
     // Test ssh_execute
     setTimeout(() => {
       console.log('\n🚀 Testing ssh_execute (ls -la)...\n');
-      
+
       const execRequest = {
         jsonrpc: '2.0',
         method: 'tools/call',
@@ -88,13 +88,13 @@ setTimeout(() => {
         },
         id: ++requestId
       };
-      
+
       server.stdin.write(JSON.stringify(execRequest) + '\n');
-      
+
       // Test ssh_execute with working directory
       setTimeout(() => {
         console.log('\n📁 Testing ssh_execute with working directory...\n');
-        
+
         const execCwdRequest = {
           jsonrpc: '2.0',
           method: 'tools/call',
@@ -108,9 +108,9 @@ setTimeout(() => {
           },
           id: ++requestId
         };
-        
+
         server.stdin.write(JSON.stringify(execCwdRequest) + '\n');
-        
+
         // Exit after tests
         setTimeout(() => {
           console.log('\n✅ All tests complete. Shutting down...');

@@ -3,13 +3,13 @@
 /**
  * Test script for the logger system
  * Run with different environment variables to test different modes:
- * 
+ *
  * SSH_VERBOSE=true node debug/test-logger.js
  * SSH_LOG_LEVEL=DEBUG node debug/test-logger.js
  * SSH_LOG_LEVEL=ERROR node debug/test-logger.js
  */
 
-import { logger, LOG_LEVELS } from '../src/logger.js';
+import { logger } from '../src/logger.js';
 
 console.log('🧪 Testing Logger System');
 console.log('========================');
@@ -79,8 +79,8 @@ setTimeout(() => {
   history.forEach(entry => {
     console.log(`  - [${entry.timestamp}] ${entry.server}: ${entry.command?.substring(0, 50)} - ${entry.success ? '✅' : '❌'}`);
   });
-  
+
   console.log('\n✅ Logger test complete!');
   console.log(`Log file: ${process.env.SSH_LOG_FILE || '.ssh-manager.log'}`);
-  console.log(`History file: .ssh-command-history.json`);
+  console.log('History file: .ssh-command-history.json');
 }, 500);

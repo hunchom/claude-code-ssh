@@ -1,9 +1,12 @@
+// @ts-nocheck
 /**
  * Backup Workflow Examples for claude-code-ssh
  *
  * This file demonstrates various backup and restore workflows
  * that can be executed through Claude Code or OpenAI Codex.
+ * The declarations below are illustrative; they are not executed here.
  */
+/* eslint-disable no-unused-vars, no-undef */
 
 // ============================================================================
 // EXAMPLE 1: Simple MySQL Backup Before Deployment
@@ -255,7 +258,7 @@ Complete deployment workflow with backup safety net
 
 async function preDeploymentWorkflow() {
   // Step 1: Create backup
-  console.log("Creating pre-deployment backup...");
+  console.log('Creating pre-deployment backup...');
   const backup = await createBackup({
     server: 'production',
     type: 'mysql',
@@ -266,28 +269,28 @@ async function preDeploymentWorkflow() {
   console.log(`Backup created: ${backup.backup_id}`);
 
   // Step 2: Deploy changes
-  console.log("Deploying new version...");
+  console.log('Deploying new version...');
   await deploy({
     server: 'production',
     branch: 'main'
   });
 
   // Step 3: Run health check
-  console.log("Running health checks...");
+  console.log('Running health checks...');
   const health = await healthCheck({
     server: 'production'
   });
 
   // Step 4: If deployment fails, restore backup
   if (!health.success) {
-    console.error("Deployment failed! Rolling back...");
+    console.error('Deployment failed! Rolling back...');
     await restoreBackup({
       server: 'production',
       backupId: backup.backup_id
     });
-    console.log("Rollback completed");
+    console.log('Rollback completed');
   } else {
-    console.log("Deployment successful!");
+    console.log('Deployment successful!');
   }
 }
 
@@ -316,7 +319,7 @@ async function disasterRecovery() {
   });
 
   if (!yesterdayBackup) {
-    throw new Error("No backup found from yesterday");
+    throw new Error('No backup found from yesterday');
   }
 
   // Step 3: Restore
@@ -326,7 +329,7 @@ async function disasterRecovery() {
     backupId: yesterdayBackup.id
   });
 
-  console.log("Recovery completed successfully");
+  console.log('Recovery completed successfully');
 }
 
 // ============================================================================
@@ -400,33 +403,31 @@ const monthlyCompliance = {
 // CRON SCHEDULE REFERENCE
 // ============================================================================
 
-/*
-Common cron schedules:
-
-Daily:
-  - "0 2 * * *"        // Every day at 2 AM
-  - "0 0 * * *"        // Every day at midnight
-
-Hourly:
-  - "0 * * * *"        // Every hour at minute 0
-  - "0 */6 * * *"      // Every 6 hours
-
-Weekly:
-  - "0 0 * * 0"        // Every Sunday at midnight
-  - "0 3 * * 1"        // Every Monday at 3 AM
-
-Monthly:
-  - "0 0 1 * *"        // 1st of month at midnight
-  - "0 2 15 * *"       // 15th of month at 2 AM
-
-Weekdays:
-  - "0 1 * * 1-5"      // Mon-Fri at 1 AM
-
-Custom:
-  - "*/30 * * * *"     // Every 30 minutes
-  - "0 */4 * * *"      // Every 4 hours
-  - "0 9-17 * * *"     // Every hour from 9 AM to 5 PM
-*/
+// Common cron schedules:
+//
+// Daily:
+//   "0 2 * * *"        -> Every day at 2 AM
+//   "0 0 * * *"        -> Every day at midnight
+//
+// Hourly:
+//   "0 * * * *"        -> Every hour at minute 0
+//   "0 */6 * * *"      -> Every 6 hours
+//
+// Weekly:
+//   "0 0 * * 0"        -> Every Sunday at midnight
+//   "0 3 * * 1"        -> Every Monday at 3 AM
+//
+// Monthly:
+//   "0 0 1 * *"        -> 1st of month at midnight
+//   "0 2 15 * *"       -> 15th of month at 2 AM
+//
+// Weekdays:
+//   "0 1 * * 1-5"      -> Mon-Fri at 1 AM
+//
+// Custom:
+//   "*/30 * * * *"     -> Every 30 minutes
+//   "0 */4 * * *"      -> Every 4 hours
+//   "0 9-17 * * *"     -> Every hour from 9 AM to 5 PM
 
 // ============================================================================
 // NOTES
@@ -466,7 +467,7 @@ Best Practices:
    - Test disaster recovery procedures
 */
 
-module.exports = {
+export {
   mysqlBackup,
   postgresBackup,
   filesBackup,

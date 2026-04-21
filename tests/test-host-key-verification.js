@@ -28,7 +28,7 @@ import('../src/ssh-key-manager.js').then(mod => {
 // a fresh SSHManager and synthesize the same hostVerifier inline here. The
 // PRODUCTION logic lives in src/ssh-manager.js connect() -- keep this test
 // in lockstep with that code.
-function makeVerifier({ host, port, knownList, strictEnv = false }) {
+function makeVerifier({ host: _host, port: _port, knownList, strictEnv = false }) {
   // mirrors the logic in SSHManager.connect() hostVerifier
   return (key) => {
     const presented = 'SHA256:' + crypto.createHash('sha256').update(key).digest('base64').replace(/=+$/, '');
@@ -88,7 +88,7 @@ const hashA = 'SHA256:' + crypto.createHash('sha256').update(keyA).digest('base6
   const v = makeVerifier({ host: 'h', port: 22, knownList: [
     { fingerprint: otherHash, type: 'ssh-ed25519' },
     { fingerprint: hashA,     type: 'ssh-rsa' },
-  ]});
+  ] });
   const r = v(keyA);
   assert(r.action === 'accept-match', 'multi-algo known host: any matching fingerprint accepts');
 }

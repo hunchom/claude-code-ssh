@@ -20,9 +20,12 @@
 import { streamExecCommand, shQuote } from '../stream-exec.js';
 import { ok, fail, preview, toMcp } from '../structured-result.js';
 import { buildPlan } from '../preview-mode.js';
-import { formatDuration } from '../output-formatter.js';
+import { formatDuration, escapeMdCell } from '../output-formatter.js';
 
 const DEFAULT_TIMEOUT_MS = 60_000;
+// `docker pull` downloads image layers over the network -- a 1 GB image on a
+// 10 Mbps uplink takes ~15 min. 60 s was too tight for anything non-trivial (H2).
+const PULL_TIMEOUT_MS = 600_000;
 const DEFAULT_TAIL_LINES = 100;
 const MAX_TAIL_LINES = 100_000;
 
@@ -176,7 +179,7 @@ export function renderDocker(result) {
       lines.push('| --- | --- | --- | --- | --- |');
       for (const c of d.containers) {
         const id = (c.id || '').slice(0, 12);
-        const ports = (c.ports || '').slice(0, 40).replace(/\|/g, '\\|');
+        const ports = escapeMdCell((c.ports || '').slice(0, 40));
         lines.push(`| \`${id}\` | ${c.name ?? '--'} | ${c.image ?? '--'} | ${c.status ?? '--'} | ${ports} |`);
       }
     }
@@ -544,7 +547,7 @@ async function runPull({ getConnection, server, image, isPreview, format, onChun
   let result;
   try {
     result = await streamExecCommand(client, remote, {
-      timeoutMs: DEFAULT_TIMEOUT_MS,
+      timeoutMs: PULL_TIMEOUT_MS,
       onChunk,
     });
   } catch (e) {

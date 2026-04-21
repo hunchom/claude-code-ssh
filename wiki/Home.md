@@ -48,12 +48,12 @@ claude mcp add ssh-manager node "$(pwd)/src/index.js"
 ```mermaid
 pie title 51 tools across 7 groups
   "core" : 5
-  "sessions" : 4
+  "sessions" : 6
   "monitoring" : 6
   "backup" : 4
   "database" : 4
   "advanced" : 14
-  "gamechanger" : 14
+  "gamechanger" : 12
 ```
 
 Opt in per group via `ssh-manager tools configure`. Minimal mode (5 tools) is ~3.5k tokens; full mode is ~43k.
