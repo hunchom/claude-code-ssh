@@ -6,7 +6,7 @@ Five minutes from zero to Claude running commands on your first host.
 
 | | |
 |---|---|
-| Node.js | 18 or newer (20 recommended — use `.nvmrc`) |
+| Node.js | 20.19 or newer (use `.nvmrc`) |
 | npm | bundled with Node |
 | Claude Code (or OpenAI Codex) | installed and authenticated |
 | SSH access | to at least one host you want to manage |

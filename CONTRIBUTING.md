@@ -39,7 +39,7 @@ All 551 tests should pass before you start.
 
 ## Code style
 
-- Node 18+, ES modules
+- Node 20.19+, ES modules
 - Prefer small, pure functions over class hierarchies
 - Handler files live in `src/tools/` — one file per tool group
 - Every new tool needs an entry in `src/tool-registry.js` and a test file in `tests/`

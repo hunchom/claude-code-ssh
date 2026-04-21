@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/hunchom/claude-code-ssh/actions/workflows/test.yml"><img src="https://github.com/hunchom/claude-code-ssh/actions/workflows/test.yml/badge.svg" alt="tests"/></a>
   <a href="https://github.com/hunchom/claude-code-ssh/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-informational?style=flat-square" alt="license"/></a>
-  <img src="https://img.shields.io/badge/node-%E2%89%A518-informational?style=flat-square" alt="node 18+"/>
+  <img src="https://img.shields.io/badge/node-%E2%89%A520.19-informational?style=flat-square" alt="node 20.19+"/>
   <img src="https://img.shields.io/badge/mcp-server-FF6B1A?style=flat-square" alt="mcp server"/>
   <a href="https://www.npmjs.com/package/claude-code-ssh"><img src="https://img.shields.io/npm/v/claude-code-ssh?style=flat-square&color=cb3837&label=npm" alt="npm version"/></a>
 </p>
