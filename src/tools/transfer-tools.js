@@ -848,7 +848,12 @@ export async function handleSshEdit({ getConnection, args }) {
   }
 
   // 2. Compute new content
-  const nextContent = new_content != null ? String(new_content) : applyPatches(current, patch);
+  let nextContent;
+  try {
+    nextContent = new_content != null ? String(new_content) : applyPatches(current, patch);
+  } catch (e) {
+    return toMcp(fail('ssh_edit', e.message || String(e), { server }), { format });
+  }
   const encoded = encodeBase64(nextContent);
 
   // 3. Paths (randomized to avoid TOCTOU collisions)

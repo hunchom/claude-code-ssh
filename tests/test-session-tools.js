@@ -36,8 +36,6 @@ async function test(name, fn) {
   try { await fn(); passed++; console.log(`[ok] ${name}`); }
   catch (e) { failed++; fails.push({ name, err: e }); console.error(`[err] ${name}: ${e.message}`); }
 }
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-
 // --------------------------------------------------------------------------
 // FakeShellStream -- scriptable bidirectional shell
 // --------------------------------------------------------------------------
@@ -50,7 +48,7 @@ class FakeShellStream extends EventEmitter {
     this.closed = false;
     this._marker = null;
     // scriptFor(userCmd, marker) -> { stdout, exit, stderr?, skipMarker?, customEcho? }
-    this.scriptFor = scriptFor || ((cmd) => ({ stdout: '', exit: 0 }));
+    this.scriptFor = scriptFor || (() => ({ stdout: '', exit: 0 }));
     this.delayMs = delayMs;
   }
 
@@ -91,22 +89,11 @@ class FakeShellStream extends EventEmitter {
   close() { this.closed = true; setImmediate(() => this.emit('close', 0)); }
 }
 
-/** Build a synthesizer that returns scripted output per-command. */
-function scripted(table) {
-  return (cmd) => {
-    for (const { match, response } of table) {
-      if (typeof match === 'string' ? cmd === match : match.test(cmd)) {
-        return typeof response === 'function' ? response(cmd) : response;
-      }
-    }
-    return { stdout: '', exit: 0 };
-  };
-}
-
 // Build a fake "client" that yields a FakeShellStream when .shell() is called.
 function makeFakeClient(stream) {
   return {
     shell(opts, cb) {
+      void opts;
       setImmediate(() => cb(null, stream));
     },
   };
@@ -281,17 +268,7 @@ await test('runCommand: multi-line output (500 lines) preserved intact', async (
 });
 
 await test('runCommand: ANSI color codes around marker still detected', async () => {
-  const stream = new FakeShellStream({
-    scriptFor: (_cmd, marker) => ({
-      stdout: '\x1b[31mred text\x1b[0m\n',
-      exit: 0,
-      // Override echo so the marker emission includes a leading color reset.
-      // The script table engine emits stdout then marker line automatically,
-      // but for this test we need to inject ANSI *around* the marker. We
-      // use skipMarker + customEcho to craft the wire precisely.
-    }),
-  });
-  // Pivot: bypass the normal scriptFor for ANSI-around-marker by using a
+  // Bypass the normal scriptFor for ANSI-around-marker by using a
   // direct scriptFor that emits the marker itself.
   const streamAnsi = new FakeShellStream({
     scriptFor: () => ({
@@ -636,7 +613,7 @@ await test('output containing coincidental "__MCP_EOC_" prefix does NOT trigger 
   // string "__MCP_EOC_deadbeef" (short) and it won't match because the live
   // session's marker has a different, unpredictable suffix.
   const stream = new FakeShellStream({
-    scriptFor: (cmd, marker) => {
+    scriptFor: (cmd) => {
       if (cmd === 'pwd' || cmd === 'whoami' || cmd === 'echo $HOME') {
         return { stdout: 'x\n', exit: 0 };
       }

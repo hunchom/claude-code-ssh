@@ -20,5 +20,11 @@
     "comma-dangle": ["error", "only-multiline"],
     "object-curly-spacing": ["error", "always"],
     "array-bracket-spacing": ["error", "never"]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["tests/**/*.js", "examples/**/*.js", "debug/**/*.js", "scripts/**/*.{js,mjs,cjs}"],
+      "rules": { "no-console": "off" }
+    }
+  ]
 }

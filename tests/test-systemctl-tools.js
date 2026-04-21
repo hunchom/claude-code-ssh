@@ -3,8 +3,8 @@
 import assert from 'assert';
 import { EventEmitter } from 'events';
 import {
-  ALLOWED_ACTIONS, MUTATING_ACTIONS, NO_UNIT_ACTIONS, REVERSIBILITY, RISK_MAP,
-  UNIT_NAME_RE, isValidUnit,
+  ALLOWED_ACTIONS,
+  isValidUnit,
   parseListUnits, parseListUnitFiles, shapeUnitStatus, parseJournalLines,
   handleSshSystemctl,
 } from '../src/tools/systemctl-tools.js';
@@ -191,7 +191,7 @@ await test('handleSshSystemctl: list-units parses typed array', async () => {
   const client = new FakeClient({ script: () => ({
     stdout: 'nginx.service loaded active running nginx HTTP',
     code: 0,
-  })});
+  }) });
   const r = await handleSshSystemctl({
     getConnection: async () => client,
     args: { server: 's', action: 'list-units', format: 'json' },

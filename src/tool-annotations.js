@@ -21,7 +21,7 @@ export const TOOL_ANNOTATIONS = {
   // Core
   ssh_execute: {
     title: 'Execute Remote Command',
-    annotations: { openWorldHint: true },
+    annotations: { destructiveHint: true, openWorldHint: true },
   },
   ssh_upload: {
     title: 'Upload File to Server',
@@ -42,7 +42,7 @@ export const TOOL_ANNOTATIONS = {
 
   // Sessions
   ssh_session_start: { title: 'Start Interactive Session', annotations: { openWorldHint: true } },
-  ssh_session_send: { title: 'Send Command to Session', annotations: { openWorldHint: true } },
+  ssh_session_send: { title: 'Send Command to Session', annotations: { destructiveHint: true, openWorldHint: true } },
   ssh_session_list: { title: 'List Sessions', annotations: { readOnlyHint: true, idempotentHint: true } },
   ssh_session_close: { title: 'Close Session', annotations: { idempotentHint: true } },
   ssh_session_replay: { title: 'Replay Session History', annotations: { readOnlyHint: true, idempotentHint: true } },
@@ -51,7 +51,7 @@ export const TOOL_ANNOTATIONS = {
   // Monitoring
   ssh_health_check: { title: 'Server Health Check', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
   ssh_service_status: { title: 'Check Service Status', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
-  ssh_process_manager: { title: 'Manage Remote Processes', annotations: { openWorldHint: true } },
+  ssh_process_manager: { title: 'Manage Remote Processes', annotations: { destructiveHint: true, openWorldHint: true } },
   ssh_monitor: { title: 'Resource Monitor Snapshot', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
   ssh_tail: { title: 'Tail Log File', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
   ssh_alert_setup: {
@@ -62,13 +62,13 @@ export const TOOL_ANNOTATIONS = {
   },
 
   // Backup
-  ssh_backup_create: { title: 'Create Backup', annotations: { openWorldHint: true } },
+  ssh_backup_create: { title: 'Create Backup', annotations: { destructiveHint: true, openWorldHint: true } },
   ssh_backup_list: { title: 'List Backups', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
   ssh_backup_restore: { title: 'Restore Backup', annotations: { destructiveHint: true, openWorldHint: true } },
   ssh_backup_schedule: { title: 'Schedule Backup (cron)', annotations: { destructiveHint: true, openWorldHint: true } },
 
   // Database
-  ssh_db_dump: { title: 'Dump Database', annotations: { openWorldHint: true } },
+  ssh_db_dump: { title: 'Dump Database', annotations: { destructiveHint: true, openWorldHint: true } },
   ssh_db_import: { title: 'Import Database Dump', annotations: { destructiveHint: true, openWorldHint: true } },
   ssh_db_list: { title: 'List Databases / Tables', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
   ssh_db_query: { title: 'Run Read-Only Query', annotations: { readOnlyHint: true, openWorldHint: true } },
@@ -77,7 +77,7 @@ export const TOOL_ANNOTATIONS = {
   ssh_deploy: { title: 'Deploy Artifact', annotations: { destructiveHint: true, openWorldHint: true } },
   ssh_deploy_artifact: { title: 'Deploy Artifact (alias)', annotations: { destructiveHint: true, openWorldHint: true } },
   ssh_execute_sudo: { title: 'Execute With Sudo', annotations: { destructiveHint: true, openWorldHint: true } },
-  ssh_execute_group: { title: 'Execute Across Group', annotations: { openWorldHint: true } },
+  ssh_execute_group: { title: 'Execute Across Group', annotations: { destructiveHint: true, openWorldHint: true } },
 
   // Admin / config
   ssh_alias: { title: 'Manage Server Aliases', annotations: { idempotentHint: true } },
@@ -89,7 +89,7 @@ export const TOOL_ANNOTATIONS = {
   ssh_history: { title: 'Command History', annotations: { readOnlyHint: true, idempotentHint: true } },
 
   // Tunnels
-  ssh_tunnel_create: { title: 'Create SSH Tunnel', annotations: { openWorldHint: true } },
+  ssh_tunnel_create: { title: 'Create SSH Tunnel', annotations: { destructiveHint: true, openWorldHint: true } },
   ssh_tunnel_list: { title: 'List Tunnels', annotations: { readOnlyHint: true, idempotentHint: true } },
   ssh_tunnel_close: { title: 'Close Tunnel', annotations: { idempotentHint: true } },
 
@@ -98,9 +98,9 @@ export const TOOL_ANNOTATIONS = {
 
   // Gamechanger
   ssh_cat: { title: 'View Remote File', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
-  ssh_systemctl: { title: 'Systemd Unit Control', annotations: { openWorldHint: true } },
+  ssh_systemctl: { title: 'Systemd Unit Control', annotations: { destructiveHint: true, openWorldHint: true } },
   ssh_journalctl: { title: 'Systemd Journal Query', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
-  ssh_docker: { title: 'Docker Control', annotations: { openWorldHint: true } },
+  ssh_docker: { title: 'Docker Control', annotations: { destructiveHint: true, openWorldHint: true } },
   ssh_port_test: { title: 'Port / TLS / HTTP Probe', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
   ssh_diff: { title: 'Diff Two Files', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
   ssh_edit: { title: 'Atomic File Edit', annotations: { destructiveHint: true, openWorldHint: true } },

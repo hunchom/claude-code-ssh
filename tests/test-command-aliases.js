@@ -47,15 +47,15 @@ try {
 console.log('Test 2: Expand command alias');
 try {
   const aliases = loadCommandAliases();
-  
+
   // Test with a known alias from default profile
   if (aliases['check-memory']) {
     const expanded = expandCommandAlias('check-memory');
-    assert(expanded === aliases['check-memory'], 
+    assert(expanded === aliases['check-memory'],
       'Should expand check-memory to its full command');
     console.log(`[ok] Expanded 'check-memory' to '${expanded}'`);
   }
-  
+
   // Test with non-alias command
   const nonAlias = expandCommandAlias('ls -la');
   assert(nonAlias === 'ls -la', 'Non-alias commands should remain unchanged');
@@ -70,17 +70,17 @@ console.log('Test 3: Add custom alias');
 try {
   const testAlias = 'test-alias-' + Date.now();
   const testCommand = 'echo "This is a test command"';
-  
+
   addCommandAlias(testAlias, testCommand);
-  
+
   const aliases = loadCommandAliases();
   assert(aliases[testAlias] === testCommand, 'Custom alias should be added');
-  
+
   const expanded = expandCommandAlias(testAlias);
   assert(expanded === testCommand, 'Custom alias should expand correctly');
-  
+
   console.log(`[ok] Added custom alias: ${testAlias}\n`);
-  
+
   // Cleanup
   removeCommandAlias(testAlias);
 } catch (error) {
@@ -93,14 +93,14 @@ console.log('Test 4: Remove custom alias');
 try {
   const testAlias = 'test-remove-' + Date.now();
   const testCommand = 'echo "To be removed"';
-  
+
   // Add then remove
   addCommandAlias(testAlias, testCommand);
   removeCommandAlias(testAlias);
-  
+
   const aliases = loadCommandAliases();
   assert(!aliases[testAlias], 'Alias should be removed');
-  
+
   console.log('[ok] Successfully removed custom alias\n');
 } catch (error) {
   console.error(`[err] Failed to remove alias: ${error.message}\n`);
@@ -112,23 +112,23 @@ console.log('Test 5: List command aliases');
 try {
   const list = listCommandAliases();
   assert(Array.isArray(list), 'listCommandAliases should return an array');
-  
+
   if (list.length > 0) {
     const firstAlias = list[0];
     assert(firstAlias.alias, 'Each alias should have an alias property');
     assert(firstAlias.command, 'Each alias should have a command property');
-    assert(typeof firstAlias.isFromProfile === 'boolean', 
+    assert(typeof firstAlias.isFromProfile === 'boolean',
       'Each alias should have isFromProfile boolean');
-    assert(typeof firstAlias.isCustom === 'boolean', 
+    assert(typeof firstAlias.isCustom === 'boolean',
       'Each alias should have isCustom boolean');
   }
-  
+
   console.log(`[ok] Listed ${list.length} aliases`);
-  
+
   // Show some examples
   const profileAliases = list.filter(a => a.isFromProfile).slice(0, 3);
   const customAliases = list.filter(a => a.isCustom).slice(0, 3);
-  
+
   if (profileAliases.length > 0) {
     console.log('   Profile aliases:', profileAliases.map(a => a.alias).join(', '));
   }
@@ -146,19 +146,19 @@ console.log('Test 6: Suggest aliases');
 try {
   // Add a test alias for suggestion
   addCommandAlias('test-suggest', 'test suggestion command');
-  
+
   const suggestions = suggestAliases('test');
   assert(Array.isArray(suggestions), 'suggestAliases should return an array');
-  
+
   const testSuggestion = suggestions.find(s => s.alias === 'test-suggest');
   assert(testSuggestion, 'Should find the test alias in suggestions');
-  
+
   console.log(`[ok] Found ${suggestions.length} suggestions for 'test'`);
   if (suggestions.length > 0) {
     console.log(`   Examples: ${suggestions.slice(0, 3).map(s => s.alias).join(', ')}`);
   }
   console.log();
-  
+
   // Cleanup
   removeCommandAlias('test-suggest');
 } catch (error) {
@@ -171,17 +171,17 @@ console.log('Test 7: Profile alias protection');
 try {
   const aliases = loadCommandAliases();
   const profileAlias = Object.keys(aliases)[0]; // Get first alias
-  
+
   if (profileAlias) {
     const originalCommand = aliases[profileAlias];
-    
+
     // Try to remove a profile alias (should reset to original)
     removeCommandAlias(profileAlias);
-    
+
     const newAliases = loadCommandAliases();
-    assert(newAliases[profileAlias] === originalCommand, 
+    assert(newAliases[profileAlias] === originalCommand,
       'Profile aliases should be reset, not removed');
-    
+
     console.log(`[ok] Profile alias '${profileAlias}' is protected from removal\n`);
   }
 } catch (error) {

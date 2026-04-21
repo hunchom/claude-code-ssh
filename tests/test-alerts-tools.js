@@ -16,7 +16,6 @@
 
 import assert from 'node:assert';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { handleSshAlertSetup, __internals } from '../src/tools/alerts-tools.js';
 
@@ -111,44 +110,11 @@ await test('corrupt config file is treated as missing, not crash', async () => {
 });
 
 // --- check path -----------------------------------------------------------
-function fakeHealthResponse(cpu_pct, mem_pct, disks) {
-  const payload = {
-    success: true,
-    tool: 'ssh_health_check',
-    server: 's',
-    data: {
-      cpu: { usage_percent: cpu_pct },
-      memory: { used_percent: mem_pct },
-      disk: disks,
-    },
-    meta: {},
-  };
-  return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
-}
-
-// Spy getConnection -- alerts-tools delegates to handleSshHealthCheck which
-// needs a working client.streamExecCommand path. Easier path: stub
-// handleSshHealthCheck by monkey-patching the module export.
-import * as monitoringMod from '../src/tools/monitoring-tools.js';
-const realHC = monitoringMod.handleSshHealthCheck;
-function installFakeHC(responseBuilder) {
-  Object.defineProperty(monitoringMod, 'handleSshHealthCheck', {
-    value: async () => responseBuilder(),
-    configurable: true,
-  });
-}
-function restoreHC() {
-  Object.defineProperty(monitoringMod, 'handleSshHealthCheck', {
-    value: realHC,
-    configurable: true,
-  });
-}
-
-// NOTE: the import above reads the bound function once, so a module-level
-// monkey-patch to the re-exported symbol does NOT reach alerts-tools.js's
-// own imported binding. We instead test evaluateThresholds() directly for
-// the threshold logic, and cover the end-to-end wire-through via the
-// "disabled" path + error paths.
+// NOTE: alerts-tools.js imports handleSshHealthCheck by binding at module load,
+// so a module-level monkey-patch to the re-exported symbol does NOT reach
+// alerts-tools.js's own imported binding. We instead test evaluateThresholds()
+// directly for the threshold logic, and cover the end-to-end wire-through via
+// the "disabled" path + error paths.
 await test('check: no config yet -> structured fail', async () => {
   const srv = uniqueServer('no-cfg');
   const r = await handleSshAlertSetup({
@@ -240,9 +206,6 @@ await test('server name with traversal characters cannot escape ALERTS_DIR', () 
   assert(p.startsWith(__internals.ALERTS_DIR),
     `path ${p} must be inside ${__internals.ALERTS_DIR}`);
 });
-
-// Guard against suppressed unused warning on the unused fake-HC utilities.
-void installFakeHC; void restoreHC; void fakeHealthResponse;
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }

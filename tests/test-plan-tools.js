@@ -431,7 +431,7 @@ await test('run: rollback inherits original step server when not specified', asy
     if (args.command === 'undo1') { rollbackServer = args.server; return okResp('ok'); }
     return okResp('ok');
   });
-  const r = await handleSshPlan({
+  await handleSshPlan({
     dispatch: { exec: execSpy },
     args: {
       mode: 'run', server: 'default_server', format: 'json',

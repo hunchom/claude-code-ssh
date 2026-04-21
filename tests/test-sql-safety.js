@@ -135,7 +135,7 @@ test('accepts SELECT with block comment inside', () => {
 
 test('accepts string literal that contains dangerous keywords', () => {
   // The string `'DROP TABLE users'` is data, not code -- must not false-positive.
-  const r = isSafeSelect("SELECT 'DROP TABLE users' AS msg");
+  const r = isSafeSelect('SELECT \'DROP TABLE users\' AS msg');
   assert.strictEqual(r.ok, true);
 });
 
@@ -200,7 +200,7 @@ test('rejects comment-hidden DROP -- the comment is stripped, DROP is first toke
 });
 
 test('rejects SELECT ... INTO OUTFILE (MySQL file write)', () => {
-  const r = isSafeSelect("SELECT * INTO OUTFILE '/tmp/pwn' FROM users");
+  const r = isSafeSelect('SELECT * INTO OUTFILE \'/tmp/pwn\' FROM users');
   assert.strictEqual(r.ok, false);
   assert(r.reason.toUpperCase().includes('INTO'));
 });
@@ -236,12 +236,12 @@ test('rejects CALL stored_procedure()', () => {
 });
 
 test('rejects LOAD DATA INFILE', () => {
-  const r = isSafeSelect("LOAD DATA INFILE '/etc/passwd' INTO TABLE t");
+  const r = isSafeSelect('LOAD DATA INFILE \'/etc/passwd\' INTO TABLE t');
   assert.strictEqual(r.ok, false);
 });
 
 test('rejects COPY (Postgres server-side file access)', () => {
-  const r = isSafeSelect("COPY t FROM '/etc/passwd'");
+  const r = isSafeSelect('COPY t FROM \'/etc/passwd\'');
   assert.strictEqual(r.ok, false);
 });
 
@@ -326,22 +326,22 @@ test('internal: stripComments handles nested block comments', () => {
 });
 
 test('internal: stripStrings removes single-quoted and preserves everything else', () => {
-  const out = __internals.stripStrings("SELECT 'DROP' FROM t");
+  const out = __internals.stripStrings('SELECT \'DROP\' FROM t');
   assert(!out.includes('DROP'), 'DROP was inside a string, should be gone');
   assert(out.includes('SELECT'));
   assert(out.includes('FROM t'));
 });
 
 test('internal: stripStrings handles `` inside backticks', () => {
-  const out = __internals.stripStrings("SELECT `a``b` FROM t");
+  const out = __internals.stripStrings('SELECT `a``b` FROM t');
   assert(!out.includes('a'));
   assert(out.includes('SELECT'));
   assert(out.includes('FROM t'));
 });
 
 test('internal: stripStrings handles `` inside single quotes', () => {
-  const out = __internals.stripStrings("SELECT 'it''s' FROM t");
-  assert(!out.includes("it"));
+  const out = __internals.stripStrings('SELECT \'it\'\'s\' FROM t');
+  assert(!out.includes('it'));
   assert(out.includes('SELECT'));
 });
 

@@ -681,7 +681,8 @@ registerToolConditional(
             type: 'text',
             text: `[err] Error retrieving history: ${error.message}`
           }
-        ]
+        ],
+        isError: true
       };
     }
   }
@@ -902,7 +903,8 @@ registerToolConditional(
             type: 'text',
             text: `[err] Group management error: ${error.message}`
           }
-        ]
+        ],
+        isError: true
       };
     }
   }
@@ -1035,6 +1037,7 @@ registerToolConditional(
             text: `[err] Deployment failed: ${error.message}`,
           },
         ],
+        isError: true,
       };
     }
   }
@@ -1157,6 +1160,7 @@ registerToolConditional(
             text: `[err] Command alias operation failed: ${error.message}`,
           },
         ],
+        isError: true,
       };
     }
   }
@@ -1220,7 +1224,7 @@ registerToolConditional(
             content: [
               {
                 type: 'text',
-                text: `[err] Hook disabled: ${hook}`,
+                text: `[ok] Hook disabled: ${hook}`,
               },
             ],
           };
@@ -1249,6 +1253,7 @@ registerToolConditional(
             text: `[err] Hook operation failed: ${error.message}`,
           },
         ],
+        isError: true,
       };
     }
   }
@@ -1329,6 +1334,7 @@ registerToolConditional(
             text: `[err] Profile operation failed: ${error.message}`,
           },
         ],
+        isError: true,
       };
     }
   }
@@ -1446,6 +1452,7 @@ registerToolConditional(
             text: `[err] Connection management failed: ${error.message}`,
           },
         ],
+        isError: true,
       };
     }
   }
@@ -1615,6 +1622,7 @@ registerToolConditional(
             text: `[err] Alias operation failed: ${error.message}`,
           },
         ],
+        isError: true,
       };
     }
   }

@@ -89,28 +89,28 @@ console.log('[test] Testing tail-tools\n');
 await test('buildTailCommand: default (no follow, no grep) quotes path', () => {
   assert.strictEqual(
     buildTailCommand({ file: '/var/log/app.log', lines: 20 }),
-    "tail -n 20 '/var/log/app.log'"
+    'tail -n 20 \'/var/log/app.log\''
   );
 });
 
 await test('buildTailCommand: follow mode includes -f', () => {
   assert.strictEqual(
     buildTailCommand({ file: '/f', lines: 5, follow: true }),
-    "tail -n 5 -f '/f'"
+    'tail -n 5 -f \'/f\''
   );
 });
 
 await test('buildTailCommand: grep is shell-quoted and piped', () => {
   assert.strictEqual(
-    buildTailCommand({ file: '/f', lines: 10, grep: "it's; rm -rf /" }),
-    "tail -n 10 '/f' | grep -E 'it'\\''s; rm -rf /'"
+    buildTailCommand({ file: '/f', lines: 10, grep: 'it\'s; rm -rf /' }),
+    'tail -n 10 \'/f\' | grep -E \'it\'\\\'\'s; rm -rf /\''
   );
 });
 
 await test('buildTailCommand: injection in lines neutralized by Number()', () => {
   assert.strictEqual(
     buildTailCommand({ file: '/f', lines: '10; rm -rf /' }),
-    "tail -n 10 '/f'"
+    'tail -n 10 \'/f\''
   );
 });
 
@@ -124,7 +124,7 @@ await test('handleSshTail: happy path with quoted path and default lines', async
     args: { server: 'prod01', file: '/var/log/app.log' },
   });
   assert.strictEqual(r.isError, undefined);
-  assert.strictEqual(client.lastCommand, "tail -n 10 '/var/log/app.log'");
+  assert.strictEqual(client.lastCommand, 'tail -n 10 \'/var/log/app.log\'');
   const md = r.content[0].text;
   assert(md.startsWith('[ok] **ssh_execute**'), 'uses exec markdown renderer');
   assert(md.includes('a'));
@@ -137,7 +137,7 @@ await test('handleSshTail: grep filter appended to command', async () => {
     getConnection: async () => client,
     args: { server: 's', file: '/var/log/app.log', lines: 50, grep: 'ERROR' },
   });
-  assert.strictEqual(client.lastCommand, "tail -n 50 '/var/log/app.log' | grep -E 'ERROR'");
+  assert.strictEqual(client.lastCommand, 'tail -n 50 \'/var/log/app.log\' | grep -E \'ERROR\'');
 });
 
 await test('handleSshTail: injection attempt in file path is neutralized by shQuote', async () => {
@@ -146,7 +146,7 @@ await test('handleSshTail: injection attempt in file path is neutralized by shQu
     getConnection: async () => client,
     args: { server: 's', file: '/tmp/log; rm -rf /', lines: 5 },
   });
-  assert.strictEqual(client.lastCommand, "tail -n 5 '/tmp/log; rm -rf /'");
+  assert.strictEqual(client.lastCommand, 'tail -n 5 \'/tmp/log; rm -rf /\'');
 });
 
 await test('handleSshTail: connection failure -> isError with stderr diagnostic', async () => {
@@ -192,7 +192,7 @@ await test('handleSshTailStart: returns session_id + tail -n N -f command', asyn
   assert.strictEqual(parsed.success, true);
   assert.strictEqual(parsed.tool, 'ssh_tail_start');
   assert(/^tail_[0-9a-f]{16}$/.test(parsed.data.session_id), `id shape: ${parsed.data.session_id}`);
-  assert.strictEqual(client.lastCommand, "tail -n 3 -f '/var/log/app.log'");
+  assert.strictEqual(client.lastCommand, 'tail -n 3 -f \'/var/log/app.log\'');
   // Session is tracked in the registry
   assert(_sessionsForTest().has(parsed.data.session_id));
   // Cleanup
@@ -205,7 +205,7 @@ await test('handleSshTailStart: file path shell-quoted (injection neutralized)',
     getConnection: async () => client,
     args: { server: 's', file: '/var/log/bad; rm -rf /', lines: 5, format: 'json' },
   });
-  assert.strictEqual(client.lastCommand, "tail -n 5 -f '/var/log/bad; rm -rf /'");
+  assert.strictEqual(client.lastCommand, 'tail -n 5 -f \'/var/log/bad; rm -rf /\'');
   const parsed = JSON.parse(r.content[0].text);
   await handleSshTailStop({ args: { session_id: parsed.data.session_id } });
 });
@@ -216,7 +216,7 @@ await test('handleSshTailStart: grep filter quoted and appended after tail', asy
     getConnection: async () => client,
     args: { server: 's', file: '/f', lines: 10, grep: 'ERR', format: 'json' },
   });
-  assert.strictEqual(client.lastCommand, "tail -n 10 -f '/f' | grep -E 'ERR'");
+  assert.strictEqual(client.lastCommand, 'tail -n 10 -f \'/f\' | grep -E \'ERR\'');
   const parsed = JSON.parse(r.content[0].text);
   await handleSshTailStop({ args: { session_id: parsed.data.session_id } });
 });

@@ -39,7 +39,7 @@ function makeClient(script) {
     sftp(cb) {
       // Pass a mock sftp -- fastPut always succeeds.
       setImmediate(() => cb(null, {
-        fastPut(local, remote, done) { setImmediate(() => done(null)); },
+        fastPut(_local, _remote, done) { setImmediate(() => done(null)); },
       }));
     },
   };
@@ -266,7 +266,7 @@ await test('new-file rollback: deletes uploaded artifact, not mv', async () => {
 });
 
 // Clean up artifact
-try { fs.rmSync(artifactDir, { recursive: true, force: true }); } catch (_) {}
+try { fs.rmSync(artifactDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }

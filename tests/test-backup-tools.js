@@ -43,14 +43,14 @@ await test('buildBackupCommand: mysql uses MYSQL_PWD env, not -p flag', () => {
     password: 'sekret', outputPath: '/backups/app.sql.gz', gzip: true,
   });
   assert(envPrefix.includes('MCP_BACKUP_PASS='), 'env prefix contains pass');
-  assert(envPrefix.includes("'sekret'"), 'password shQuoted in env');
+  assert(envPrefix.includes('\'sekret\''), 'password shQuoted in env');
   assert(!command.includes('sekret'), 'password NOT in command body');
   // No password-flag: mysqldump -p<pass> or -p <pass>. (mkdir's -p is fine -- different tool.)
   assert(!/mysqldump[^|]*\s-p[\s'"]/.test(command), 'no mysqldump -p flag with password');
   assert(command.includes('MYSQL_PWD="$MCP_BACKUP_PASS"'));
   assert(command.includes('mysqldump'));
   assert(command.includes('| gzip > '));
-  assert(command.includes("/backups/app.sql.gz"));
+  assert(command.includes('/backups/app.sql.gz'));
 });
 
 await test('buildBackupCommand: postgres uses PGPASSWORD env', () => {
@@ -84,9 +84,9 @@ await test('buildBackupCommand: files uses tar with shQuote', () => {
     gzip: true,
   });
   assert(command.includes('tar -czf'));
-  assert(command.includes("'/etc/nginx'"));
+  assert(command.includes('\'/etc/nginx\''));
   // Injection attempt wrapped in quotes
-  assert(command.includes("'/var/log; rm -rf /'"));
+  assert(command.includes('\'/var/log; rm -rf /\''));
   // Ensure the dangerous substring is NOT floating free
   assert(!/\s\/var\/log;\s*rm/.test(command));
 });
@@ -140,9 +140,9 @@ await test('backup_create: happy path generates meta + returns typed', async () 
   const FAKE_HASH = 'abc123abc123abc123abc123abc123abc123abc123abc123abc123abc123abcd';
   const client = new FakeClient({ script: (cmd) => {
     if (cmd.includes('sha256sum')) return { stdout: `${FAKE_HASH}\n`, code: 0 };
-    if (cmd.includes("stat -c '%s'")) return { stdout: '12345\n', code: 0 };
+    if (cmd.includes('stat -c \'%s\'')) return { stdout: '12345\n', code: 0 };
     return { stdout: '', code: 0 };
-  }});
+  } });
   const r = await handleSshBackupCreate({
     getConnection: async () => client,
     args: {
@@ -203,7 +203,7 @@ await test('backup_restore: sha256 mismatch -> refuse restore', async () => {
     if (cmd.startsWith('cat ')) return { stdout: metaJson, code: 0 };
     if (cmd.includes('sha256sum')) return { stdout: 'DIFFERENT-HASH\n', code: 0 };
     return { stdout: '', code: 0 };
-  }});
+  } });
   const r = await handleSshBackupRestore({
     getConnection: async () => client,
     args: { server: 's', backup_id: 'id1', verify: true, format: 'json' },
@@ -219,7 +219,7 @@ await test('backup_restore: preview loads meta and shows high-risk plan', async 
     if (cmd.includes('find ')) return { stdout: '/b/1.tgz.meta\n', code: 0 };
     if (cmd.startsWith('cat ')) return { stdout: JSON.stringify(meta), code: 0 };
     return { stdout: '', code: 0 };
-  }});
+  } });
   const r = await handleSshBackupRestore({
     getConnection: async () => client,
     args: { server: 's', backup_id: 'id1', preview: true, format: 'json' },

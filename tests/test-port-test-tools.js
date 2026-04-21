@@ -4,7 +4,7 @@ import assert from 'assert';
 import { EventEmitter } from 'events';
 import {
   parseDnsOutput, parseTcpOutput, parseTlsOutput, parseHttpOutput,
-  buildDnsCommand, buildTcpCommand, buildTlsCommand, buildHttpCommand,
+  buildDnsCommand, buildTlsCommand, buildHttpCommand,
   handleSshPortTest,
 } from '../src/tools/port-test-tools.js';
 
@@ -103,7 +103,7 @@ await test('parseHttpOutput: malformed returns null', () => {
 // --- buildXxxCommand: shQuote / injection safety -------------------------
 await test('buildDnsCommand: host is shell-quoted', () => {
   const cmd = buildDnsCommand('evil.com; rm -rf /');
-  assert(cmd.includes("'evil.com; rm -rf /'"));
+  assert(cmd.includes('\'evil.com; rm -rf /\''));
   assert(!cmd.match(/^[^']*evil\.com; rm -rf \//), 'no unquoted fragment');
 });
 
@@ -135,7 +135,7 @@ await test('handleSshPortTest: full chain tcp+dns with scripted results', async 
     if (cmd.startsWith('getent hosts')) return { stdout: '1.2.3.4 host.example.com\n', code: 0 };
     if (cmd.includes('nc -z') || cmd.includes('/dev/tcp/')) return { stdout: 'TCP_LATENCY_MS=5\n', code: 0 };
     return { stdout: '', code: 0 };
-  }});
+  } });
   const r = await handleSshPortTest({
     getConnection: async () => client,
     args: {

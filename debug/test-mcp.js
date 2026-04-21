@@ -37,7 +37,7 @@ server.on('error', (error) => {
 // Wait for server to start
 setTimeout(() => {
   console.log('\n📋 Sending initialization request...\n');
-  
+
   // Send initialization request
   const initRequest = {
     jsonrpc: '2.0',
@@ -52,22 +52,22 @@ setTimeout(() => {
     },
     id: 1
   };
-  
+
   server.stdin.write(JSON.stringify(initRequest) + '\n');
-  
+
   // Wait and then request tools list
   setTimeout(() => {
     console.log('\n🔧 Requesting tools list...\n');
-    
+
     const toolsRequest = {
       jsonrpc: '2.0',
       method: 'tools/list',
       params: {},
       id: 2
     };
-    
+
     server.stdin.write(JSON.stringify(toolsRequest) + '\n');
-    
+
     // Give time for response then exit
     setTimeout(() => {
       console.log('\n✅ Test complete. Shutting down...');
