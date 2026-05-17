@@ -6,11 +6,11 @@ This file provides guidance to Claude Code when working on this repository.
 
 **claude-code-ssh** is an MCP server that gives Claude Code direct SSH access to a configured fleet of servers. The goal: Claude stops being a read-only assistant and becomes a hands-on operator — reading logs, editing configs, running backups, deploying, debugging — without a human typing commands between them.
 
-51 tools, 7 groups, opt-in per user. Connection pooling, streaming exec, head+tail output truncation, ASCII-only rendering.
+13 fat verb-tools, each covering one domain via an `action` enum. Always loaded (un-deferred). Connection pooling, streaming exec, head+tail output truncation, command-output compression, ASCII-only rendering.
 
 ## Architecture
 
-- **`src/index.js`** — MCP server entry, registers all 51 tools via `registerToolConditional()`
+- **`src/index.js`** — MCP server entry, registers the 13 v4 tools via `registerToolConditional()`; descriptions sourced from `src/tool-descriptions.js`
 - **`src/tools/*.js`** — 17 modular handler files, one per logical tool area (exec, files, backup, db, etc.)
 - **`src/tool-registry.js`** — tool metadata + group membership (core, sessions, monitoring, backup, database, advanced, gamechanger)
 - **`src/tool-config-manager.js`** — per-user enablement via `~/.ssh-manager/tools-config.json`
@@ -58,14 +58,14 @@ ssh-manager tools export-claude               # Export auto-approval config
 
 **Tool Groups**: core (5), sessions (4), monitoring (6), backup (4), database (4), advanced (14)
 
-**Modes**: all (37 tools, ~43.5k tokens), minimal (5 tools, ~3.5k tokens), custom (variable)
+**Modes**: v4 surface is always loaded (13 tools, ~5k tokens); the per-group mode system is deprecated.
 
 See [docs/TOOL_MANAGEMENT.md](docs/TOOL_MANAGEMENT.md) for complete guide.
 
 ### Development and Testing
 ```bash
 npm start                    # Start MCP server (requires stdin)
-npm test                     # Run 551 tests across 26 suites
+npm test                     # Run 1028 tests
 ./scripts/validate.sh        # Syntax + startup check
 node --check src/index.js    # JavaScript syntax only
 ```

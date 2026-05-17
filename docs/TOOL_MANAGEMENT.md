@@ -2,32 +2,18 @@
 
 ## Overview
 
-claude-code-ssh provides **37 tools** organized into **6 functional groups**. You can enable or disable tool groups to customize your experience and reduce context usage in Claude Code.
+> **v4 update:** the v4 surface is **13 fat verb-tools**, always loaded. The
+> per-group enable/disable model described below belonged to the v3 51-tool
+> surface and no longer applies — there are no tool *groups* in v4. The 13
+> tools serialize to roughly 5k schema tokens, small enough that Claude Code
+> keeps them loaded without `ToolSearch`. This guide is retained for historical
+> reference; the `ssh-manager tools` CLI subcommands are deprecated.
 
-### Why Manage Tools?
-
-- **Reduce Context Usage**: By default, all 37 tools consume ~43.5k tokens in Claude Code. Minimal mode uses only ~3.5k tokens (92% reduction)
-- **Fewer Approval Prompts**: Only enabled tools require approval in Claude Code
-- **Faster Loading**: Less tools mean faster MCP server startup
-- **Cleaner Interface**: Only see the tools you actually use
-
-## Quick Start
-
-### View Current Configuration
-
-```bash
-ssh-manager tools list
-```
-
-### Interactive Configuration Wizard
-
-```bash
-ssh-manager tools configure
-```
-
-Choose from three modes:
-1. **All tools** (37 tools) - Full feature set, recommended for most users
-2. **Minimal** (5 tools) - Only core operations, maximum efficiency
+claude-code-ssh provides **13 tools**, each a verb-tool covering one domain
+through an `action` enum (`ssh_run`, `ssh_file`, `ssh_find`, `ssh_logs`,
+`ssh_service`, `ssh_health`, `ssh_db`, `ssh_backup`, `ssh_session`, `ssh_net`,
+`ssh_docker`, `ssh_fleet`, `ssh_plan`). All 13 are registered unconditionally —
+there is nothing to enable or disable.
 3. **Custom** - Pick which groups to enable
 
 ### Enable/Disable Specific Groups
@@ -157,8 +143,8 @@ Advanced features for power users:
 }
 ```
 
-- **Enabled tools**: 37/37
-- **Context usage**: ~43.5k tokens
+- **Enabled tools**: the full v3 tool set
+- **Context usage**: the full v3 schema cost
 - **Best for**: Users who need all features
 
 ### Minimal Mode
@@ -198,7 +184,7 @@ Advanced features for power users:
 }
 ```
 
-- **Enabled tools**: Custom (5-37 tools)
+- **Enabled tools**: Custom (a hand-picked v3 subset)
 - **Context usage**: Varies based on selection
 - **Best for**: Tailoring to specific workflows
 
@@ -270,7 +256,7 @@ ssh-manager tools enable monitoring
 ssh-manager tools configure  # Choose "1) All tools"
 ```
 
-**Result**: 37 tools = ~43.5k tokens
+**Result**: the full v3 tool set loaded
 
 ### Scenario 3: Database Administrator
 
@@ -431,7 +417,7 @@ Add comments to your config file to remember why you enabled specific groups:
 
 ### Q: Will existing users see any changes?
 
-**A**: No. If no configuration file exists, all 37 tools are enabled by default (current behavior).
+**A**: No. Under the v3 model, with no configuration file every tool was enabled by default. The v4 surface is always fully loaded -- there is nothing to enable or disable.
 
 ### Q: Can I enable individual tools without enabling the whole group?
 
@@ -451,7 +437,7 @@ Add comments to your config file to remember why you enabled specific groups:
 
 ### Q: How much does minimal mode actually save?
 
-**A**: Minimal mode (5 tools) uses ~3.5k tokens vs all tools (37 tools) at ~43.5k tokens. That's a **92% reduction** or **~40k tokens saved**.
+**A**: Under the v3 model, minimal mode (5 tools) cut the schema cost sharply versus enabling the full tool set. This no longer applies -- the v4 surface is a flat 13-tool set, always loaded.
 
 ## Command Reference
 
