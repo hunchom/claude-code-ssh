@@ -221,3 +221,12 @@ export function renderHeader({
   if (durationMs != null) slots.push(formatDuration(durationMs));
   return `${marker} ${slots.join(' · ')}`;
 }
+
+/**
+ * Indent a payload block by `prefix` (default 2 spaces). Replaces fenced code
+ * blocks in v4 output -- clean as plain text, unbreakable by payload content.
+ */
+export function indentBody(text, prefix = '  ') {
+  if (text == null || text === '') return '';
+  return String(text).split('\n').map((l) => prefix + l).join('\n');
+}

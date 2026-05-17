@@ -4,7 +4,7 @@
  * Run: node tests/test-render-primitives.js
  */
 import assert from 'assert';
-import { renderHeader } from '../src/output-formatter.js';
+import { renderHeader, indentBody } from '../src/output-formatter.js';
 
 let passed = 0;
 let failed = 0;
@@ -45,6 +45,25 @@ test('renderHeader: default marker is [ok]', () => {
 test('renderHeader: status of 0 is kept, empty string dropped', () => {
   assert(renderHeader({ tool: 't', status: 0 }).endsWith('· 0'));
   assert.strictEqual(renderHeader({ tool: 't', status: '' }), '[ok] t');
+});
+
+// --- indentBody ----------------------------------------------------------
+test('indentBody: each line prefixed with 2 spaces', () => {
+  assert.strictEqual(indentBody('a\nb'), '  a\n  b');
+});
+
+test('indentBody: empty or nullish input -> empty string', () => {
+  assert.strictEqual(indentBody(''), '');
+  assert.strictEqual(indentBody(null), '');
+  assert.strictEqual(indentBody(undefined), '');
+});
+
+test('indentBody: custom prefix honored', () => {
+  assert.strictEqual(indentBody('x', '| '), '| x');
+});
+
+test('indentBody: blank lines are still prefixed', () => {
+  assert.strictEqual(indentBody('a\n\nb'), '  a\n  \n  b');
 });
 
 // --- Summary -------------------------------------------------------------
