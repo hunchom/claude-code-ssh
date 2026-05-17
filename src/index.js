@@ -683,8 +683,6 @@ registerToolConditional('ssh_db', {
     gzip: z.boolean().optional().describe('Gzip the dump (action: dump)'),
     user: z.string().optional().describe('Database user'),
     password: z.string().optional().describe('Database password'),
-    host: z.string().optional().describe('Database host'),
-    port: z.number().optional().describe('Database port'),
     preview: z.boolean().optional().describe('Show the plan without importing (action: import)'),
     format: FORMAT,
   },

@@ -19,6 +19,9 @@ const REQUIRED = {
 };
 
 // Args common to every db handler: connection-target credentials.
+// No host/port: every db-tools handler hits the local socket -- forwarding
+// them was dead + misleading (a caller's remote host/port was silently
+// ignored). Re-add only alongside a handler that actually honors them.
 function creds(a) {
   return {
     server: a.server,
@@ -26,8 +29,6 @@ function creds(a) {
     database: a.database,
     user: a.user,
     password: a.password,
-    host: a.host,
-    port: a.port,
     format: a.format,
   };
 }

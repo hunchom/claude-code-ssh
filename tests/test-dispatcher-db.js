@@ -82,14 +82,12 @@ await test('db credential args are forwarded', async () => {
     deps: DEPS, handlers: { query },
     args: {
       server: 's', action: 'query', database: 'app', query: 'SELECT 1', db_type: 'mysql',
-      user: 'u', password: 'p', host: 'h', port: 5432,
+      user: 'u', password: 'p',
     },
   });
   const fwd = query.calls[0].args;
   assert.strictEqual(fwd.user, 'u');
   assert.strictEqual(fwd.password, 'p');
-  assert.strictEqual(fwd.host, 'h');
-  assert.strictEqual(fwd.port, 5432);
 });
 
 await test('query missing query -> structured fail, handler not called', async () => {
