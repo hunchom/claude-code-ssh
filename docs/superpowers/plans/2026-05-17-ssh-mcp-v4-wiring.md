@@ -1442,7 +1442,7 @@ After Task 8, confirm the whole deliverable:
 - [ ] `node --check src/index.js && node --check src/dispatchers/ssh-find.js && node --check src/dispatchers/ssh-run.js` — clean.
 - [ ] `node tests/test-tool-registry.js` / `test-index-registration.js` / `test-tool-annotations.js` — all assert 13 tools, green.
 - [ ] `./scripts/validate.sh` — syntax + MCP startup check passes.
-- [ ] Grep the new/edited files for `Claude`, `Anthropic`, `Co-Authored`, `noreply@anthropic` — zero hits. Commit messages likewise.
+- [ ] Grep the new/edited files for AI-attribution markers (co-author trailers, "generated with" footers, vendor noreply emails) — zero hits. Commit messages likewise.
 
 ---
 
