@@ -15,6 +15,7 @@
 import { fail, toMcp } from '../structured-result.js';
 import { makeCtx } from './ctx-factory.js';
 import { requireArgs } from './action-validate.js';
+import { expandCommandAlias } from '../command-aliases.js';
 
 const REQUIRED = {
   exec: ['server', 'command'],
@@ -39,10 +40,14 @@ export async function handleSshRun({ deps, handlers, args } = {}) {
   // exec + sudo both resolve server default_dir when no cwd given
   const cfg = (deps && deps.getServerConfig && deps.getServerConfig(a.server)) || {};
 
+  // exec + sudo expand command aliases at exec time -- parity w/ old ssh_execute.
+  // deps.expandCommandAlias override = test seam; else module impl.
+  const expand = (deps && deps.expandCommandAlias) || expandCommandAlias;
+
   if (action === 'exec') {
     return handlers.execute(makeCtx('conn', deps, {
       server: a.server,
-      command: a.command,
+      command: expand(a.command),
       cwd: a.cwd || cfg.default_dir,
       timeout: a.timeout,
       raw: a.raw,
@@ -53,7 +58,7 @@ export async function handleSshRun({ deps, handlers, args } = {}) {
   if (action === 'sudo') {
     return handlers.executeSudo(makeCtx('conn-cfg', deps, {
       server: a.server,
-      command: a.command,
+      command: expand(a.command),
       password: a.sudo_password,
       cwd: a.cwd || cfg.default_dir,
       timeout: a.timeout,

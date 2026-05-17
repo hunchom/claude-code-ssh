@@ -65,6 +65,27 @@ await test('exec forwards timeout to the handler as timeout', async () => {
   assert.strictEqual(execute.calls[0].args.timeout, 9000);
 });
 
+await test('exec expands a command alias before passing to the handler', async () => {
+  const execute = spy();
+  // deps.expandCommandAlias override seam: "gs" alias -> "git status -sb"
+  await handleSshRun({
+    deps: { ...DEPS, expandCommandAlias: (c) => (c === 'gs' ? 'git status -sb' : c) },
+    handlers: { execute },
+    args: { server: 's', action: 'exec', command: 'gs' },
+  });
+  assert.strictEqual(execute.calls[0].args.command, 'git status -sb');
+});
+
+await test('sudo expands a command alias before passing to the handler', async () => {
+  const executeSudo = spy();
+  await handleSshRun({
+    deps: { ...DEPS, expandCommandAlias: (c) => (c === 'rs' ? 'systemctl restart nginx' : c) },
+    handlers: { executeSudo },
+    args: { server: 's', action: 'sudo', command: 'rs' },
+  });
+  assert.strictEqual(executeSudo.calls[0].args.command, 'systemctl restart nginx');
+});
+
 await test('sudo routes to handlers.executeSudo with getServerConfig in ctx', async () => {
   const executeSudo = spy();
   await handleSshRun({

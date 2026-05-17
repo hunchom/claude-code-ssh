@@ -62,6 +62,36 @@ await test('aliases routes to handlers.aliases', async () => {
   assert.strictEqual(aliases.calls[0].args.op, 'add');
 });
 
+await test('command_alias routes to handlers.command_alias, forwards op + alias + command', async () => {
+  const command_alias = spy();
+  await handleSshFleet({
+    deps: DEPS, handlers: { command_alias },
+    args: { action: 'command_alias', op: 'add', alias: 'gs', command: 'git status' },
+  });
+  assert.strictEqual(command_alias.calls.length, 1);
+  assert.strictEqual(command_alias.calls[0].args.op, 'add');
+  assert.strictEqual(command_alias.calls[0].args.alias, 'gs');
+  assert.strictEqual(command_alias.calls[0].args.command, 'git status');
+});
+
+await test('groups forwards description', async () => {
+  const groups = spy();
+  await handleSshFleet({
+    deps: DEPS, handlers: { groups },
+    args: { action: 'groups', op: 'add', name: 'web', description: 'frontend' },
+  });
+  assert.strictEqual(groups.calls[0].args.description, 'frontend');
+});
+
+await test('history forwards search', async () => {
+  const history = spy();
+  await handleSshFleet({
+    deps: DEPS, handlers: { history },
+    args: { action: 'history', search: 'git' },
+  });
+  assert.strictEqual(history.calls[0].args.search, 'git');
+});
+
 await test('profiles routes to handlers.profiles', async () => {
   const profiles = spy();
   await handleSshFleet({ deps: DEPS, handlers: { profiles }, args: { action: 'profiles', op: 'list' } });

@@ -22,7 +22,6 @@ import {
   listAliases
 } from './server-aliases.js';
 import {
-  expandCommandAlias,
   addCommandAlias,
   removeCommandAlias,
   listCommandAliases,
@@ -93,7 +92,7 @@ import { handleSshDockerTool } from './dispatchers/ssh-docker.js';
 import { handleSshFleet } from './dispatchers/ssh-fleet.js';
 import { handleSshPlanTool } from './dispatchers/ssh-plan.js';
 import {
-  fleetServers, fleetGroups, fleetAliases, fleetProfiles,
+  fleetServers, fleetGroups, fleetAliases, fleetCommandAlias, fleetProfiles,
   fleetHooks, fleetHistory, fleetConnections,
 } from './fleet-adapters.js';
 
@@ -620,9 +619,6 @@ registerToolConditional('ssh_health', {
     proc_action: z.enum(['list', 'kill', 'info']).optional().describe('Process operation (action: procs, default list)'),
     pid: z.number().optional().describe('Process id (action: procs, proc_action kill/info)'),
     signal: z.enum(['TERM', 'KILL', 'HUP', 'INT', 'QUIT']).optional().describe('Kill signal (action: procs)'),
-    sort_by: z.enum(['cpu', 'memory']).optional().describe('Process sort key (action: procs)'),
-    limit: z.number().optional().describe('Process row cap (action: procs)'),
-    filter: z.string().optional().describe('Process name/command filter (action: procs)'),
     alert_action: z.enum(['set', 'get', 'check']).optional().describe('Alert operation (action: alerts)'),
     cpu_threshold: z.number().min(0).max(100).optional().describe('CPU alert threshold percent (action: alerts)'),
     memory_threshold: z.number().min(0).max(100).optional().describe('Memory alert threshold percent (action: alerts)'),
@@ -651,12 +647,9 @@ registerToolConditional('ssh_db', {
     db_type: z.enum(['mysql', 'postgresql', 'mongodb']).optional().describe('Database engine'),
     database: z.string().optional().describe('Database name (actions: query, dump, import)'),
     query: z.string().optional().describe('SELECT-only SQL or Mongo find (action: query)'),
-    collection: z.string().optional().describe('MongoDB collection (action: query)'),
-    output_file: z.string().optional().describe('Dump output path (action: dump)'),
-    tables: z.array(z.string()).optional().describe('Specific tables (action: dump)'),
-    input_file: z.string().optional().describe('Import input path (action: import)'),
+    output_path: z.string().optional().describe('Dump output path (action: dump)'),
+    input_path: z.string().optional().describe('Import input path (action: import)'),
     gzip: z.boolean().optional().describe('Gzip the dump (action: dump)'),
-    drop: z.boolean().optional().describe('Drop existing before import, Mongo (action: import)'),
     user: z.string().optional().describe('Database user'),
     password: z.string().optional().describe('Database password'),
     host: z.string().optional().describe('Database host'),
@@ -760,7 +753,7 @@ registerToolConditional('ssh_net', {
     action: z.enum(['tunnel-open', 'tunnel-list', 'tunnel-close', 'port-test'])
       .describe('Network operation to perform'),
     tunnel_type: z.enum(['local', 'remote', 'dynamic']).optional().describe('Tunnel kind (action: tunnel-open)'),
-    local_host: z.string().optional().describe('Local host (action: tunnel-open)'),
+    bind: z.string().optional().describe('Local bind host (action: tunnel-open)'),
     local_port: z.number().optional().describe('Local port (action: tunnel-open)'),
     remote_host: z.string().optional().describe('Remote host (action: tunnel-open)'),
     remote_port: z.number().optional().describe('Remote port (action: tunnel-open)'),
@@ -789,18 +782,21 @@ registerToolConditional('ssh_fleet', {
     + 'groups, aliases, profiles, hooks, host keys, command history, '
     + 'connection pool.',
   inputSchema: {
-    action: z.enum(['servers', 'groups', 'aliases', 'profiles', 'hooks', 'keys', 'history', 'connections'])
+    action: z.enum(['servers', 'groups', 'aliases', 'command_alias', 'profiles', 'hooks', 'keys', 'history', 'connections'])
       .describe('Fleet/config entity to operate on'),
-    op: z.enum(['list', 'add', 'remove', 'update', 'status', 'reconnect', 'disconnect', 'cleanup', 'verify', 'accept', 'check', 'show'])
+    op: z.enum(['list', 'add', 'remove', 'update', 'suggest', 'status', 'reconnect', 'disconnect', 'cleanup', 'verify', 'accept', 'check', 'show'])
       .optional().describe('Sub-operation (default list/status)'),
     name: z.string().optional().describe('Entity name (group, alias, profile, hook)'),
     members: z.array(z.string()).optional().describe('Member server names (action: groups)'),
+    description: z.string().optional().describe('Group description (action: groups)'),
     target: z.string().optional().describe('Alias target server (action: aliases)'),
+    alias: z.string().optional().describe('Command alias name (action: command_alias)'),
+    command: z.string().optional().describe('Command body, or search term for op suggest (action: command_alias)'),
     server: z.string().optional().describe('Server name (actions: keys, connections, history)'),
     host: z.string().optional().describe('Raw host (action: keys)'),
     port: z.number().optional().describe('Port (action: keys)'),
-    auto_accept: z.boolean().optional().describe('Auto-accept new host keys (action: keys)'),
     limit: z.number().optional().describe('Row limit (action: history)'),
+    search: z.string().optional().describe('Command substring filter (action: history)'),
     format: FORMAT,
   },
 }, async (args) => handleSshFleet({
@@ -813,6 +809,9 @@ registerToolConditional('ssh_fleet', {
     }),
     aliases: ({ args: a }) => fleetAliases({
       args: a, deps: { listAliases, addAlias, removeAlias, loadServerConfig, resolveServerName },
+    }),
+    command_alias: ({ args: a }) => fleetCommandAlias({
+      args: a, deps: { listCommandAliases, addCommandAlias, removeCommandAlias, suggestAliases },
     }),
     profiles: ({ args: a }) => fleetProfiles({
       args: a, deps: { listProfiles, setActiveProfile, getActiveProfileName, loadProfile },

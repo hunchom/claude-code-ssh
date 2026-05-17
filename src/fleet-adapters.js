@@ -27,7 +27,6 @@ export async function fleetGroups({ args, deps }) {
     let result;
     let output = '';
     switch (op) {
-      case 'create':
       case 'add':
         if (!name) throw new Error('group name required');
         result = deps.createGroup(name, members || [], { description });
@@ -95,6 +94,43 @@ export async function fleetAliases({ args, deps }) {
     }
   } catch (e) {
     return mcp(`[err] Alias operation failed: ${e.message}`, true);
+  }
+}
+
+/** ssh_command_alias body. v4 op -> add/remove/list/suggest. */
+export async function fleetCommandAlias({ args, deps }) {
+  const { op, alias, command } = args || {};
+  try {
+    switch (op) {
+      case 'add': {
+        if (!alias || !command) throw new Error('alias and command required for add');
+        deps.addCommandAlias(alias, command);
+        return mcp(`[ok] Command alias created: ${alias} -> ${command}`);
+      }
+      case 'remove':
+        if (!alias) throw new Error('alias required for remove');
+        deps.removeCommandAlias(alias);
+        return mcp(`[ok] Command alias removed: ${alias}`);
+      case 'suggest': {
+        if (!command) throw new Error('command search term required for suggest');
+        const suggestions = deps.suggestAliases(command);
+        const text = suggestions.map(({ alias: al, command: c }) => `  ${al} -> ${c}`).join('\n');
+        return mcp(suggestions.length
+          ? `[tip] Suggested aliases for "${command}":\n${text}`
+          : `[tip] No aliases found matching "${command}"`);
+      }
+      case 'list':
+      default: {
+        const aliases = deps.listCommandAliases();
+        const text = aliases.map(({ alias: al, command: c, isFromProfile, isCustom }) =>
+          `  ${al} -> ${c}${isFromProfile ? ' (profile)' : ''}${isCustom ? ' (custom)' : ''}`).join('\n');
+        return mcp(aliases.length
+          ? `[log] Command aliases:\n${text}`
+          : '[log] No command aliases configured');
+      }
+    }
+  } catch (e) {
+    return mcp(`[err] Command alias operation failed: ${e.message}`, true);
   }
 }
 

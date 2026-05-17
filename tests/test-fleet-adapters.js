@@ -6,7 +6,7 @@
  */
 import assert from 'assert';
 import {
-  fleetServers, fleetGroups, fleetAliases, fleetProfiles,
+  fleetServers, fleetGroups, fleetAliases, fleetCommandAlias, fleetProfiles,
   fleetHooks, fleetHistory, fleetConnections,
 } from '../src/fleet-adapters.js';
 
@@ -50,9 +50,9 @@ await test('fleetGroups op=list returns an MCP response', async () => {
   assert(isMcp(r));
 });
 
-await test('fleetGroups op=create without name -> isError', async () => {
+await test('fleetGroups op=add without name -> isError', async () => {
   const r = await fleetGroups({
-    args: { op: 'create' },
+    args: { op: 'add' },
     deps: { listGroups: () => [], createGroup: () => ({}), updateGroup: () => ({}),
       deleteGroup: () => {}, addServersToGroup: () => ({}), removeServersFromGroup: () => ({}) },
   });
@@ -66,6 +66,47 @@ await test('fleetAliases op=list returns an MCP response', async () => {
       loadServerConfig: () => ({}), resolveServerName: () => 'web1' },
   });
   assert(isMcp(r));
+});
+
+await test('fleetCommandAlias op=list returns an MCP response', async () => {
+  const r = await fleetCommandAlias({
+    args: { op: 'list' },
+    deps: { listCommandAliases: () => [], addCommandAlias: () => true,
+      removeCommandAlias: () => true, suggestAliases: () => [] },
+  });
+  assert(isMcp(r));
+});
+
+await test('fleetCommandAlias op=add forwards alias+command to addCommandAlias', async () => {
+  const calls = [];
+  const r = await fleetCommandAlias({
+    args: { op: 'add', alias: 'gs', command: 'git status' },
+    deps: { listCommandAliases: () => [], addCommandAlias: (a, c) => { calls.push([a, c]); return true; },
+      removeCommandAlias: () => true, suggestAliases: () => [] },
+  });
+  assert(isMcp(r));
+  assert.deepStrictEqual(calls[0], ['gs', 'git status']);
+  assert(r.content[0].text.includes('gs'));
+});
+
+await test('fleetCommandAlias op=add without command -> isError', async () => {
+  const r = await fleetCommandAlias({
+    args: { op: 'add', alias: 'gs' },
+    deps: { listCommandAliases: () => [], addCommandAlias: () => true,
+      removeCommandAlias: () => true, suggestAliases: () => [] },
+  });
+  assert.strictEqual(r.isError, true);
+});
+
+await test('fleetCommandAlias op=suggest forwards search term to suggestAliases', async () => {
+  const calls = [];
+  const r = await fleetCommandAlias({
+    args: { op: 'suggest', command: 'git' },
+    deps: { listCommandAliases: () => [], addCommandAlias: () => true,
+      removeCommandAlias: () => true, suggestAliases: (c) => { calls.push(c); return []; } },
+  });
+  assert(isMcp(r));
+  assert.strictEqual(calls[0], 'git');
 });
 
 await test('fleetProfiles op=list returns an MCP response', async () => {
@@ -91,6 +132,35 @@ await test('fleetHistory returns an MCP response from deps.logger', async () => 
     deps: { logger: { getHistory: () => [] } },
   });
   assert(isMcp(r));
+});
+
+await test('fleetHistory search filters command history', async () => {
+  const rows = [
+    { server: 's', command: 'git status', success: true },
+    { server: 's', command: 'ls -la', success: true },
+  ];
+  const r = await fleetHistory({
+    args: { limit: 10, search: 'git' },
+    deps: { logger: { getHistory: () => rows } },
+  });
+  assert(isMcp(r));
+  assert(r.content[0].text.includes('git status'), 'matched row kept');
+  assert(!r.content[0].text.includes('ls -la'), 'unmatched row dropped');
+});
+
+await test('fleetGroups op=add forwards description to createGroup', async () => {
+  const calls = [];
+  const r = await fleetGroups({
+    args: { op: 'add', name: 'web', description: 'frontend tier' },
+    deps: {
+      listGroups: () => [],
+      createGroup: (n, m, opts) => { calls.push(opts); return { servers: [] }; },
+      updateGroup: () => ({}), deleteGroup: () => {},
+      addServersToGroup: () => ({}), removeServersFromGroup: () => ({}),
+    },
+  });
+  assert(isMcp(r));
+  assert.strictEqual(calls[0].description, 'frontend tier');
 });
 
 await test('fleetConnections op=status returns an MCP response', async () => {

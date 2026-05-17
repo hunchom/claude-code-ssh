@@ -10,16 +10,16 @@
  * time (Part 3) as adapter functions. `keys` is the lone modular handler
  * (handleSshKeyManage, cfg ctx kind); v4 `op` maps to its `action` arg.
  *
- * handlers (injected): { servers, groups, aliases, profiles, hooks, keys,
- *                        history, connections }. Each is async ({ args } or a
- *                        full ctx object) -> MCP response.
+ * handlers (injected): { servers, groups, aliases, command_alias, profiles,
+ *                        hooks, keys, history, connections }. Each is async
+ *                        ({ args } or a full ctx object) -> MCP response.
  */
 
 import { fail, toMcp } from '../structured-result.js';
 import { makeCtx } from './ctx-factory.js';
 
 const ACTIONS = new Set([
-  'servers', 'groups', 'aliases', 'profiles',
+  'servers', 'groups', 'aliases', 'command_alias', 'profiles',
   'hooks', 'keys', 'history', 'connections',
 ]);
 
@@ -51,17 +51,20 @@ export async function handleSshFleet({ deps, handlers, args } = {}) {
     }));
   }
 
-  // servers / groups / aliases / profiles / hooks / history / connections:
-  // adapter functions take a plain { args } object.
+  // servers / groups / aliases / command_alias / profiles / hooks / history /
+  // connections: adapter functions take a plain { args } object.
   return handlers[action]({
     args: {
       op: a.op,
       name: a.name,
       members: a.members,
+      description: a.description,
       alias: a.alias,
+      command: a.command,
       target: a.target,
       server: a.server,
       limit: a.limit,
+      search: a.search,
       format: a.format,
     },
   });
