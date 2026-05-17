@@ -9,7 +9,8 @@
  * actions handled here: exec, sudo, fleet, script, detach, job-status,
  * job-kill. exec/sudo/fleet delegate to src/tools/exec-tools.js handlers;
  * script/detach/job-* have no handler -- the dispatcher execs them directly
- * via streamExecCommand, like handleSshExecute.
+ * via streamExecCommand with raw:true (no OS timeout-wrapper), unlike
+ * handleSshExecute's non-raw wrapped path.
  *
  * handlers (injected): { execute, executeSudo, executeGroup }.
  */
