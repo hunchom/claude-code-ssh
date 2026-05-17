@@ -204,3 +204,20 @@ export function makeMcpContent(result, { format = 'markdown' } = {}) {
   }
   return [{ type: 'text', text: renderMarkdown(result) }];
 }
+
+/**
+ * Render the single v4 header line. Grammar:
+ *   <marker> <tool> · <action> · <server> · <status> · <duration>
+ * Absent slots collapse; present slots never reorder. Used by every v4 tool.
+ */
+export function renderHeader({
+  marker = '[ok]', tool, action, server, status, durationMs,
+} = {}) {
+  const slots = [];
+  if (tool) slots.push(String(tool));
+  if (action) slots.push(String(action));
+  if (server) slots.push(String(server));
+  if (status != null && status !== '') slots.push(String(status));
+  if (durationMs != null) slots.push(formatDuration(durationMs));
+  return `${marker} ${slots.join(' · ')}`;
+}
