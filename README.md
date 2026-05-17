@@ -241,7 +241,7 @@ What this doesn't do, today, honestly:
 ## Testing
 
 ```bash
-npm test       # 1028 tests
+npm test       # 1031 tests
 ```
 
 ## Layout
