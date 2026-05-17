@@ -629,15 +629,26 @@ export async function handleSshHealthCheck({ getConnection, args }) {
 // handleSshMonitor -- type-scoped slice
 // --------------------------------------------------------------------------
 
-export async function handleSshMonitor({ getConnection, args }) {
+// _healthCheck: injectable delegate, defaults to the real aggregator. Tests
+// override it to drive the overview parse-guard; production never passes it.
+export async function handleSshMonitor({ getConnection, args, _healthCheck = handleSshHealthCheck }) {
   const { server, type = 'overview', format = 'markdown' } = args || {};
   const startedAt = Date.now();
 
   // overview = delegate to health_check
   if (type === 'overview') {
-    const hc = await handleSshHealthCheck({ getConnection, args: { server, format: 'json' } });
+    const hc = await _healthCheck({ getConnection, args: { server, format: 'json' } });
     if (hc.isError) return hc;
-    const parsed = JSON.parse(hc.content[0].text);
+    // health_check is invoked with format:'json' so content[0].text is JSON
+    // today -- guard anyway so a future shape change degrades, not throws.
+    let parsed;
+    try {
+      parsed = JSON.parse(hc.content[0].text);
+    } catch (_) {
+      return toMcp(fail('ssh_monitor',
+        'overview unavailable: health_check returned an unparseable payload', { server }),
+      { format, renderer: renderMonitor });
+    }
     if (!parsed.success) {
       return toMcp(fail('ssh_monitor', parsed.error || 'failed', { server }), { format, renderer: renderMonitor });
     }
