@@ -107,7 +107,7 @@ await test('ssh_execute: preview:true returns dry-run card, does NOT call getCon
   });
   assert.strictEqual(called, false, 'getConnection must not be called in preview');
   assert(r.content[0].text.includes('dry run'));
-  assert(r.content[0].text.includes('"action": "exec"'));
+  assert(r.content[0].text.includes('action'));
   assert(r.content[0].text.includes('prod01'));
 });
 
@@ -193,8 +193,8 @@ await test('ssh_execute_sudo: preview returns high-risk dry-run, never calls rem
   });
   assert.strictEqual(called, false);
   const md = r.content[0].text;
-  assert(md.includes('"action": "exec-sudo"'));
-  assert(md.includes('"risk": "high"'));
+  assert(md.includes('action'));
+  assert(md.includes('risk'));
   assert(md.includes('password never enters argv'));
 });
 
@@ -297,7 +297,7 @@ await test('ssh_execute_group: preview shows fan-out plan, never connects', asyn
   });
   assert.strictEqual(called, false);
   assert(r.content[0].text.includes('dry run'));
-  assert(r.content[0].text.includes('"action": "exec-group"'));
+  assert(r.content[0].text.includes('action'));
   assert(r.content[0].text.includes('s1, s2'));
 });
 

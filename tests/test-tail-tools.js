@@ -245,7 +245,7 @@ await test('handleSshTailStart: markdown render starts with ssh_tail_start heade
     getConnection: async () => client,
     args: { server: 's', file: '/f' },
   });
-  assert(r.content[0].text.startsWith('[ok] **ssh_tail_start**'),
+  assert(r.content[0].text.startsWith('[ok] ssh_tail_start'),
     `got: ${r.content[0].text.slice(0, 80)}`);
   const parsed = JSON.parse((await handleSshTailStart({
     getConnection: async () => client,

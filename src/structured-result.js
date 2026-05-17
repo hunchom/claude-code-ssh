@@ -8,7 +8,7 @@
  * Tools provide a small renderer per-type for the markdown face.
  */
 
-import { formatBytes, formatDuration } from './output-formatter.js';
+import { formatBytes, renderHeader, renderKV, indentBody } from './output-formatter.js';
 
 /**
  * Build a success result.
@@ -116,53 +116,48 @@ export function toMcp(result, { format = 'markdown', renderer } = {}) {
 
 /**
  * Default markdown renderer. Tools override for richer cards.
- * Layout:
- *   [ok] **<tool>** | `server` | <duration?>
- *   <data-as-compact-json>
- *   > elided: ... (if meta.truncated)
+ * Header line via renderHeader; data as an indented KV block; no fences.
  */
 export function defaultRender(result) {
   const { success, tool, server, data, meta, error } = result;
-  const marker = success ? '[ok]' : '[err]';
-  const badge = success ? '' : ' | **failed**';
-  const duration = meta && meta.duration_ms != null
-    ? ` | \`${formatDuration(meta.duration_ms)}\``
-    : '';
-  const srv = server ? ` | \`${server}\`` : '';
-  const header = `${marker} **${tool}**${srv}${duration}${badge}`;
-
+  const header = renderHeader({
+    marker: success ? '[ok]' : '[err]',
+    tool,
+    server,
+    status: success ? null : 'failed',
+    durationMs: meta && meta.duration_ms,
+  });
   const lines = [header];
 
   if (!success) {
-    lines.push('');
-    lines.push('```text');
-    lines.push(String(error || 'unknown error'));
-    lines.push('```');
+    lines.push(indentBody(String(error || 'unknown error')));
     return lines.join('\n');
   }
 
   if (data && data.preview) {
-    lines.push('');
-    lines.push('> **dry run** -- nothing executed');
-    lines.push('');
-    lines.push('```json');
-    lines.push(JSON.stringify(data.plan, null, 2));
-    lines.push('```');
+    lines.push('  dry run -- nothing executed');
+    lines.push(indentBody(renderKV(kvRows(data.plan))));
     return lines.join('\n');
   }
 
   if (data != null) {
-    lines.push('');
-    lines.push('```json');
-    lines.push(JSON.stringify(data, null, 2));
-    lines.push('```');
+    lines.push(indentBody(renderKV(kvRows(data))));
   }
 
-  if (meta && (meta.truncated_bytes || meta.elided_bytes)) {
-    const b = meta.truncated_bytes || meta.elided_bytes;
-    lines.push('');
-    lines.push(`> elided: ${formatBytes(b)}`);
-  }
+  const elided = meta && (meta.truncated_bytes || meta.elided_bytes);
+  if (elided) lines.push(indentBody(`elided: ${formatBytes(elided)}`));
 
   return lines.join('\n');
+}
+
+/**
+ * Flatten an object to [key, value] rows for renderKV. Nested objects/arrays
+ * collapse to compact JSON; non-objects render as a single `value` row.
+ */
+function kvRows(obj) {
+  if (obj == null || typeof obj !== 'object') return [['value', String(obj)]];
+  return Object.entries(obj).map(([k, v]) => [
+    k,
+    v != null && typeof v === 'object' ? JSON.stringify(v) : String(v),
+  ]);
 }

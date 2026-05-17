@@ -48,7 +48,7 @@ import os from 'os';
 import path from 'path';
 import { StringDecoder } from 'string_decoder';
 
-import { stripAnsi, formatDuration } from '../output-formatter.js';
+import { stripAnsi, formatDuration, renderHeader } from '../output-formatter.js';
 import { ok, fail, toMcp, defaultRender } from '../structured-result.js';
 
 // --------------------------------------------------------------------------
@@ -541,7 +541,7 @@ function renderSessionStart(result) {
   if (!result.success) return defaultRender(result);
   const d = result.data;
   const lines = [];
-  lines.push(`[ok] **ssh_session_start** | \`${d.server}\` | \`${result.meta?.duration_ms != null ? formatDuration(result.meta.duration_ms) : ''}\``);
+  lines.push(renderHeader({ marker: '[ok]', tool: 'ssh_session_start', server: d.server, durationMs: result.meta?.duration_ms }));
   lines.push('');
   lines.push(`- **session_id**: \`${d.session_id}\``);
   lines.push(`- **shell**: \`${d.shell}\``);

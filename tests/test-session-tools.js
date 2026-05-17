@@ -349,7 +349,7 @@ await test('session_start: markdown render shows session_id + cwd + user', async
     args: { server: 'dev', format: 'markdown' },
   });
   const md = r.content[0].text;
-  assert(md.startsWith('[ok] **ssh_session_start**'), `got: ${md.slice(0, 80)}`);
+  assert(md.startsWith('[ok] ssh_session_start'), `got: ${md.slice(0, 80)}`);
   assert(md.includes('session_id'));
   assert(md.includes('/opt/app'));
   assert(md.includes('bob'));

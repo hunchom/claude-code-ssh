@@ -122,36 +122,39 @@ test('toMcp custom renderer is honored', () => {
 });
 
 // --- defaultRender -------------------------------------------------------
-test('defaultRender: success card has [ok] marker, tool name, server, duration', () => {
-  const md = defaultRender(ok('ssh_execute', { x: 1 }, { server: 'prod01', duration_ms: 1234 }));
-  assert(md.startsWith('[ok] **ssh_execute**'));
-  assert(md.includes('`prod01`'));
-  assert(md.includes('`1.23 s`'));
-  assert(md.includes('```json'));
+test('defaultRender: success uses renderHeader, KV body, no fences', () => {
+  const md = defaultRender(ok('ssh_execute', { rows: 3, kind: 'mysql' },
+    { server: 'prod01', duration_ms: 1234 }));
+  assert.strictEqual(md.split('\n')[0], '[ok] ssh_execute · prod01 · 1.23 s');
+  assert(!md.includes('```'), 'no fenced block');
+  assert(!md.includes('**'), 'no markdown bold');
+  assert(md.includes('rows'), 'data key present');
+  assert(md.includes('mysql'), 'data value present');
 });
 
-test('defaultRender: failure uses [err] marker and "failed" badge', () => {
+test('defaultRender: failure uses [err] marker and indented error', () => {
   const md = defaultRender(fail('ssh_execute', 'boom'));
-  assert(md.startsWith('[err] **ssh_execute**'));
-  assert(md.includes('**failed**'));
-  assert(md.includes('boom'));
+  assert.strictEqual(md.split('\n')[0], '[err] ssh_execute · failed');
+  assert(md.includes('\n  boom'), 'error indented 2 spaces');
 });
 
-test('defaultRender: preview renders "dry run" blockquote and plan JSON', () => {
+test('defaultRender: preview renders plain "dry run" line and KV plan', () => {
   const md = defaultRender(preview('ssh_upload', { action: 'upload', target: 'a' }));
-  assert(md.includes('> **dry run**'));
-  assert(md.includes('"action": "upload"'));
+  assert(md.includes('dry run -- nothing executed'));
+  assert(!md.includes('```'), 'no fenced JSON');
+  assert(md.includes('action'));
+  assert(md.includes('upload'));
 });
 
-test('defaultRender: omits duration when not set', () => {
+test('defaultRender: omits duration when meta has none', () => {
   const md = defaultRender(ok('t', {}));
-  assert(!md.includes(' s`'), 'no seconds segment');
-  assert(!md.includes(' ms`'), 'no ms segment');
+  assert.strictEqual(md.split('\n')[0], '[ok] t');
 });
 
-test('defaultRender: elided bytes footer rendered', () => {
+test('defaultRender: elided bytes footer rendered plain', () => {
   const md = defaultRender(ok('t', { x: 1 }, { elided_bytes: 5120 }));
-  assert(md.includes('> elided: 5.0 KB'));
+  assert(md.includes('elided: 5.0 KB'));
+  assert(!md.includes('>'), 'no blockquote marker');
 });
 
 // --- buildPlan -----------------------------------------------------------
@@ -189,7 +192,8 @@ test('maybePreview returns MCP response when preview=true', () => {
   assert(r);
   assert.strictEqual(r.isError, false);
   assert(r.content[0].text.includes('dry run'));
-  assert(r.content[0].text.includes('"action": "upload"'));
+  assert(r.content[0].text.includes('action'));
+  assert(r.content[0].text.includes('upload'));
 });
 
 // --- renderPlan ----------------------------------------------------------
