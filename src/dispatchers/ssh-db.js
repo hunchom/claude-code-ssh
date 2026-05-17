@@ -49,21 +49,23 @@ export async function handleSshDb({ deps, handlers, args } = {}) {
   switch (action) {
     case 'query':
       return handlers.query(makeCtx('conn', deps, {
-        ...creds(a), query: a.query, collection: a.collection,
+        ...creds(a), query: a.query,
       }));
 
     case 'list':
       return handlers.list(makeCtx('conn', deps, creds(a)));
 
     case 'dump':
+      // handler destructures output_path, not output_file
       return handlers.dump(makeCtx('conn', deps, {
-        ...creds(a), output_file: a.output_file, gzip: a.gzip, tables: a.tables,
+        ...creds(a), output_path: a.output_path, gzip: a.gzip, preview: a.preview,
       }));
 
     case 'import':
     default:
+      // handler destructures input_path, not input_file
       return handlers.import(makeCtx('conn', deps, {
-        ...creds(a), input_file: a.input_file, drop: a.drop, preview: a.preview,
+        ...creds(a), input_path: a.input_path, preview: a.preview,
       }));
   }
 }

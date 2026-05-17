@@ -59,20 +59,20 @@ await test('dump routes to handlers.dump', async () => {
   const dump = spy();
   await handleSshDb({
     deps: DEPS, handlers: { dump },
-    args: { server: 's', action: 'dump', database: 'app', output_file: '/tmp/a.sql' },
+    args: { server: 's', action: 'dump', database: 'app', output_path: '/tmp/a.sql' },
   });
   assert.strictEqual(dump.calls.length, 1);
-  assert.strictEqual(dump.calls[0].args.output_file, '/tmp/a.sql');
+  assert.strictEqual(dump.calls[0].args.output_path, '/tmp/a.sql');
 });
 
 await test('import routes to handlers.import, forwards preview', async () => {
   const importH = spy();
   await handleSshDb({
     deps: DEPS, handlers: { import: importH },
-    args: { server: 's', action: 'import', database: 'app', input_file: '/tmp/a.sql', preview: true },
+    args: { server: 's', action: 'import', database: 'app', input_path: '/tmp/a.sql', preview: true },
   });
   assert.strictEqual(importH.calls.length, 1);
-  assert.strictEqual(importH.calls[0].args.input_file, '/tmp/a.sql');
+  assert.strictEqual(importH.calls[0].args.input_path, '/tmp/a.sql');
   assert.strictEqual(importH.calls[0].args.preview, true);
 });
 

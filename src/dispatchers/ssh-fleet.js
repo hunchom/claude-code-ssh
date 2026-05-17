@@ -34,14 +34,19 @@ export async function handleSshFleet({ deps, handlers, args } = {}) {
     return toMcp(fail('ssh_fleet', `unknown action "${action}"`, { server: a.server ?? null }));
   }
 
+  // No requireArgs here: per-action required-arg validation is delegated to
+  // each inline fleet adapter (and to handleSshKeyManage for keys). Omission
+  // is intentional -- fleet sub-args are op-shaped, not a flat required map.
+
   if (action === 'keys') {
-    // handleSshKeyManage destructures `ctx` with getServerConfig + args.
+    // handleSshKeyManage destructures `ctx` with getServerConfig + args;
+    // it reads `preview`, not autoAccept.
     return handlers.keys(makeCtx('cfg', deps, {
       action: a.op,
       server: a.server,
       host: a.host,
       port: a.port,
-      autoAccept: a.auto_accept,
+      preview: a.preview,
       format: a.format,
     }));
   }

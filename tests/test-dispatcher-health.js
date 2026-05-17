@@ -58,11 +58,10 @@ await test('procs routes to handlers.processManager, passing proc_action -> acti
   const processManager = spy();
   await handleSshHealth({
     deps: DEPS, handlers: { processManager },
-    args: { server: 's', action: 'procs', proc_action: 'list', limit: 10 },
+    args: { server: 's', action: 'procs', proc_action: 'list' },
   });
   assert.strictEqual(processManager.calls.length, 1);
   assert.strictEqual(processManager.calls[0].args.action, 'list');
-  assert.strictEqual(processManager.calls[0].args.limit, 10);
 });
 
 await test('procs defaults proc_action to "list" when omitted', async () => {

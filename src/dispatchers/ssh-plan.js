@@ -61,6 +61,9 @@ export async function handleSshPlanTool({ deps, handlers, planFn, args } = {}) {
   const a = args || {};
   const { action } = a;
 
+  if (!action) {
+    return toMcp(fail('ssh_plan', 'action is required', { server: null }));
+  }
   if (action !== 'run' && action !== 'approve') {
     return toMcp(fail('ssh_plan', `unknown action "${action}"`, { server: null }));
   }

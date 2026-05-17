@@ -38,7 +38,7 @@ export async function handleSshNet({ deps, handlers, args } = {}) {
       return handlers.tunnelCreate(makeCtx('conn', deps, {
         server: a.server,
         type: a.tunnel_type,
-        local_host: a.local_host,
+        bind: a.bind, // handler destructures `bind`, not local_host
         local_port: a.local_port,
         remote_host: a.remote_host,
         remote_port: a.remote_port,
@@ -53,7 +53,7 @@ export async function handleSshNet({ deps, handlers, args } = {}) {
 
     case 'tunnel-close':
       return handlers.tunnelClose(makeCtx('args', deps, {
-        tunnel_id: a.tunnel_id, server: a.server, format: a.format,
+        tunnel_id: a.tunnel_id, format: a.format,
       }));
 
     case 'port-test':

@@ -34,32 +34,35 @@ export async function handleSshBackup({ deps, handlers, args } = {}) {
 
   switch (action) {
     case 'create':
+      // handler ignores name/exclude -- dropped
       return handlers.create(makeCtx('conn', deps, {
-        server: a.server, backup_type: a.backup_type, name: a.name,
-        database: a.database, paths: a.paths, exclude: a.exclude,
+        server: a.server, backup_type: a.backup_type,
+        database: a.database, paths: a.paths,
         backup_dir: a.backup_dir, gzip: a.gzip, verify: a.verify,
         preview: a.preview, format: a.format,
       }));
 
     case 'list':
+      // handler ignores backup_type -- dropped
       return handlers.list(makeCtx('conn', deps, {
-        server: a.server, backup_type: a.backup_type, backup_dir: a.backup_dir,
-        format: a.format,
+        server: a.server, backup_dir: a.backup_dir, format: a.format,
       }));
 
     case 'restore':
+      // handler ignores database -- dropped
       return handlers.restore(makeCtx('conn', deps, {
-        server: a.server, backup_id: a.backup_id, database: a.database,
+        server: a.server, backup_id: a.backup_id,
         target_path: a.target_path, backup_dir: a.backup_dir, verify: a.verify,
         preview: a.preview, format: a.format,
       }));
 
     case 'schedule':
     default:
+      // handler ignores name/retention -- dropped
       return handlers.schedule(makeCtx('conn', deps, {
         server: a.server, cron: a.cron, backup_type: a.backup_type,
-        name: a.name, database: a.database, paths: a.paths,
-        retention: a.retention, preview: a.preview, format: a.format,
+        database: a.database, paths: a.paths,
+        preview: a.preview, format: a.format,
       }));
   }
 }

@@ -56,9 +56,6 @@ export async function handleSshHealth({ deps, handlers, args } = {}) {
         action: a.proc_action || 'list',
         pid: a.pid,
         signal: a.signal,
-        sort_by: a.sort_by,
-        limit: a.limit,
-        filter: a.filter,
         preview: a.preview,
         format: a.format,
       }));
