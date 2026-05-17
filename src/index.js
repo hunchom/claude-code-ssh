@@ -499,11 +499,21 @@ registerToolConditional('ssh_run', {
     + 'handshake) and output is bounded and compressed.',
   inputSchema: {
     server: z.string().describe('Server name from configuration'),
-    action: z.enum(['exec', 'sudo', 'fleet']).describe('exec a command, sudo a command, or fleet-exec across a group'),
-    command: z.string().optional().describe('Command to run (actions: exec, sudo)'),
+    action: z.enum(['exec', 'sudo', 'fleet', 'script', 'detach', 'job-status', 'job-kill'])
+      .describe('exec/sudo a command, fleet-exec across a group, run a script '
+        + 'of commands, detach a long job, or check/kill a detached job'),
+    command: z.string().optional().describe('Command to run (actions: exec, sudo, detach)'),
+    commands: z.array(z.string()).optional()
+      .describe('Commands run in one shell with shared state (action: script)'),
+    isolate: z.boolean().optional()
+      .describe('Run each script command in its own shell -- no shared cd/env (action: script)'),
     cwd: z.string().optional().describe('Working directory (actions: exec, sudo, fleet)'),
     group: z.string().optional().describe('Server group name (action: fleet)'),
     sudo_password: z.string().optional().describe('Sudo password, streamed via stdin (action: sudo)'),
+    job_id: z.string().optional()
+      .describe('Detached job id (actions: detach to set, job-status/job-kill to target)'),
+    since_offset: z.number().optional()
+      .describe('Log byte offset for an incremental read; pass back the prior log_size (action: job-status)'),
     timeout: z.number().optional().describe('Command timeout in ms (actions: exec, sudo)'),
     raw: RAW,
     format: FORMAT,
