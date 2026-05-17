@@ -40,12 +40,16 @@ await test('every annotated tool is actually registered (no dangling entries)', 
     `annotations defined for unknown tools: ${dangling.join(', ')}`);
 });
 
+await test('exactly 12 tools are annotated', () => {
+  assert.strictEqual(Object.keys(TOOL_ANNOTATIONS).length, 12,
+    `expected 12 annotated tools, got ${Object.keys(TOOL_ANNOTATIONS).length}`);
+});
+
 await test('every annotated tool has a human title', () => {
   const missing = Object.entries(TOOL_ANNOTATIONS)
     .filter(([, v]) => !v.title || typeof v.title !== 'string')
     .map(([k]) => k);
-  assert.strictEqual(missing.length, 0,
-    `tools missing title: ${missing.join(', ')}`);
+  assert.strictEqual(missing.length, 0, `tools missing title: ${missing.join(', ')}`);
 });
 
 await test('readOnlyHint and destructiveHint are never both true (spec invariant)', () => {
@@ -56,60 +60,54 @@ await test('readOnlyHint and destructiveHint are never both true (spec invariant
     `readOnly + destructive both set on: ${conflicts.join(', ')}`);
 });
 
-await test('obviously-destructive tools are marked destructiveHint', () => {
-  const expected = ['ssh_backup_restore', 'ssh_db_import', 'ssh_deploy', 'ssh_deploy_artifact',
-    'ssh_execute_sudo', 'ssh_backup_schedule', 'ssh_edit', 'ssh_plan'];
+await test('mutation-capable fat tools are marked destructiveHint', () => {
+  const expected = ['ssh_run', 'ssh_file', 'ssh_service', 'ssh_health',
+    'ssh_db', 'ssh_backup', 'ssh_docker', 'ssh_session', 'ssh_net', 'ssh_plan'];
   for (const name of expected) {
     assert.strictEqual(TOOL_ANNOTATIONS[name]?.annotations?.destructiveHint, true,
       `${name} should be destructiveHint:true`);
   }
 });
 
-await test('obviously read-only tools are marked readOnlyHint', () => {
-  const expected = ['ssh_list_servers', 'ssh_health_check', 'ssh_cat', 'ssh_db_list',
-    'ssh_db_query', 'ssh_tail', 'ssh_tail_read', 'ssh_backup_list',
-    'ssh_connection_status', 'ssh_history', 'ssh_session_list'];
-  for (const name of expected) {
+await test('purely-inspecting fat tools are marked readOnlyHint', () => {
+  for (const name of ['ssh_logs', 'ssh_fleet']) {
     assert.strictEqual(TOOL_ANNOTATIONS[name]?.annotations?.readOnlyHint, true,
       `${name} should be readOnlyHint:true`);
   }
 });
 
+await test('every fat tool declares openWorldHint (acts on remote hosts)', () => {
+  const missing = Object.entries(TOOL_ANNOTATIONS)
+    .filter(([, v]) => v.annotations?.openWorldHint !== true)
+    .map(([k]) => k);
+  assert.strictEqual(missing.length, 0,
+    `tools missing openWorldHint: ${missing.join(', ')}`);
+});
+
 await test('withAnnotations() merges title + annotations into schema', () => {
-  const base = { description: 'x', inputSchema: {} };
-  const out = withAnnotations('ssh_list_servers', base);
-  assert.strictEqual(out.title, 'List Configured Servers');
-  assert.strictEqual(out.annotations.readOnlyHint, true);
-  assert.strictEqual(out.annotations.idempotentHint, true);
-  // Caller-provided fields preserved
+  const out = withAnnotations('ssh_run', { description: 'x', inputSchema: {} });
+  assert.strictEqual(typeof out.title, 'string');
+  assert(out.title.length > 0);
+  assert.strictEqual(out.annotations.destructiveHint, true);
   assert.strictEqual(out.description, 'x');
 });
 
 await test('withAnnotations() leaves unknown tools untouched', () => {
   const base = { description: 'x', inputSchema: {} };
-  const out = withAnnotations('ssh_nonexistent_tool', base);
-  assert.deepStrictEqual(out, base);
+  assert.deepStrictEqual(withAnnotations('ssh_nonexistent_tool', base), base);
 });
 
 await test('withAnnotations() does not clobber a caller-provided title', () => {
-  const base = { title: 'Custom', description: 'x', inputSchema: {} };
-  const out = withAnnotations('ssh_execute', base);
+  const out = withAnnotations('ssh_run', { title: 'Custom', description: 'x', inputSchema: {} });
   assert.strictEqual(out.title, 'Custom');
 });
 
 await test('withAnnotations() caller-provided annotations override map defaults', () => {
-  // ssh_list_servers is annotated readOnlyHint:true, idempotentHint:true.
-  // If a future caller explicitly flips readOnlyHint off, that must win.
-  const base = {
-    description: 'x',
-    inputSchema: {},
-    annotations: { readOnlyHint: false },
-  };
-  const out = withAnnotations('ssh_list_servers', base);
-  assert.strictEqual(out.annotations.readOnlyHint, false,
-    'caller override must beat map default');
-  assert.strictEqual(out.annotations.idempotentHint, true,
-    'non-overridden map defaults still apply');
+  const out = withAnnotations('ssh_logs', {
+    description: 'x', inputSchema: {}, annotations: { readOnlyHint: false },
+  });
+  assert.strictEqual(out.annotations.readOnlyHint, false, 'caller override must beat map default');
+  assert.strictEqual(out.annotations.openWorldHint, true, 'non-overridden defaults still apply');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
