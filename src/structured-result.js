@@ -92,12 +92,9 @@ function strip(obj, keys) {
 
 /**
  * Package a structured result as MCP content.
- * @param {Object} result       from ok() / fail() / preview()
- * @param {Object} [opts]
- * @param {'markdown'|'json'|'both'} [opts.format='markdown']
- * @param {Function} [opts.renderer]   (result) => string. Defaults to defaultRender.
+ * format: "compact" (default) | "markdown" | "json" | "both".
  */
-export function toMcp(result, { format = 'markdown', renderer } = {}) {
+export function toMcp(result, { format = 'compact', renderer } = {}) {
   const md = (renderer || defaultRender)(result);
   if (format === 'json') {
     return { content: [{ type: 'text', text: JSON.stringify(result) }], isError: !result.success };

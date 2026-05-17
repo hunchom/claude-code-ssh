@@ -95,11 +95,13 @@ test('preview: data carries preview:true + plan', () => {
 });
 
 // --- toMcp format variants -----------------------------------------------
-test('toMcp markdown: wraps in content[0].text, isError reflects success', () => {
+test('toMcp compact (default): single rendered text block', () => {
   const r = toMcp(ok('t', { x: 1 }));
   assert.strictEqual(r.content.length, 1);
   assert.strictEqual(r.content[0].type, 'text');
   assert.strictEqual(r.isError, false);
+  assert(r.content[0].text.startsWith('[ok] t'), 'rendered, not raw JSON');
+  assert(!r.content[0].text.includes('```'), 'no fences');
 });
 
 test('toMcp json: single JSON block, isError:true on fail', () => {

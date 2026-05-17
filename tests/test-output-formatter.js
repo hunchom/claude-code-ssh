@@ -285,14 +285,15 @@ test('renderMarkdown: truncation shows both streams when both elided', () => {
 });
 
 // --- makeMcpContent ------------------------------------------------------
-test('makeMcpContent: markdown (default)', () => {
+test('makeMcpContent: compact is the default format', () => {
   const r = formatExecResult({
     server: 's', command: 'c', stdout: 'out', stderr: '', code: 0, durationMs: 10,
   });
   const c = makeMcpContent(r);
   assert.strictEqual(c.length, 1);
   assert.strictEqual(c[0].type, 'text');
-  assert(c[0].text.includes('ssh_execute'), 'is markdown');
+  assert(c[0].text.startsWith('[ok] ssh_execute'), 'compact render is the default');
+  assert(!c[0].text.includes('```'), 'no fences in default output');
 });
 
 test('makeMcpContent: json is parseable and round-trips the wire shape', () => {

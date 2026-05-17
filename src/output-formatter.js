@@ -168,9 +168,11 @@ export function renderMarkdown(r) {
 
 /**
  * Build the MCP `content` array from an ExecResult.
- * format: "markdown" (default, human-friendly) | "json" (raw wire schema) | "both".
+ * format: "compact" (default) | "markdown" | "json" | "both".
+ * compact and markdown both use renderMarkdown -- the renderer is already
+ * fence-free and compact; the names are kept distinct for caller intent.
  */
-export function makeMcpContent(result, { format = 'markdown' } = {}) {
+export function makeMcpContent(result, { format = 'compact' } = {}) {
   if (format === 'json') {
     return [{ type: 'text', text: JSON.stringify(result) }];
   }
