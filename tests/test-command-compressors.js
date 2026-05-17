@@ -4,7 +4,7 @@
  * Run: node tests/test-command-compressors.js
  */
 import assert from 'assert';
-import { compress, compressLs } from '../src/command-compressors.js';
+import { compress, compressLs, compressPs } from '../src/command-compressors.js';
 
 let passed = 0;
 let failed = 0;
@@ -62,6 +62,35 @@ test('compress: ls with nothing to drop adds no footer', () => {
 test('compress: empty / nullish text is safe', () => {
   assert.strictEqual(compress('ls', ''), '');
   assert.strictEqual(compress('ls', null), '');
+});
+
+// --- compressPs ----------------------------------------------------------
+test('compressPs: at or under the cap -> unchanged, dropped 0', () => {
+  const out = compressPs('HEADER\nrow1\nrow2');
+  assert.strictEqual(out.text, 'HEADER\nrow1\nrow2');
+  assert.strictEqual(out.dropped, 0);
+});
+
+test('compressPs: over the cap keeps header + 15 rows, reports dropped', () => {
+  const rows = Array.from({ length: 30 }, (_, i) => `row${i}`).join('\n');
+  const out = compressPs('HEADER\n' + rows);
+  const lines = out.text.split('\n');
+  assert.strictEqual(lines.length, 16, 'header + 15 rows');
+  assert.strictEqual(lines[0], 'HEADER');
+  assert.strictEqual(lines[15], 'row14', 'kept rows are the top of the list');
+  assert.strictEqual(out.dropped, 15);
+});
+
+test('compress: ps command routes to compressPs with footer', () => {
+  const rows = Array.from({ length: 30 }, (_, i) => `r${i}`).join('\n');
+  const r = compress('ps -eo pid,args', 'HEAD\n' + rows);
+  assert(r.includes('15 lines compressed'), 'footer reports dropped count');
+});
+
+test('compress: ps inside a pipeline is still detected', () => {
+  const rows = Array.from({ length: 30 }, (_, i) => `r${i}`).join('\n');
+  const r = compress('sudo ps aux | grep node', 'HEAD\n' + rows);
+  assert(r.includes('compressed'), 'ps after sudo/pipe still matched');
 });
 
 // --- Summary -------------------------------------------------------------

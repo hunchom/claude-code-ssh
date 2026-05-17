@@ -25,9 +25,26 @@ export function compressLs(text) {
   return { text: s, dropped: 0 };
 }
 
+/** Rows to keep from a ps listing (header is kept on top of these). */
+const PS_KEEP = 15;
+
+/**
+ * Keep the ps header line plus the top PS_KEEP rows; drop the idle tail.
+ * Input is assumed CPU-sorted (the v4 process tools sort with --sort=-%cpu).
+ */
+export function compressPs(text) {
+  const s = String(text == null ? '' : text);
+  const lines = s.split('\n');
+  if (lines.length <= PS_KEEP + 1) return { text: s, dropped: 0 };
+  const kept = lines.slice(0, PS_KEEP + 1);
+  return { text: kept.join('\n'), dropped: lines.length - kept.length };
+}
+
 // command-prefix -> compressor. First match wins.
 const COMPRESSORS = [
   { match: /^ls(\s|$)/, fn: compressLs },
+  // ps may appear after `sudo ` or a pipe/`;`/`&`.
+  { match: /(^|[|;&]\s*|^sudo\s+)ps(\s|$)/, fn: compressPs },
 ];
 
 /**
