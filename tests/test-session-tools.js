@@ -73,7 +73,8 @@ class FakeShellStream extends EventEmitter {
       if (echo) this.emit('data', Buffer.from(echo));
       // Emit any scripted stdout.
       if (script.stdout) this.emit('data', Buffer.from(script.stdout));
-      if (script.stderr) this.stderr.emit('data', Buffer.from(script.stderr));
+      // PTY folds fd2 into fd1 -> scripted stderr arrives on `data`, not `.stderr`.
+      if (script.stderr) this.emit('data', Buffer.from(script.stderr));
       // Emit the sentinel line last -- unless the script wants to misbehave.
       if (!script.skipMarker) {
         this.emit('data', Buffer.from(`${marker} ${script.exit ?? 0}\n`));
@@ -312,25 +313,26 @@ await test('runCommand: timeout cancels and rejects', async () => {
   await sess.close();
 });
 
-await test('stream: stderr is folded into the pty stream, not decoded separately', async () => {
-  // client.shell() merges stderr into `data`. The session must NOT wire a
-  // separate stderr decoder -- a multibyte char straddling a stdout/stderr
-  // boundary would otherwise splice across two decoders and corrupt.
+await test('stream: stderr folds into data; one decoder stitches split chars', async () => {
+  // client.shell() gives a PTY -- fd2 multiplexes onto the same master as fd1,
+  // so stderr arrives interleaved on `data`. SSHSessionV2 wires ONE decoder on
+  // `data` and no separate `.stderr` listener; a multibyte char split across
+  // chunks (stdout/stderr interleaved) must still decode intact, none lost.
   const stream = new FakeShellStream({ scriptFor: () => ({ stdout: '', exit: 0, skipMarker: true }) });
   const sess = new SSHSessionV2({ id: 'sess_dec', server: 's', shell: 'bash', stream });
+  // fix removed the dead `.stderr` listener -> nothing wires it
+  assert.strictEqual(stream.stderr.listenerCount('data'), 0, 'no separate stderr listener');
   const p = sess._waitForMarker({ timeoutMs: 1000 });
 
-  // A 3-byte UTF-8 char ('e' with acute, U+00E9 is 2 bytes; use U+20AC euro = 3 bytes).
-  const euro = Buffer.from('€', 'utf8'); // [0xE2,0x82,0xAC]
-  // Deliver the char split across two `data` events -- single decoder must
-  // stitch it. Anything emitted on stream.stderr must be ignored entirely.
-  stream.stderr.emit('data', Buffer.from('this stderr must be ignored'));
+  const euro = Buffer.from('€', 'utf8'); // [0xE2,0x82,0xAC] -- 3 bytes
+  // PTY interleaving: stderr text, then a stdout char split mid-byte across events.
+  stream.emit('data', Buffer.from('ERR-folded '));
   stream.emit('data', euro.slice(0, 1));
   stream.emit('data', Buffer.concat([euro.slice(1), Buffer.from(`done\n${sess.marker} 0\n`)]));
 
   const r = await p;
-  assert(r.raw.includes('€'), 'split multibyte char decoded intact on the data stream');
-  assert(!r.raw.includes('stderr must be ignored'), 'separate stderr stream is not buffered');
+  assert(r.raw.includes('€'), 'split multibyte char decoded intact across data chunks');
+  assert(r.raw.includes('ERR-folded'), 'stderr folded into data is captured, not lost');
   await sess.close();
 });
 
