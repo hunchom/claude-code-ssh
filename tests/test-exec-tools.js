@@ -34,7 +34,10 @@ class FakeClient {
     this.streams = [];
     this.lastCommand = null;
   }
-  exec(cmd, cb) {
+  exec(rawCmd, cb) {
+    // Strip OS timeout wrapper so script dispatch and lastCommand assertions
+    // see the bare command, not `timeout -k N N <cmd>`.
+    const cmd = rawCmd.replace(/^timeout -k \d+ \d+ /, '');
     this.lastCommand = cmd;
     const s = new FakeStream();
     this.streams.push(s);

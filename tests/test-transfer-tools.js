@@ -74,7 +74,8 @@ class FakeClient {
     this._sftp = sftp || new FakeSftp();
     this.sftpCalls = 0;
   }
-  exec(cmd, cb) {
+  exec(rawCmd, cb) {
+    const cmd = rawCmd.replace(/^timeout -k \d+ \d+ /, '');
     this.commands.push(cmd);
     const s = new FakeStream();
     this.streams.push(s);

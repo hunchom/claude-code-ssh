@@ -238,6 +238,48 @@ await test('debounce: pending chunk flushed on close before resolve', async () =
   assert.strictEqual(chunks[0].text, 'late-arriving');
 });
 
+// --- streamExecCommand applies the OS timeout wrapper -------------------
+await test('streamExecCommand: non-raw timed command gets the OS timeout wrapper', async () => {
+  const client = new FakeClient();
+  const p = streamExecCommand(client, 'make all', { timeoutMs: 5000, debounceMs: 5 });
+  await sleep(5);
+  client.streams[0].finish(0);
+  await p;
+  assert(/^timeout -k \d+ \d+ /.test(client.lastCommand), 'OS timeout wrapper applied');
+  assert(client.lastCommand.includes('make all'), 'original command preserved');
+});
+
+await test('streamExecCommand: raw:true command is NOT wrapped', async () => {
+  const client = new FakeClient();
+  const p = streamExecCommand(client, 'make all', {
+    timeoutMs: 5000, debounceMs: 5, raw: true,
+  });
+  await sleep(5);
+  client.streams[0].finish(0);
+  await p;
+  assert.strictEqual(client.lastCommand, 'make all', 'raw command sent verbatim');
+});
+
+await test('streamExecCommand: no timeout -> not wrapped even when non-raw', async () => {
+  const client = new FakeClient();
+  const p = streamExecCommand(client, 'echo hi', { debounceMs: 5 });
+  await sleep(5);
+  client.streams[0].finish(0);
+  await p;
+  assert.strictEqual(client.lastCommand, 'echo hi', 'untimed command not wrapped');
+});
+
+await test('streamExecCommand: timeout wrapper composes with the cwd prefix', async () => {
+  const client = new FakeClient();
+  const p = streamExecCommand(client, 'ls', { cwd: '/srv/app', timeoutMs: 3000, debounceMs: 5 });
+  await sleep(5);
+  client.streams[0].finish(0);
+  await p;
+  // cwd prefix is inside the timeout-wrapped command.
+  assert(client.lastCommand.startsWith('timeout -k '), 'timeout outermost');
+  assert(client.lastCommand.includes("cd '/srv/app' && ls"), 'cwd prefix preserved');
+});
+
 // --- wrapWithTimeout -----------------------------------------------------
 await test('wrapWithTimeout: prefixes the OS timeout utility with a seconds wall', () => {
   const w = wrapWithTimeout('make build', 30000);

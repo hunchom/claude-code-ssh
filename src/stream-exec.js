@@ -68,11 +68,15 @@ export function streamExecCommand(client, command, options = {}) {
     maxBufferedBytes = 1_000_000,
     timeoutMs,
     killGraceMs = 5_000,
+    raw = false,
     onChunk,
     stdin,
   } = options;
 
-  const fullCommand = buildRemoteCommand(command, cwd);
+  // cwd prefix first, then the OS timeout wrapper outside it -- so `timeout`
+  // bounds the whole `cd ... && cmd`. raw:true skips the wrapper entirely.
+  const withCwd = buildRemoteCommand(command, cwd);
+  const fullCommand = raw ? withCwd : wrapWithTimeout(withCwd, timeoutMs);
 
   return new Promise((resolve, reject) => {
     const outDecoder = new StringDecoder('utf8');

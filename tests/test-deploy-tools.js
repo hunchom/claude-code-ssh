@@ -23,7 +23,8 @@ function makeClient(script) {
   return {
     commands,
     _script: script,
-    exec(cmd, cb) {
+    exec(rawCmd, cb) {
+      const cmd = rawCmd.replace(/^timeout -k \d+ \d+ /, '');
       commands.push(cmd);
       const s = new FakeStream();
       setImmediate(() => {

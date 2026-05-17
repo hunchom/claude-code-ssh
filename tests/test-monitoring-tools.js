@@ -44,7 +44,8 @@ class FakeClient {
     this.script = script || (() => ({ stdout: '', stderr: '', code: 0 }));
     this.streams = []; this.lastCommand = null; this.commands = [];
   }
-  exec(cmd, cb) {
+  exec(rawCmd, cb) {
+    const cmd = rawCmd.replace(/^timeout -k \d+ \d+ /, '');
     this.lastCommand = cmd; this.commands.push(cmd);
     const s = new FakeStream(); this.streams.push(s);
     setImmediate(() => {

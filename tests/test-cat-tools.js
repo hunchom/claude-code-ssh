@@ -16,7 +16,8 @@ class FakeStream extends EventEmitter {
 }
 class FakeClient {
   constructor({ script } = {}) { this.script = script || (() => ({ stdout: '', code: 0 })); this.streams = []; this.lastCommand = null; }
-  exec(cmd, cb) {
+  exec(rawCmd, cb) {
+    const cmd = rawCmd.replace(/^timeout -k \d+ \d+ /, '');
     this.lastCommand = cmd;
     const s = new FakeStream(); this.streams.push(s);
     setImmediate(() => {
