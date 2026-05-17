@@ -5,7 +5,6 @@
  */
 import assert from 'assert';
 import {
-  SEG_RE,
   buildScriptCommand,
   parseScriptSegments,
 } from '../src/script-runner.js';
@@ -29,38 +28,51 @@ function test(name, fn) {
 console.log('[test] Testing script-runner\n');
 
 // --- buildScriptCommand --------------------------------------------------
-test('buildScriptCommand: joins commands into a single exec string', () => {
-  const cmd = buildScriptCommand(['echo a', 'echo b']);
-  assert.strictEqual(typeof cmd, 'string');
-  assert(cmd.includes('echo a'), 'first segment present');
-  assert(cmd.includes('echo b'), 'second segment present');
+test('buildScriptCommand: returns { command, nonce }', () => {
+  const r = buildScriptCommand(['echo a', 'echo b']);
+  assert.strictEqual(typeof r.command, 'string');
+  assert(/^[0-9a-f]{12}$/.test(r.nonce), 'nonce is 12 hex chars');
+  assert(r.command.includes('echo a'), 'first segment present');
+  assert(r.command.includes('echo b'), 'second segment present');
 });
 
-test('buildScriptCommand: a sentinel with index + $? follows each segment', () => {
-  const cmd = buildScriptCommand(['true', 'false']);
-  // printf '\n##SEG %d %d##\n' 0 $?  -- one per segment
-  const sentinels = cmd.match(/##SEG %d %d##/g) || [];
+test('buildScriptCommand: a fresh nonce per invocation', () => {
+  const a = buildScriptCommand(['echo x']);
+  const b = buildScriptCommand(['echo x']);
+  assert.notStrictEqual(a.nonce, b.nonce, 'nonce differs across calls');
+});
+
+test('buildScriptCommand: a nonce-bound sentinel follows each segment', () => {
+  const { command, nonce } = buildScriptCommand(['true', 'false']);
+  // printf '\n##SEG-<nonce> %d %d##\n' 0 $?  -- one per segment
+  const sentinels = command.match(new RegExp(`##SEG-${nonce} %d %d##`, 'g')) || [];
   assert.strictEqual(sentinels.length, 2, 'one sentinel per segment');
-  assert(cmd.includes("printf '\\n##SEG %d %d##\\n' 0 $?"), 'segment 0 sentinel');
-  assert(cmd.includes("printf '\\n##SEG %d %d##\\n' 1 $?"), 'segment 1 sentinel');
+  assert(
+    command.includes(`printf '\\n##SEG-${nonce} %d %d##\\n' 0 $?`),
+    'segment 0 sentinel',
+  );
+  assert(
+    command.includes(`printf '\\n##SEG-${nonce} %d %d##\\n' 1 $?`),
+    'segment 1 sentinel',
+  );
 });
 
 test('buildScriptCommand: segments are NOT && chained -- a failure does not abort', () => {
-  const cmd = buildScriptCommand(['false', 'echo still-runs']);
-  assert(!cmd.includes('&&'), 'no && between segments');
+  const { command } = buildScriptCommand(['false', 'echo still-runs']);
+  assert(!command.includes('&&'), 'no && between segments');
   // `;` lets the next segment run even after a non-zero exit.
-  assert(cmd.includes(';'), 'segments separated so all run');
+  assert(command.includes(';'), 'segments separated so all run');
 });
 
 test('buildScriptCommand: default joins segments in one shell (shared state)', () => {
-  const cmd = buildScriptCommand(['cd /tmp', 'pwd']);
+  const { command } = buildScriptCommand(['cd /tmp', 'pwd']);
   // No `sh -c` wrapper per segment: it is one process, so `cd` carries over.
-  assert(!/sh -c .* sh -c /.test(cmd), 'not one sub-shell per segment');
+  assert(!/sh -c .* sh -c /.test(command), 'not one sub-shell per segment');
 });
 
 test('buildScriptCommand: isolate:true wraps each segment in its own sh -c', () => {
-  const cmd = buildScriptCommand(['cd /tmp', 'pwd'], { isolate: true });
-  const subs = cmd.match(/sh -c /g) || [];
+  const { command } = buildScriptCommand(['cd /tmp', 'pwd'], { isolate: true });
+  const subs = command.match(/sh -c /g) || [];
   assert.strictEqual(subs.length, 2, 'one sub-shell per segment when isolated');
 });
 
@@ -73,17 +85,10 @@ test('buildScriptCommand: a non-string segment is rejected', () => {
   assert.throws(() => buildScriptCommand(['ok', 42]), /must be a string/);
 });
 
-test('SEG_RE: matches the emitted sentinel and captures index + code', () => {
-  const m = '\n##SEG 3 127##\n'.match(SEG_RE);
-  assert(m, 'sentinel matched');
-  assert.strictEqual(m[1], '3', 'segment index captured');
-  assert.strictEqual(m[2], '127', 'exit code captured');
-});
-
 // --- parseScriptSegments -------------------------------------------------
 test('parseScriptSegments: splits stdout into per-segment results', () => {
-  const raw = 'a-out\n##SEG 0 0##\nb-out\n##SEG 1 0##\n';
-  const segs = parseScriptSegments(raw, ['echo a', 'echo b']);
+  const raw = 'a-out\n##SEG-abc123 0 0##\nb-out\n##SEG-abc123 1 0##\n';
+  const segs = parseScriptSegments(raw, 'abc123', ['echo a', 'echo b']);
   assert.strictEqual(segs.length, 2);
   assert.strictEqual(segs[0].stdout, 'a-out');
   assert.strictEqual(segs[0].exitCode, 0);
@@ -92,16 +97,16 @@ test('parseScriptSegments: splits stdout into per-segment results', () => {
 });
 
 test('parseScriptSegments: a non-zero segment exit is reported per segment', () => {
-  const raw = 'ok\n##SEG 0 0##\n\n##SEG 1 127##\n';
-  const segs = parseScriptSegments(raw, ['true', 'nosuchcmd']);
+  const raw = 'ok\n##SEG-n1 0 0##\n\n##SEG-n1 1 127##\n';
+  const segs = parseScriptSegments(raw, 'n1', ['true', 'nosuchcmd']);
   assert.strictEqual(segs[0].exitCode, 0);
   assert.strictEqual(segs[1].exitCode, 127, 'failure surfaced for its segment');
 });
 
 test('parseScriptSegments: output after the last sentinel = unfinished segment', () => {
   // Script killed mid-segment 1: no closing sentinel for it.
-  const raw = 'done\n##SEG 0 0##\nhalf-out';
-  const segs = parseScriptSegments(raw, ['echo done', 'sleep 99']);
+  const raw = 'done\n##SEG-n2 0 0##\nhalf-out';
+  const segs = parseScriptSegments(raw, 'n2', ['echo done', 'sleep 99']);
   assert.strictEqual(segs.length, 2);
   assert.strictEqual(segs[1].stdout, 'half-out');
   assert.strictEqual(segs[1].exitCode, null, 'no exit code for a killed segment');
@@ -109,19 +114,40 @@ test('parseScriptSegments: output after the last sentinel = unfinished segment',
 });
 
 test('parseScriptSegments: trailing whitespace after last sentinel is not a segment', () => {
-  const raw = 'x\n##SEG 0 0##\n\n  \n';
-  const segs = parseScriptSegments(raw, ['echo x']);
+  const raw = 'x\n##SEG-n3 0 0##\n\n  \n';
+  const segs = parseScriptSegments(raw, 'n3', ['echo x']);
   assert.strictEqual(segs.length, 1, 'blank tail ignored');
 });
 
 test('parseScriptSegments: empty / nullish stdout -> empty array', () => {
-  assert.deepStrictEqual(parseScriptSegments('', []), []);
-  assert.deepStrictEqual(parseScriptSegments(null, []), []);
+  assert.deepStrictEqual(parseScriptSegments('', 'n4', []), []);
+  assert.deepStrictEqual(parseScriptSegments(null, 'n4', []), []);
 });
 
 test('parseScriptSegments: command label is null when commands array is short', () => {
-  const segs = parseScriptSegments('o\n##SEG 0 0##\n', []);
+  const segs = parseScriptSegments('o\n##SEG-n5 0 0##\n', 'n5', []);
   assert.strictEqual(segs[0].command, null);
+});
+
+test('parseScriptSegments: a missing nonce is rejected', () => {
+  assert.throws(() => parseScriptSegments('o\n##SEG-x 0 0##\n', ''), /nonce is required/);
+  assert.throws(() => parseScriptSegments('o', null), /nonce is required/);
+});
+
+test('parseScriptSegments: a forged ##SEG line in stdout does NOT corrupt the parse', () => {
+  // Segment 0 echoes a fake sentinel with the WRONG nonce -- must be ignored.
+  // Only the real ##SEG-<nonce> line ends the segment.
+  const { nonce } = buildScriptCommand(['echo hi']);
+  const wrong = nonce === 'deadbeef' ? 'cafef00d' : 'deadbeef';
+  const raw =
+    `real-out\n##SEG-${wrong} 0 0##\nstill-seg-0\n##SEG-${nonce} 0 1##\n`;
+  const segs = parseScriptSegments(raw, nonce, ['attacker']);
+  assert.strictEqual(segs.length, 1, 'forged sentinel did not split the segment');
+  assert.strictEqual(segs[0].exitCode, 1, 'real exit code wins, not the forged 0');
+  assert(
+    segs[0].stdout.includes(`##SEG-${wrong} 0 0##`),
+    'forged line stays as plain stdout',
+  );
 });
 
 // --- Summary -------------------------------------------------------------

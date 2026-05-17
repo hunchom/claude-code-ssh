@@ -50,6 +50,13 @@ test('newJobId: successive ids are unique', () => {
   assert.strictEqual(seen.size, 200, 'no collisions across 200 ids');
 });
 
+test('newJobId: every generated id passes the job-id guard', () => {
+  // A generated id must always be a legal job-status/kill target.
+  for (let i = 0; i < 200; i++) {
+    assert.doesNotThrow(() => buildJobStatusCommand(newJobId()));
+  }
+});
+
 // --- buildDetachCommand --------------------------------------------------
 test('buildDetachCommand: creates the per-job dir and returns {jobId, command, ...}', () => {
   const r = buildDetachCommand('long-build.sh');
@@ -98,6 +105,12 @@ test('buildDetachCommand: an explicit job id is honored', () => {
   assert(r.command.includes('fixed-id-1'));
 });
 
+test('buildDetachCommand: a hostile explicit job id is rejected', () => {
+  assert.throws(() => buildDetachCommand('echo hi', { jobId: '../x' }), /invalid job id/);
+  assert.throws(() => buildDetachCommand('echo hi', { jobId: 'a;b' }), /invalid job id/);
+  assert.throws(() => buildDetachCommand('echo hi', { jobId: '$(x)' }), /invalid job id/);
+});
+
 test('buildDetachCommand: empty command is rejected', () => {
   assert.throws(() => buildDetachCommand(''), /command is required/);
   assert.throws(() => buildDetachCommand(null), /command is required/);
@@ -128,6 +141,21 @@ test('buildJobStatusCommand: reads the log tail from a byte offset', () => {
   assert(/tail -c|dd .*bs=1.*skip=/.test(cmd), 'reads from the offset');
 });
 
+test('buildJobStatusCommand: a negative offset clamps to a positive tail -c', () => {
+  // A wrapped/negative offset must never produce `tail -c +-N`.
+  const cmd = buildJobStatusCommand('j', { offset: -500 });
+  assert(/tail -c \+1 /.test(cmd), 'negative offset clamps to +1 (whole file)');
+  assert(!cmd.includes('+-'), 'no negative argument to tail -c');
+});
+
+test('buildJobStatusCommand: a huge (>2^31) offset stays a positive tail -c', () => {
+  // 3 GiB log: 32-bit `| 0` would wrap negative; Math.floor keeps it positive.
+  const huge = 3 * 1024 * 1024 * 1024; // 3221225472, > 2^31
+  const cmd = buildJobStatusCommand('j', { offset: huge });
+  assert(cmd.includes(String(huge + 1)), 'huge offset + 1 threaded verbatim');
+  assert(!cmd.includes('+-'), 'no negative argument to tail -c');
+});
+
 test('buildJobStatusCommand: a missing job dir is reported, not a hard error', () => {
   const cmd = buildJobStatusCommand('gone');
   // The command tolerates absence so the parser can say "unknown".
@@ -135,7 +163,13 @@ test('buildJobStatusCommand: a missing job dir is reported, not a hard error', (
 });
 
 test('buildJobStatusCommand: empty job id is rejected', () => {
-  assert.throws(() => buildJobStatusCommand(''), /job id is required/);
+  assert.throws(() => buildJobStatusCommand(''), /invalid job id/);
+});
+
+test('buildJobStatusCommand: a hostile job id is rejected', () => {
+  assert.throws(() => buildJobStatusCommand('../x'), /invalid job id/);
+  assert.throws(() => buildJobStatusCommand('a;b'), /invalid job id/);
+  assert.throws(() => buildJobStatusCommand('$(x)'), /invalid job id/);
 });
 
 // --- parseJobStatus ------------------------------------------------------
@@ -182,7 +216,8 @@ test('parseJobStatus: logSize feeds the next incremental read', () => {
 // --- buildJobKillCommand -------------------------------------------------
 test('buildJobKillCommand: reads the recorded pid for the job', () => {
   const cmd = buildJobKillCommand('job-9');
-  assert(cmd.includes('job-9/pid'), 'reads the pid file');
+  assert(cmd.includes('job-9'), 'targets the job dir');
+  assert(cmd.includes('/pid'), 'reads the pid file');
   assert(cmd.includes('cat '), 'cat the pid file');
 });
 
@@ -206,8 +241,14 @@ test('buildJobKillCommand: tolerates a missing or already-dead job', () => {
 });
 
 test('buildJobKillCommand: empty job id is rejected', () => {
-  assert.throws(() => buildJobKillCommand(''), /job id is required/);
-  assert.throws(() => buildJobKillCommand(null), /job id is required/);
+  assert.throws(() => buildJobKillCommand(''), /invalid job id/);
+  assert.throws(() => buildJobKillCommand(null), /invalid job id/);
+});
+
+test('buildJobKillCommand: a hostile job id is rejected', () => {
+  assert.throws(() => buildJobKillCommand('../x'), /invalid job id/);
+  assert.throws(() => buildJobKillCommand('a;b'), /invalid job id/);
+  assert.throws(() => buildJobKillCommand('$(x)'), /invalid job id/);
 });
 
 // --- Summary -------------------------------------------------------------

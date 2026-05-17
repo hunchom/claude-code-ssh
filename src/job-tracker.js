@@ -11,19 +11,30 @@
  */
 
 import crypto from 'crypto';
+import { shQuote } from './stream-exec.js';
 
 /** Remote root for job directories. `$HOME` expands on the remote shell. */
 export const JOBS_ROOT = '$HOME/.ssh-manager/jobs';
 
-/** A short, unique, filesystem/shell-safe job id. */
+/** Job ids are model-supplied -> strict allowlist; becomes a shell path/dir. */
+const JOB_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** Reject any job id outside the allowlist -- blocks shell/path injection. */
+function assertJobId(jobId) {
+  if (typeof jobId !== 'string' || !JOB_ID_RE.test(jobId)) {
+    throw new Error('ssh_run: invalid job id');
+  }
+}
+
+/** A short, unique, filesystem/shell-safe job id. Always passes JOB_ID_RE. */
 export function newJobId() {
   // 9 random bytes -> 12 base64url chars; collision-free for practical use.
   return crypto.randomBytes(9).toString('base64url');
 }
 
-/** Shell-quote a token for POSIX sh (single-quote wrap, escape inner quote). */
-function shQuoteLocal(str) {
-  return `'${String(str).replace(/'/g, '\'\\\'\'')}'`;
+/** Job dir path with the (validated) id shQuoted; $HOME stays unquoted. */
+function jobDirOf(jobId) {
+  return `${JOBS_ROOT}/${shQuote(jobId)}`;
 }
 
 /**
@@ -41,13 +52,14 @@ export function buildDetachCommand(command, { jobId = newJobId() } = {}) {
   if (typeof command !== 'string' || command === '') {
     throw new Error('ssh_run detach: command is required');
   }
-  const jobDir = `${JOBS_ROOT}/${jobId}`;
+  assertJobId(jobId);
+  const jobDir = jobDirOf(jobId);
   const logPath = `${jobDir}/log`;
   // Inner script: run the user command, then record its exit code in rc.
   const inner = `${command}; echo $? > ${jobDir}/rc`;
   const cmd =
     `mkdir -p ${jobDir} && `
-    + `{ setsid sh -c ${shQuoteLocal(inner)} > ${logPath} 2>&1 & `
+    + `{ setsid sh -c ${shQuote(inner)} > ${logPath} 2>&1 & `
     + `echo $! > ${jobDir}/pid; }`;
   return { jobId, jobDir, logPath, command: cmd };
 }
@@ -66,11 +78,11 @@ export function buildDetachCommand(command, { jobId = newJobId() } = {}) {
  *   <log bytes after offset>
  */
 export function buildJobStatusCommand(jobId, { offset = 0 } = {}) {
-  if (typeof jobId !== 'string' || jobId === '') {
-    throw new Error('ssh_run job-status: job id is required');
-  }
-  const jobDir = `${JOBS_ROOT}/${jobId}`;
-  const off = offset | 0;
+  assertJobId(jobId);
+  const jobDir = jobDirOf(jobId);
+  // Clamp to a non-negative int: a huge LOGSIZE must not 32-bit-wrap negative
+  // and produce `tail -c +-N`, which coreutils rejects -> silent log loss.
+  const off = Math.max(0, Math.floor(Number(offset) || 0));
   // wc -c after +<off> yields bytes-from-offset; tail -c +N is 1-indexed.
   return (
     `if test -d ${jobDir}; then `
@@ -97,9 +109,13 @@ export function parseJobStatus(stdout) {
   const head = logMark === -1 ? s : s.slice(0, logMark);
   const logChunk = logMark === -1 ? '' : s.slice(logMark + '\n##LOG##\n'.length);
 
+  // Plain line scan -- no RegExp built from an interpolated key.
   const field = (key) => {
-    const m = head.match(new RegExp(`^${key}=(.*)$`, 'm'));
-    return m ? m[1].trim() : '';
+    const prefix = `${key}=`;
+    for (const line of head.split('\n')) {
+      if (line.startsWith(prefix)) return line.slice(prefix.length).trim();
+    }
+    return '';
   };
 
   if (field('STATE') === 'missing') {
@@ -127,10 +143,8 @@ export function parseJobStatus(stdout) {
  * then KILL. A missing pid file or an already-dead group is not an error.
  */
 export function buildJobKillCommand(jobId) {
-  if (typeof jobId !== 'string' || jobId === '') {
-    throw new Error('ssh_run job-kill: job id is required');
-  }
-  const jobDir = `${JOBS_ROOT}/${jobId}`;
+  assertJobId(jobId);
+  const jobDir = jobDirOf(jobId);
   // P holds the job's pid; -$P targets its process group.
   return (
     `P=$(cat ${jobDir}/pid 2>/dev/null); `

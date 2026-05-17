@@ -3,24 +3,34 @@
  * with exit-capturing sentinels, so a cmd1;cmd2;cmd3 chain runs in a single
  * round-trip with shared shell state. parseScriptSegments splits it back.
  *
- * Pure: buildScriptCommand returns a POSIX-sh string, parseScriptSegments
- * turns raw stdout into per-segment results. The dispatcher (Plan 4) execs.
+ * Sentinels carry a per-invocation nonce so a command's own stdout cannot
+ * forge a fake `##SEG ...##` line and corrupt the per-segment parse.
+ *
+ * Pure: buildScriptCommand returns { command, nonce }, parseScriptSegments
+ * turns raw stdout + that nonce into per-segment results. Dispatcher execs.
  */
 
-/**
- * Matches one emitted sentinel: `\n##SEG <index> <exit-code>##\n`.
- * Group 1 = segment index, group 2 = that segment's $?.
- */
-export const SEG_RE = /\n##SEG (\d+) (\d+)##\n/;
+import crypto from 'crypto';
+import { shQuote } from './stream-exec.js';
 
-/** Global twin of SEG_RE for splitting a whole stdout blob. */
-const SEG_RE_G = /\n##SEG (\d+) (\d+)##\n/g;
+/** Per-invocation nonce: 6 random bytes -> 12 hex chars. Unforgeable marker. */
+function newNonce() {
+  return crypto.randomBytes(6).toString('hex');
+}
+
+/** Build the sentinel regex for one nonce. Group 1 = index, group 2 = $?. */
+function segRe(nonce, flags) {
+  return new RegExp(`\\n##SEG-${nonce} (\\d+) (\\d+)##\\n`, flags);
+}
 
 /**
  * Build the single-exec script string.
- * Each segment is followed by `printf '\n##SEG %d %d##\n' <idx> $?` so $?
- * is captured BEFORE the next segment runs. Segments are `;`-separated, not
- * `&&`-chained: a non-zero segment never aborts the rest.
+ * Each segment is followed by `printf '\n##SEG-<nonce> %d %d##\n' <idx> $?`
+ * so $? is captured BEFORE the next segment runs. Segments are `;`-separated,
+ * not `&&`-chained: a non-zero segment never aborts the rest.
+ *
+ * Returns { command, nonce }. Caller threads `nonce` into parseScriptSegments
+ * so only this invocation's sentinels are trusted.
  *
  * isolate:true wraps each segment in its own `sh -c` -- separate shells, no
  * shared cd/env -- for the rare caller that needs state isolation.
@@ -29,6 +39,7 @@ export function buildScriptCommand(commands, { isolate = false } = {}) {
   if (!Array.isArray(commands) || commands.length === 0) {
     throw new Error('ssh_run script: at least one command is required');
   }
+  const nonce = newNonce();
   const parts = [];
   commands.forEach((c, i) => {
     if (typeof c !== 'string') {
@@ -36,26 +47,32 @@ export function buildScriptCommand(commands, { isolate = false } = {}) {
     }
     // isolate => run the segment in a child shell; $? is the child's exit.
     const body = isolate
-      ? `sh -c ${shQuoteLocal(c)}`
+      ? `sh -c ${shQuote(c)}`
       : `{ ${c}\n; }`;
-    parts.push(`${body}; printf '\\n##SEG %d %d##\\n' ${i} $?`);
+    parts.push(`${body}; printf '\\n##SEG-${nonce} %d %d##\\n' ${i} $?`);
   });
-  return parts.join('\n');
+  return { command: parts.join('\n'), nonce };
 }
 
 /**
- * Split raw script stdout into per-segment results using the sentinels.
- * Returns [{ index, command, stdout, exitCode }]. `commands` is the original
- * array, used to label each segment; a segment with no sentinel (the script
- * was killed mid-run) gets exitCode null.
+ * Split raw script stdout into per-segment results using nonce-bound
+ * sentinels. Returns [{ index, command, stdout, exitCode }]. `nonce` is the
+ * value buildScriptCommand returned -- only `##SEG-<nonce> ...##` lines are
+ * trusted, so a command echoing a fake `##SEG ...##` line cannot corrupt the
+ * parse. `commands` labels each segment; a segment with no sentinel (script
+ * killed mid-run) gets exitCode null.
  */
-export function parseScriptSegments(stdout, commands = []) {
+export function parseScriptSegments(stdout, nonce, commands = []) {
+  if (typeof nonce !== 'string' || nonce === '') {
+    throw new Error('parseScriptSegments: nonce is required');
+  }
   const s = stdout == null ? '' : String(stdout);
+  const re = segRe(nonce, 'g');
   const segments = [];
   let lastIndex = 0;
   let m;
-  SEG_RE_G.lastIndex = 0;
-  while ((m = SEG_RE_G.exec(s)) !== null) {
+  re.lastIndex = 0;
+  while ((m = re.exec(s)) !== null) {
     const idx = Number(m[1]);
     segments.push({
       index: idx,
@@ -77,12 +94,4 @@ export function parseScriptSegments(stdout, commands = []) {
     });
   }
   return segments;
-}
-
-/**
- * Local POSIX shell-quoter. A copy of stream-exec.js's shQuote kept here so
- * script-runner has no cross-module coupling for one tiny helper.
- */
-function shQuoteLocal(str) {
-  return `'${String(str).replace(/'/g, '\'\\\'\'')}'`;
 }
