@@ -21,6 +21,8 @@ const DEFAULT_LINES = 10;
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_MAX_LEN = 10_000;
 const RING_BUFFER_CAP = 1_000_000;
+// Grace period a closed-but-unread session lingers before a sweep reaps it.
+const CLOSED_SESSION_GRACE_MS = 5 * 60_000;
 
 /** Session registry -- module-level Map so tools across calls share it. */
 const sessions = new Map();
@@ -37,6 +39,29 @@ function rememberStopped(id) {
   }
 }
 
+/**
+ * Reap closed follow-sessions so a stream that ended without an explicit
+ * ssh_tail_stop never lingers for the server's lifetime. A closed session
+ * drops when its buffer is fully read, or when it closed past the grace
+ * period (stream dead -- a stale buffer helps nobody).
+ *
+ * `excludeId` is left intact even if reapable: handleSshTailRead passes the
+ * session it is mid-serving so the caller still gets one final closed:true
+ * read before that session is dropped at the end of the call.
+ */
+function reapClosedSessions(now = Date.now(), excludeId = null) {
+  for (const [id, st] of sessions) {
+    if (id === excludeId) continue;
+    if (!st.closed) continue;
+    const fullyRead = st.readOffset >= st.totalBytes;
+    const expired = st.closedAt != null && (now - st.closedAt) >= CLOSED_SESSION_GRACE_MS;
+    if (fullyRead || expired) {
+      sessions.delete(id);
+      rememberStopped(id);
+    }
+  }
+}
+
 /** Exposed for tests to introspect internal state. */
 export function _sessionsForTest() {
   return sessions;
@@ -44,6 +69,11 @@ export function _sessionsForTest() {
 export function _stoppedIdsForTest() {
   return stoppedIds;
 }
+/** Exposed for tests: drive the closed-session sweep directly. */
+export function _reapClosedSessionsForTest(now) {
+  return reapClosedSessions(now);
+}
+export const _CLOSED_SESSION_GRACE_MS = CLOSED_SESSION_GRACE_MS;
 
 /** Coerce numeric arg to a positive integer, with safe fallback. */
 function safeLines(n, fallback = DEFAULT_LINES) {
@@ -151,7 +181,9 @@ export async function handleSshTailStart({ getConnection, args }) {
         createdAt: Date.now(),
         buffer: '',
         totalBytes: 0,   // lifetime bytes appended (monotonic, pre-truncation)
+        readOffset: 0,   // highest offset a follow-read has delivered to a caller
         closed: false,
+        closedAt: null,  // ms timestamp the stream closed (null while open)
         stream,
       };
 
@@ -164,11 +196,17 @@ export async function handleSshTailStart({ getConnection, args }) {
         }
       }
 
+      function markClosed() {
+        if (state.closed) return;
+        state.closed = true;
+        state.closedAt = Date.now();
+      }
       stream.on('data', (d) => append(stripAnsi(d.toString('utf8'))));
       stream.stderr && stream.stderr.on('data', (d) => append(stripAnsi(d.toString('utf8'))));
-      stream.on('close', () => { state.closed = true; });
-      stream.on('error', () => { state.closed = true; });
+      stream.on('close', markClosed);
+      stream.on('error', markClosed);
 
+      reapClosedSessions();   // sweep stale sessions before adding a new one
       sessions.set(id, state);
       resolve(state);
     });
@@ -197,6 +235,10 @@ export async function handleSshTailStart({ getConnection, args }) {
 // --------------------------------------------------------------------------
 export async function handleSshTailRead({ args }) {
   const { session_id, since_offset, format = 'markdown' } = args || {};
+
+  // Sweep other closed/dead sessions; never the one we are about to serve --
+  // it gets one final closed:true read, then is reaped at the end of the call.
+  reapClosedSessions(Date.now(), session_id);
 
   const state = sessions.get(session_id);
   if (!state) {
@@ -240,6 +282,12 @@ export async function handleSshTailRead({ args }) {
     closed: state.closed,
     elided_bytes: elided,
   };
+
+  // Caller has now seen everything up to `total`. Advance the read watermark
+  // and reap: a closed + fully-read session drops here -- this very response
+  // already carried closed:true, so the caller knows the stream ended.
+  state.readOffset = Math.max(state.readOffset, total);
+  reapClosedSessions();
 
   return toMcp(
     ok('ssh_tail_read', data, { server: state.server }),
