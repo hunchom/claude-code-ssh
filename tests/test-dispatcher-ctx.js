@@ -6,6 +6,7 @@
  */
 import assert from 'assert';
 import { requireArgs } from '../src/dispatchers/action-validate.js';
+import { makeCtx } from '../src/dispatchers/ctx-factory.js';
 
 let passed = 0;
 let failed = 0;
@@ -66,6 +67,54 @@ test('requireArgs: action absent from map -> null (no requirements)', () => {
 test('requireArgs: server is validated like any other required arg', () => {
   const r = requireArgs('ssh_run', 'exec', { command: 'ls' }, { exec: ['server', 'command'] });
   assert(r.content[0].text.includes('server'), 'missing server reported');
+});
+
+// --- makeCtx -------------------------------------------------------------
+const DEPS = {
+  getConnection: () => 'CONN',
+  getServerConfig: () => 'CFG',
+  resolveGroup: () => 'GRP',
+  getSftp: () => 'SFTP',
+};
+
+test('makeCtx: "conn" kind -> { getConnection, args }', () => {
+  const ctx = makeCtx('conn', DEPS, { server: 's' });
+  assert.deepStrictEqual(Object.keys(ctx).sort(), ['args', 'getConnection']);
+  assert.strictEqual(ctx.getConnection, DEPS.getConnection);
+  assert.deepStrictEqual(ctx.args, { server: 's' });
+});
+
+test('makeCtx: "conn-cfg" kind adds getServerConfig', () => {
+  const ctx = makeCtx('conn-cfg', DEPS, { server: 's' });
+  assert.deepStrictEqual(Object.keys(ctx).sort(), ['args', 'getConnection', 'getServerConfig']);
+  assert.strictEqual(ctx.getServerConfig, DEPS.getServerConfig);
+});
+
+test('makeCtx: "conn-group" kind adds resolveGroup', () => {
+  const ctx = makeCtx('conn-group', DEPS, {});
+  assert.deepStrictEqual(Object.keys(ctx).sort(), ['args', 'getConnection', 'resolveGroup']);
+  assert.strictEqual(ctx.resolveGroup, DEPS.resolveGroup);
+});
+
+test('makeCtx: "cfg" kind -> { getServerConfig, args } only', () => {
+  const ctx = makeCtx('cfg', DEPS, {});
+  assert.deepStrictEqual(Object.keys(ctx).sort(), ['args', 'getServerConfig']);
+});
+
+test('makeCtx: "args" kind -> { args } only', () => {
+  const ctx = makeCtx('args', DEPS, { x: 1 });
+  assert.deepStrictEqual(Object.keys(ctx), ['args']);
+  assert.deepStrictEqual(ctx.args, { x: 1 });
+});
+
+test('makeCtx: "deploy" kind -> { getConnection, getSftp, args }', () => {
+  const ctx = makeCtx('deploy', DEPS, {});
+  assert.deepStrictEqual(Object.keys(ctx).sort(), ['args', 'getConnection', 'getSftp']);
+  assert.strictEqual(ctx.getSftp, DEPS.getSftp);
+});
+
+test('makeCtx: unknown kind throws', () => {
+  assert.throws(() => makeCtx('bogus', DEPS, {}), /unknown ctx kind/);
 });
 
 // --- Summary -------------------------------------------------------------
