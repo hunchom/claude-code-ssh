@@ -8,6 +8,8 @@ import {
   SEARCH_DEFAULTS,
   assertSearchPath,
   buildGrepCommand,
+  buildLocateCommand,
+  buildLsCommand,
 } from '../src/remote-search.js';
 
 let passed = 0;
@@ -121,6 +123,67 @@ test('buildGrepCommand: a pattern with quotes cannot break out', () => {
   const shCIdx = cmd.indexOf('sh -c ');
   const outerArg = cmd.slice(shCIdx + 'sh -c '.length);
   assert(outerArg.startsWith("'"), 'sh -c argument is single-quoted');
+});
+
+// --- buildLocateCommand --------------------------------------------------
+test('buildLocateCommand: timeout-wrapped find with -name glob', () => {
+  const cmd = buildLocateCommand({ name: '*.conf', path: '/etc' });
+  assert(cmd.startsWith('timeout 20 '), 'timeout wrapper');
+  assert(cmd.includes('find '), 'uses find');
+  assert(cmd.includes("'/etc'"), 'path shell-quoted');
+  assert(cmd.includes("-name '*.conf'"), 'name glob shell-quoted');
+});
+
+test('buildLocateCommand: -xdev by default, prunes pseudo-filesystems', () => {
+  const cmd = buildLocateCommand({ name: 'x', path: '/', allowRoot: true });
+  assert(cmd.includes('-xdev'), 'stays on one filesystem by default');
+  for (const p of ['/proc', '/sys', '/dev', '/run']) {
+    assert(cmd.includes(`-path ${"'" + p + "'"}`), `${p} pruned`);
+  }
+  assert(cmd.includes('-prune'), 'prune action present');
+});
+
+test('buildLocateCommand: crossMounts:true drops -xdev', () => {
+  const cmd = buildLocateCommand({ name: 'x', path: '/a', crossMounts: true });
+  assert(!cmd.includes('-xdev'), 'cross-mount opt-in drops -xdev');
+});
+
+test('buildLocateCommand: result count capped with head', () => {
+  const cmd = buildLocateCommand({ name: 'x', path: '/a', matchCap: 75 });
+  assert(cmd.includes('| head -n 75'), 'cap via head');
+});
+
+test('buildLocateCommand: missing name is rejected', () => {
+  assert.throws(() => buildLocateCommand({ path: '/a' }), /name is required/);
+});
+
+test('buildLocateCommand: bare root refused without override', () => {
+  assert.throws(
+    () => buildLocateCommand({ name: 'x', path: '/' }),
+    /refusing to search/,
+  );
+});
+
+// --- buildLsCommand ------------------------------------------------------
+test('buildLsCommand: timeout-wrapped ls -la of one directory', () => {
+  const cmd = buildLsCommand({ path: '/var/log' });
+  assert(cmd.startsWith('timeout 20 '), 'timeout wrapper');
+  assert(cmd.includes('ls -la'), 'long listing');
+  assert(cmd.includes("'/var/log'"), 'path shell-quoted');
+});
+
+test('buildLsCommand: a path with spaces survives quoting', () => {
+  const cmd = buildLsCommand({ path: '/srv/my app' });
+  assert(cmd.includes("'/srv/my app'"), 'spaced path quoted as one token');
+});
+
+test('buildLsCommand: empty path is rejected', () => {
+  assert.throws(() => buildLsCommand({ path: '' }), /path is required/);
+});
+
+test('buildLsCommand: bare root is allowed -- listing / is cheap and safe', () => {
+  const cmd = buildLsCommand({ path: '/' });
+  assert(cmd.includes("ls -la '/'"), 'root listing permitted');
 });
 
 // --- Summary -------------------------------------------------------------

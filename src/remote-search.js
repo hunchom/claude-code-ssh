@@ -77,3 +77,44 @@ export function buildGrepCommand({
     + `else ${grep}; fi | head -n ${matchCap | 0}`;
   return `timeout ${timeoutSecs | 0} sh -c ${shQuote(inner)}`;
 }
+
+/**
+ * Build a bounded `find -name` command. Pseudo-filesystems are pruned with
+ * `-path X -prune -o`; -xdev keeps it on one filesystem unless crossMounts.
+ */
+export function buildLocateCommand({
+  name,
+  path,
+  matchCap = SEARCH_DEFAULTS.matchCap,
+  timeoutSecs = SEARCH_DEFAULTS.timeoutSecs,
+  crossMounts = SEARCH_DEFAULTS.crossMounts,
+  prune = SEARCH_DEFAULTS.prune,
+  allowRoot = false,
+} = {}) {
+  if (typeof name !== 'string' || name === '') {
+    throw new Error('ssh_find: name is required for action locate');
+  }
+  const root = assertSearchPath(path, { allowRoot });
+  const xdev = crossMounts ? '' : ' -xdev';
+  // -path '/proc' -prune -o ... -path '/run' -prune -o <match> -print
+  const pruneExpr = prune
+    .map((p) => `-path ${shQuote(p)} -prune -o`)
+    .join(' ');
+  const find = `find ${shQuote(root)}${xdev} ${pruneExpr} `
+    + `-name ${shQuote(name)} -print`;
+  return `timeout ${timeoutSecs | 0} ${find} | head -n ${matchCap | 0}`;
+}
+
+/**
+ * Build a bounded `ls -la` of one directory. Listing "/" is cheap, so the
+ * bare-root guard does not apply here; only an empty path is rejected.
+ */
+export function buildLsCommand({
+  path,
+  timeoutSecs = SEARCH_DEFAULTS.timeoutSecs,
+} = {}) {
+  const p = typeof path === 'string' ? path.trim() : '';
+  if (!p) throw new Error('ssh_find: path is required for action ls');
+  const root = /^\/+$/.test(p) ? '/' : p.replace(/\/+$/, '') || '/';
+  return `timeout ${timeoutSecs | 0} ls -la ${shQuote(root)}`;
+}
