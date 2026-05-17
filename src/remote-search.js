@@ -36,6 +36,17 @@ export function assertSearchPath(path, { allowRoot = false } = {}) {
   return normalized || '/';
 }
 
+/**
+ * Clamp value to [min, max] as an int; non-numeric or 0 -> fallback.
+ * Guards `timeout`/`head` bounds: timeout 0 = no timeout, head -n 0/-1 = no cap.
+ * 0 is treated as "unset" (-> fallback), matching the builders' `|| default`.
+ */
+function clampInt(value, min, max, fallback) {
+  const n = Number(value);
+  const base = Number.isFinite(n) && n !== 0 ? n : fallback;
+  return Math.max(min, Math.min(max, Math.trunc(base)));
+}
+
 /** Build the prune/exclude flags shared by the rg and grep branches. */
 function excludeFlags(prune, crossMounts) {
   // strip leading slash: grep/rg --exclude-dir matches a basename
@@ -64,7 +75,10 @@ export function buildGrepCommand({
   }
   const root = assertSearchPath(path, { allowRoot });
   const ex = excludeFlags(prune, crossMounts);
-  const ctx = contextLines > 0 ? ` -C ${contextLines | 0}` : '';
+  const cap = clampInt(matchCap, 1, 100000, SEARCH_DEFAULTS.matchCap);
+  const secs = clampInt(timeoutSecs, 1, 600, SEARCH_DEFAULTS.timeoutSecs);
+  const ctxN = clampInt(contextLines, 0, 1000, SEARCH_DEFAULTS.contextLines);
+  const ctx = ctxN > 0 ? ` -C ${ctxN}` : '';
   const qp = shQuote(pattern);
   const qroot = shQuote(root);
 
@@ -74,8 +88,8 @@ export function buildGrepCommand({
   const grep = `grep -rnI${ctx} ${ex} -e ${qp} ${qroot}`;
 
   const inner = `if command -v rg >/dev/null 2>&1; then ${rg}; `
-    + `else ${grep}; fi | head -n ${matchCap | 0}`;
-  return `timeout ${timeoutSecs | 0} sh -c ${shQuote(inner)}`;
+    + `else ${grep}; fi | head -n ${cap}`;
+  return `timeout ${secs} sh -c ${shQuote(inner)}`;
 }
 
 /**
@@ -95,6 +109,8 @@ export function buildLocateCommand({
     throw new Error('ssh_find: name is required for action locate');
   }
   const root = assertSearchPath(path, { allowRoot });
+  const cap = clampInt(matchCap, 1, 100000, SEARCH_DEFAULTS.matchCap);
+  const secs = clampInt(timeoutSecs, 1, 600, SEARCH_DEFAULTS.timeoutSecs);
   const xdev = crossMounts ? '' : ' -xdev';
   // -path '/proc' -prune -o ... -path '/run' -prune -o <match> -print
   const pruneExpr = prune
@@ -102,7 +118,7 @@ export function buildLocateCommand({
     .join(' ');
   const find = `find ${shQuote(root)}${xdev} ${pruneExpr} `
     + `-name ${shQuote(name)} -print`;
-  return `timeout ${timeoutSecs | 0} ${find} | head -n ${matchCap | 0}`;
+  return `timeout ${secs} ${find} | head -n ${cap}`;
 }
 
 /**
@@ -116,18 +132,19 @@ export function buildLsCommand({
   const p = typeof path === 'string' ? path.trim() : '';
   if (!p) throw new Error('ssh_find: path is required for action ls');
   const root = /^\/+$/.test(p) ? '/' : p.replace(/\/+$/, '') || '/';
-  return `timeout ${timeoutSecs | 0} ls -la ${shQuote(root)}`;
+  const secs = clampInt(timeoutSecs, 1, 600, SEARCH_DEFAULTS.timeoutSecs);
+  return `timeout ${secs} ls -la ${shQuote(root)}`;
 }
 
 /**
  * Parse grep/rg `file:line:text` output to {file, line, text} objects.
  * Splits on the first two colons only -- a colon in the match text survives.
- * grep context separators (`--`) and blank lines are dropped.
+ * grep context separators (`--`) and blank lines are dropped. CRLF tolerated.
  */
 export function parseGrepHits(text) {
   const s = text == null ? '' : String(text);
   const hits = [];
-  for (const raw of s.split('\n')) {
+  for (const raw of s.split(/\r?\n/)) {
     const ln = raw;
     if (ln === '' || ln === '--') continue;
     const c1 = ln.indexOf(':');
@@ -162,22 +179,29 @@ function lsType(perms) {
 /**
  * Parse `ls -la` long-format output to {perms, size, name, type} rows.
  * The leading `total N` line is skipped; a `name -> target` symlink keeps
- * only the name. Filenames with spaces survive (name = everything from
- * field 9 onward).
+ * only the name. Filenames with spaces survive (name = field 9 onward).
+ * Device rows carry `major, minor` for size -> joined into one size token.
  */
 export function parseLsRows(text) {
   const s = text == null ? '' : String(text);
   const rows = [];
-  for (const raw of s.split('\n')) {
+  for (const raw of s.split(/\r?\n/)) {
     const ln = raw.trim();
     if (ln === '' || /^total \d+$/.test(ln)) continue;
-    // perms links owner group size mon day time name...
-    const m = ln.match(/^(\S+)\s+\S+\s+\S+\s+\S+\s+(\S+)\s+\S+\s+\S+\s+\S+\s+(.+)$/);
+    // perms links owner group size mon day time name... ; size = N or "maj, min"
+    const m = ln.match(
+      /^(\S+)\s+\S+\s+\S+\s+\S+\s+(\d+,\s*\d+|\S+)\s+\S+\s+\S+\s+\S+\s+(.+)$/,
+    );
     if (!m) continue;
     let name = m[3];
     const arrow = name.indexOf(' -> ');
     if (arrow !== -1) name = name.slice(0, arrow);
-    rows.push({ perms: m[1], size: m[2], name, type: lsType(m[1]) });
+    rows.push({
+      perms: m[1],
+      size: m[2].replace(/\s+/g, ' '),
+      name,
+      type: lsType(m[1]),
+    });
   }
   return rows;
 }

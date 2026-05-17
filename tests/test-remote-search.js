@@ -14,6 +14,7 @@ import {
   parseLocateHits,
   parseLsRows,
 } from '../src/remote-search.js';
+import { shQuote } from '../src/stream-exec.js';
 
 let passed = 0;
 let failed = 0;
@@ -114,18 +115,35 @@ test('buildGrepCommand: bare root still refused here', () => {
   );
 });
 
-test('buildGrepCommand: a pattern with quotes cannot break out', () => {
+test('buildGrepCommand: a hostile pattern cannot break out', () => {
   const pattern = "a'; rm -rf /";
   const cmd = buildGrepCommand({ pattern, path: '/a' });
   // cmd is 'timeout N sh -c <shQuote(inner)>'; inner contains shQuote(pattern).
-  // The rm appears only inside the double-quoted sh -c argument, never as a
-  // bare command.  Verify structure: outer is sh -c '...', rm is not the last
-  // token outside quotes.
   assert(cmd.startsWith('timeout ') && cmd.includes('sh -c '), 'wrapped in sh -c');
-  // The whole remainder after 'sh -c ' is a single shell-quoted blob.
-  const shCIdx = cmd.indexOf('sh -c ');
-  const outerArg = cmd.slice(shCIdx + 'sh -c '.length);
+  const outerArg = cmd.slice(cmd.indexOf('sh -c ') + 'sh -c '.length);
   assert(outerArg.startsWith("'"), 'sh -c argument is single-quoted');
+  // Embedded quote forced shQuote escape sequence into the command.
+  assert(cmd.includes("'\\''"), 'quote-bearing token shows escape sequence');
+});
+
+test('buildGrepCommand: a hostile path cannot break out', () => {
+  const path = "/tmp/x'; rm -rf /; echo ";
+  const cmd = buildGrepCommand({ pattern: 'TODO', path });
+  assert(cmd.startsWith('timeout ') && cmd.includes('sh -c '), 'wrapped in sh -c');
+  assert(cmd.includes("'\\''"), 'hostile path produced escape sequence');
+});
+
+test('buildLocateCommand: hostile name/path cannot break out', () => {
+  const nameCmd = buildLocateCommand({ name: "x'; rm -rf /", path: '/a' });
+  assert(nameCmd.includes("'\\''"), 'hostile name shell-escaped');
+  const pathCmd = buildLocateCommand({ name: 'x', path: "/a'; rm -rf /" });
+  assert(pathCmd.includes("'\\''"), 'hostile path shell-escaped');
+});
+
+test('buildLsCommand: hostile path cannot break out', () => {
+  const cmd = buildLsCommand({ path: "/var'; rm -rf /; echo " });
+  assert(cmd.includes("'\\''"), 'hostile path shell-escaped');
+  assert(cmd.startsWith('timeout '), 'still timeout-wrapped');
 });
 
 // --- buildLocateCommand --------------------------------------------------
@@ -189,6 +207,83 @@ test('buildLsCommand: bare root is allowed -- listing / is cheap and safe', () =
   assert(cmd.includes("ls -la '/'"), 'root listing permitted');
 });
 
+// --- boundedness: timeout clamp ------------------------------------------
+test('buildGrepCommand: timeoutSecs 0 clamps to a real timeout', () => {
+  // timeout 0 = no timeout on GNU coreutils -> would be unbounded.
+  const cmd = buildGrepCommand({ pattern: 'x', path: '/a', timeoutSecs: 0 });
+  assert(/^timeout 20 /.test(cmd), `expected fallback timeout, got: ${cmd}`);
+  assert(!cmd.includes('timeout 0 '), 'never emits timeout 0');
+});
+
+test('buildGrepCommand: timeoutSecs NaN/string/negative clamp to bounded', () => {
+  for (const bad of [NaN, 'abc', -5, null, undefined]) {
+    const cmd = buildGrepCommand({ pattern: 'x', path: '/a', timeoutSecs: bad });
+    const m = cmd.match(/^timeout (\d+) /);
+    assert(m, `timeout token present for ${String(bad)}`);
+    const secs = Number(m[1]);
+    assert(secs >= 1 && secs <= 600, `bounded timeout for ${String(bad)}`);
+  }
+});
+
+test('buildGrepCommand: timeoutSecs above ceiling clamps to 600', () => {
+  const cmd = buildGrepCommand({ pattern: 'x', path: '/a', timeoutSecs: 999999 });
+  assert(/^timeout 600 /.test(cmd), `clamped to ceiling, got: ${cmd}`);
+});
+
+test('buildLocateCommand: timeoutSecs 0/NaN clamp to bounded', () => {
+  for (const bad of [0, NaN, 'abc', -1]) {
+    const cmd = buildLocateCommand({ name: 'x', path: '/a', timeoutSecs: bad });
+    assert(!cmd.includes('timeout 0 '), `no timeout 0 for ${String(bad)}`);
+    const m = cmd.match(/^timeout (\d+) /);
+    assert(m && Number(m[1]) >= 1, `bounded timeout for ${String(bad)}`);
+  }
+});
+
+test('buildLsCommand: timeoutSecs 0/NaN clamp to bounded', () => {
+  for (const bad of [0, NaN, 'abc', -1]) {
+    const cmd = buildLsCommand({ path: '/a', timeoutSecs: bad });
+    assert(!cmd.includes('timeout 0 '), `no timeout 0 for ${String(bad)}`);
+    const m = cmd.match(/^timeout (\d+) /);
+    assert(m && Number(m[1]) >= 1, `bounded timeout for ${String(bad)}`);
+  }
+});
+
+// --- boundedness: match cap clamp ----------------------------------------
+test('buildGrepCommand: matchCap 0 clamps -> head never gets -n 0', () => {
+  const cmd = buildGrepCommand({ pattern: 'x', path: '/a', matchCap: 0 });
+  assert(cmd.includes('| head -n 200'), `fallback cap, got: ${cmd}`);
+  assert(!cmd.includes('head -n 0'), 'never head -n 0');
+});
+
+test('buildGrepCommand: matchCap NaN/string/negative clamp to bounded', () => {
+  // grep head is inside the sh -c '...' arg -> trailing quote after the number.
+  for (const bad of [NaN, 'abc', -10, null, undefined]) {
+    const cmd = buildGrepCommand({ pattern: 'x', path: '/a', matchCap: bad });
+    const m = cmd.match(/\| head -n (-?\d+)'$/);
+    assert(m, `head cap present for ${String(bad)}`);
+    const cap = Number(m[1]);
+    assert(cap >= 1 && cap <= 100000, `bounded cap for ${String(bad)}`);
+  }
+});
+
+test('buildGrepCommand: huge matchCap clamps -> no Int32 wrap to negative', () => {
+  // matchCap | 0 wraps a value >2^31 negative -> head -n -1 = print all.
+  const cmd = buildGrepCommand({ pattern: 'x', path: '/a', matchCap: 2 ** 32 });
+  const m = cmd.match(/\| head -n (-?\d+)'$/);
+  assert(m && Number(m[1]) > 0, `positive cap, got: ${cmd}`);
+  assert(Number(m[1]) <= 100000, 'cap clamped to ceiling');
+});
+
+test('buildLocateCommand: matchCap 0/NaN/huge clamp to bounded', () => {
+  for (const bad of [0, NaN, 'abc', -1, 2 ** 32]) {
+    const cmd = buildLocateCommand({ name: 'x', path: '/a', matchCap: bad });
+    const m = cmd.match(/\| head -n (-?\d+)$/);
+    assert(m, `head cap present for ${String(bad)}`);
+    const cap = Number(m[1]);
+    assert(cap >= 1 && cap <= 100000, `bounded cap for ${String(bad)}`);
+  }
+});
+
 // --- parseGrepHits -------------------------------------------------------
 test('parseGrepHits: file:line:text rows parsed to objects', () => {
   const hits = parseGrepHits(
@@ -216,6 +311,13 @@ test('parseGrepHits: blank lines and grep context "--" separators dropped', () =
 test('parseGrepHits: empty / nullish input -> empty array', () => {
   assert.deepStrictEqual(parseGrepHits(''), []);
   assert.deepStrictEqual(parseGrepHits(null), []);
+});
+
+test('parseGrepHits: CRLF stream leaves no trailing \\r on text', () => {
+  const hits = parseGrepHits('/a/x.js:1:const y = 1;\r\n/a/z.js:2:done\r\n');
+  assert.strictEqual(hits.length, 2);
+  assert.strictEqual(hits[0].text, 'const y = 1;');
+  assert.strictEqual(hits[1].text, 'done');
 });
 
 // --- parseLocateHits -----------------------------------------------------
@@ -260,6 +362,27 @@ test('parseLsRows: symlink target is stripped from the name', () => {
 
 test('parseLsRows: empty input -> empty array', () => {
   assert.deepStrictEqual(parseLsRows(''), []);
+});
+
+test('parseLsRows: device-file rows (major, minor size) parse cleanly', () => {
+  const rows = parseLsRows(
+    'total 0\n'
+    + 'crw-rw-rw- 1 root tty 5, 0 May 17 10:00 tty0\n'
+    + 'brw-rw---- 1 root disk 8, 0 May 17 10:00 sda',
+  );
+  assert.strictEqual(rows.length, 2);
+  assert.strictEqual(rows[0].name, 'tty0');
+  assert.strictEqual(rows[0].size, '5, 0');
+  assert.strictEqual(rows[1].name, 'sda');
+  assert.strictEqual(rows[1].size, '8, 0');
+});
+
+test('parseLsRows: CRLF output parses without mangling', () => {
+  const rows = parseLsRows(
+    'total 4\r\n-rw-r--r-- 1 u g 9 May 17 10:00 app.conf\r\n',
+  );
+  assert.strictEqual(rows.length, 1);
+  assert.strictEqual(rows[0].name, 'app.conf');
 });
 
 // --- Summary -------------------------------------------------------------
