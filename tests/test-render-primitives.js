@@ -4,7 +4,7 @@
  * Run: node tests/test-render-primitives.js
  */
 import assert from 'assert';
-import { renderHeader, indentBody, renderKV } from '../src/output-formatter.js';
+import { renderHeader, indentBody, renderKV, renderRows } from '../src/output-formatter.js';
 
 let passed = 0;
 let failed = 0;
@@ -79,6 +79,33 @@ test('renderKV: empty or non-array -> empty string', () => {
 
 test('renderKV: coerces non-string values, nullish value -> empty', () => {
   assert.strictEqual(renderKV([['n', 42], ['m', null]]), 'n  42\nm  ');
+});
+
+// --- renderRows ----------------------------------------------------------
+test('renderRows: aligns columns, no trailing whitespace', () => {
+  const t = renderRows(['name', 'exit'], [['web1', '0'], ['db1', '1']]);
+  assert.strictEqual(t, 'name  exit\nweb1  0\ndb1   1');
+});
+
+test('renderRows: empty headers -> empty string', () => {
+  assert.strictEqual(renderRows([], []), '');
+});
+
+test('renderRows: failures sorted to top with summary count', () => {
+  const t = renderRows(
+    ['name', 'ok'],
+    [['a', 'y'], ['b', 'n'], ['c', 'y']],
+    { isFail: (r) => r[1] === 'n' },
+  );
+  const lines = t.split('\n');
+  assert.strictEqual(lines[0], '1/3 failed');
+  assert.strictEqual(lines[1], 'name  ok');
+  assert.strictEqual(lines[2], 'b     n');
+});
+
+test('renderRows: isFail with zero failures adds no summary line', () => {
+  const t = renderRows(['n'], [['a'], ['b']], { isFail: () => false });
+  assert.strictEqual(t.split('\n')[0], 'n');
 });
 
 // --- Summary -------------------------------------------------------------

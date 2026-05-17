@@ -242,3 +242,32 @@ export function renderKV(rows) {
     .map(([k, v]) => `${String(k).padEnd(width)}  ${v == null ? '' : String(v)}`)
     .join('\n');
 }
+
+/**
+ * Render rows as a column-aligned ASCII table. `headers` is an array of column
+ * labels; `rows` is an array of cell arrays. With an `isFail` predicate, failed
+ * rows sort first and an `N/M failed` summary line is prepended.
+ */
+export function renderRows(headers, rows, { isFail } = {}) {
+  if (!Array.isArray(headers) || headers.length === 0) return '';
+  let ordered = Array.isArray(rows) ? rows.slice() : [];
+  let summary = '';
+  if (typeof isFail === 'function') {
+    const failed = ordered.filter((r) => isFail(r));
+    const rest = ordered.filter((r) => !isFail(r));
+    ordered = [...failed, ...rest];
+    if (failed.length > 0) summary = `${failed.length}/${rows.length} failed`;
+  }
+  const widths = headers.map((h, i) =>
+    Math.max(String(h).length, ...ordered.map((r) => String(r[i] ?? '').length)));
+  const fmt = (cells) =>
+    cells
+      .map((c, i) => String(c ?? '').padEnd(widths[i]))
+      .join('  ')
+      .replace(/\s+$/, '');
+  const lines = [];
+  if (summary) lines.push(summary);
+  lines.push(fmt(headers));
+  for (const r of ordered) lines.push(fmt(r));
+  return lines.join('\n');
+}
