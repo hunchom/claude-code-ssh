@@ -22,6 +22,10 @@ export const TOOL_ANNOTATIONS = {
     title: 'Run Remote Command',
     annotations: { destructiveHint: true, openWorldHint: true },
   },
+  ssh_find: {
+    title: 'Search and List Files',
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+  },
   ssh_file: {
     title: 'Transfer / Read / Edit Files',
     annotations: { destructiveHint: true, openWorldHint: true },

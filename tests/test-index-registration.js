@@ -64,10 +64,10 @@ await test('every registerToolConditional() corresponds to a TOOL_GROUPS entry',
     `tools registered in index.js but missing from TOOL_GROUPS: ${orphans.join(', ')}`);
 });
 
-await test('exactly 12 tools are registered', () => {
+await test('exactly 13 tools are registered', () => {
   const registered = registeredNames(indexSrc);
-  assert.strictEqual(registered.size, 12,
-    `expected 12 registered tools, got ${registered.size}: ${[...registered].join(', ')}`);
+  assert.strictEqual(registered.size, 13,
+    `expected 13 registered tools, got ${registered.size}: ${[...registered].join(', ')}`);
 });
 
 await test('count of registered tools matches registry exactly', () => {

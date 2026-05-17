@@ -7,12 +7,13 @@
 
 /**
  * Tool groups with their associated tools.
- * Total: 12 v4 fat verb-tools across 3 groups.
+ * Total: 13 v4 fat verb-tools across 3 groups.
  */
 export const TOOL_GROUPS = {
-  // Core (3) -- run commands, move files, read logs
+  // Core (4) -- run commands, find files, move files, read logs
   core: [
     'ssh_run',
+    'ssh_find',
     'ssh_file',
     'ssh_logs',
   ],
@@ -39,7 +40,7 @@ export const TOOL_GROUPS = {
  * Human-readable descriptions for each tool group.
  */
 export const TOOL_GROUP_DESCRIPTIONS = {
-  core: 'Run remote commands, transfer/read/edit files, read logs',
+  core: 'Run remote commands, search/list files, transfer/read/edit files, read logs',
   ops: 'Service control, health checks, database ops, backups, Docker',
   advanced: 'Persistent sessions, tunnels/port probes, fleet+config metadata, multi-step plans',
 };
@@ -48,14 +49,14 @@ export const TOOL_GROUP_DESCRIPTIONS = {
  * Tool count per group.
  */
 export const TOOL_GROUP_COUNTS = {
-  core: 3,
+  core: 4,
   ops: 5,
   advanced: 4,
 };
 
 /**
  * Get all tool names across all groups
- * @returns {string[]} Array of all tool names (12 across 3 groups)
+ * @returns {string[]} Array of all tool names (13 across 3 groups)
  */
 export function getAllTools() {
   return Object.values(TOOL_GROUPS).flat();

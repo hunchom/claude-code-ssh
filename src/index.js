@@ -78,8 +78,9 @@ import { handleSshDocker } from './tools/docker-tools.js';
 import { handleSshPortTest } from './tools/port-test-tools.js';
 import { handleSshPlan } from './tools/plan-tools.js';
 
-// v4 dispatcher facade -- 12 fat verb-tools over the handlers above.
+// v4 dispatcher facade -- 13 fat verb-tools over the handlers above.
 import { handleSshRun } from './dispatchers/ssh-run.js';
+import { handleSshFind } from './dispatchers/ssh-find.js';
 import { handleSshFile } from './dispatchers/ssh-file.js';
 import { handleSshLogs } from './dispatchers/ssh-logs.js';
 import { handleSshService } from './dispatchers/ssh-service.js';
@@ -514,6 +515,30 @@ registerToolConditional('ssh_run', {
     executeSudo: handleSshExecuteSudo,
     executeGroup: handleSshExecuteGroup,
   },
+  args,
+}));
+
+registerToolConditional('ssh_find', {
+  description: 'Search and list files on a configured SSH server. Use instead '
+    + 'of `ssh host grep -r` / `ssh host find` / `ssh host ls` via Bash -- '
+    + 'every search is timeout-bounded, prunes pseudo-filesystems, and caps '
+    + 'match count so it will not flood context.',
+  inputSchema: {
+    server: z.string().describe('Server name from configuration'),
+    action: z.enum(['grep', 'locate', 'ls'])
+      .describe('grep recursive content, locate files by name, or ls one directory'),
+    path: z.string().describe('Search root (grep, locate) or directory to list (ls)'),
+    pattern: z.string().optional().describe('Content regex to search for (action: grep)'),
+    name: z.string().optional().describe('Filename glob to match (action: locate)'),
+    context_lines: z.number().optional().describe('Lines of context around each grep hit (action: grep)'),
+    match_cap: z.number().optional().describe('Max hits before the search stops (actions: grep, locate)'),
+    timeout_secs: z.number().optional().describe('Server-side wall-clock limit in seconds'),
+    cross_mounts: z.boolean().optional().describe('Descend into other filesystems (actions: grep, locate)'),
+    allow_root: z.boolean().optional().describe('Permit searching the bare "/" root (actions: grep, locate)'),
+    format: FORMAT,
+  },
+}, async (args) => handleSshFind({
+  deps: DEPS,
   args,
 }));
 

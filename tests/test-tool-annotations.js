@@ -40,9 +40,9 @@ await test('every annotated tool is actually registered (no dangling entries)', 
     `annotations defined for unknown tools: ${dangling.join(', ')}`);
 });
 
-await test('exactly 12 tools are annotated', () => {
-  assert.strictEqual(Object.keys(TOOL_ANNOTATIONS).length, 12,
-    `expected 12 annotated tools, got ${Object.keys(TOOL_ANNOTATIONS).length}`);
+await test('exactly 13 tools are annotated', () => {
+  assert.strictEqual(Object.keys(TOOL_ANNOTATIONS).length, 13,
+    `expected 13 annotated tools, got ${Object.keys(TOOL_ANNOTATIONS).length}`);
 });
 
 await test('every annotated tool has a human title', () => {
@@ -70,7 +70,7 @@ await test('mutation-capable fat tools are marked destructiveHint', () => {
 });
 
 await test('purely-inspecting fat tools are marked readOnlyHint', () => {
-  for (const name of ['ssh_logs', 'ssh_fleet']) {
+  for (const name of ['ssh_logs', 'ssh_fleet', 'ssh_find']) {
     assert.strictEqual(TOOL_ANNOTATIONS[name]?.annotations?.readOnlyHint, true,
       `${name} should be readOnlyHint:true`);
   }
