@@ -243,10 +243,13 @@ async function execCommandWithTimeout(ssh, command, options = {}, timeoutMs = 30
   }
 }
 
-// Check if a connection is still valid
-async function isConnectionValid(ssh) {
+// Synchronous pool-liveness check. No network: a reused connection must not
+// pay an echo round-trip per command. A genuinely dead socket is caught when
+// the next real command fails, and getConnection reconnects then. ssh.ping()
+// is retained on SSHManager for explicit opt-in probes (ssh_health etc.).
+function isConnectionValid(ssh) {
   try {
-    return await ssh.ping();
+    return typeof ssh.isAlive === 'function' ? ssh.isAlive() : false;
   } catch (error) {
     logger.debug('Connection validation failed', { error: error.message });
     return false;
@@ -263,7 +266,7 @@ function setupKeepalive(serverName, ssh) {
   // Set up new keepalive interval
   const interval = setInterval(async () => {
     try {
-      const isValid = await isConnectionValid(ssh);
+      const isValid = isConnectionValid(ssh);
       if (!isValid) {
         logger.warn(`Connection to ${serverName} lost, will reconnect on next use`);
         closeConnection(serverName);
@@ -344,7 +347,7 @@ async function getConnection(serverName) {
     const existingSSH = connections.get(normalizedName);
 
     // Verify the connection is still valid
-    const isValid = await isConnectionValid(existingSSH);
+    const isValid = isConnectionValid(existingSSH);
 
     if (isValid) {
       // Update timestamp and return existing connection
