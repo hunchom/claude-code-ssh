@@ -144,8 +144,8 @@ test('defaultRender: preview renders plain "dry run" line and KV plan', () => {
   const md = defaultRender(preview('ssh_upload', { action: 'upload', target: 'a' }));
   assert(md.includes('dry run -- nothing executed'));
   assert(!md.includes('```'), 'no fenced JSON');
-  assert(md.includes('action'));
-  assert(md.includes('upload'));
+  assert(/^\s*action\s+upload$/m.test(md), 'action value is upload');
+  assert(/^\s*target\s+a$/m.test(md), 'target value is a');
 });
 
 test('defaultRender: omits duration when meta has none', () => {
@@ -157,6 +157,24 @@ test('defaultRender: elided bytes footer rendered plain', () => {
   const md = defaultRender(ok('t', { x: 1 }, { elided_bytes: 5120 }));
   assert(md.includes('elided: 5.0 KB'));
   assert(!md.includes('>'), 'no blockquote marker');
+});
+
+// --- kvRows (exercised via defaultRender) --------------------------------
+test('defaultRender: nested object/array values render as compact JSON', () => {
+  const md = defaultRender(ok('t', { arr: [1, 2], nested: { a: 1 } }));
+  assert(!md.includes('[object Object]'), 'nested object not stringified to [object Object]');
+  assert(md.includes('[1,2]'), 'array as compact JSON');
+  assert(md.includes('{"a":1}'), 'nested object as compact JSON');
+});
+
+test('defaultRender: null data does not throw, renders header only', () => {
+  const md = defaultRender(ok('t', null));
+  assert.strictEqual(md, '[ok] t');
+});
+
+test('defaultRender: non-object data renders a single value row', () => {
+  const md = defaultRender(ok('t', 'plain string'));
+  assert(/^\s*value\s+plain string$/m.test(md), 'scalar data in a value row');
 });
 
 // --- buildPlan -----------------------------------------------------------
@@ -194,8 +212,8 @@ test('maybePreview returns MCP response when preview=true', () => {
   assert(r);
   assert.strictEqual(r.isError, false);
   assert(r.content[0].text.includes('dry run'));
-  assert(r.content[0].text.includes('action'));
-  assert(r.content[0].text.includes('upload'));
+  assert(/^\s*action\s+upload$/m.test(r.content[0].text), 'action value is upload');
+  assert(/^\s*reversibility\s+auto$/m.test(r.content[0].text), 'reversibility value is auto');
 });
 
 // --- renderPlan ----------------------------------------------------------

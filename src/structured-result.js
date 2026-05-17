@@ -133,12 +133,14 @@ export function defaultRender(result) {
 
   if (data && data.preview) {
     lines.push('  dry run -- nothing executed');
-    lines.push(indentBody(renderKV(kvRows(data.plan))));
+    const planBody = renderKV(kvRows(data.plan));
+    if (planBody) lines.push(indentBody(planBody));
     return lines.join('\n');
   }
 
   if (data != null) {
-    lines.push(indentBody(renderKV(kvRows(data))));
+    const body = renderKV(kvRows(data));
+    if (body) lines.push(indentBody(body));
   }
 
   const elided = meta && (meta.truncated_bytes || meta.elided_bytes);
@@ -150,11 +152,17 @@ export function defaultRender(result) {
 /**
  * Flatten an object to [key, value] rows for renderKV. Nested objects/arrays
  * collapse to compact JSON; non-objects render as a single `value` row.
+ * Scalar newlines collapse to spaces -- renderKV cells must stay single-line.
  */
 function kvRows(obj) {
-  if (obj == null || typeof obj !== 'object') return [['value', String(obj)]];
+  if (obj == null || typeof obj !== 'object') return [['value', scalar(obj)]];
   return Object.entries(obj).map(([k, v]) => [
     k,
-    v != null && typeof v === 'object' ? JSON.stringify(v) : String(v),
+    v != null && typeof v === 'object' ? JSON.stringify(v) : scalar(v),
   ]);
+}
+
+// Scalar -> single-line string. Newlines -> spaces.
+function scalar(v) {
+  return String(v).replace(/\r?\n/g, ' ');
 }
