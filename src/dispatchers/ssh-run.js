@@ -14,8 +14,7 @@
  * handlers (injected): { execute, executeSudo, executeGroup }.
  */
 
-import { fail, toMcp } from '../structured-result.js';
-import { ok } from '../structured-result.js';
+import { ok, fail, toMcp } from '../structured-result.js';
 import { streamExecCommand } from '../stream-exec.js';
 import { renderHeader, renderRows, renderKV, indentBody } from '../output-formatter.js';
 import { makeCtx } from './ctx-factory.js';
