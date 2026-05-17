@@ -48,6 +48,7 @@ export async function handleSshFile({ deps, handlers, args } = {}) {
         server: a.server,
         local_path: a.local_path,
         remote_path: a.remote_path,
+        verify: a.verify,
         preview: a.preview,
         format: a.format,
       }));
@@ -57,6 +58,7 @@ export async function handleSshFile({ deps, handlers, args } = {}) {
         server: a.server,
         local_path: a.local_path,
         remote_path: a.remote_path,
+        verify: a.verify,
         preview: a.preview,
         format: a.format,
       }));
@@ -68,6 +70,8 @@ export async function handleSshFile({ deps, handlers, args } = {}) {
         destination: a.destination,
         exclude: a.exclude,
         delete: a.delete_extra,
+        dry_run: a.dry_run,
+        compress: a.compress,
         preview: a.preview,
         format: a.format,
       }));
@@ -112,9 +116,9 @@ export async function handleSshFile({ deps, handlers, args } = {}) {
         format: a.format,
       }));
 
+    // deploy + deploy-artifact share handleSshDeploy; action already validated
     case 'deploy':
     case 'deploy-artifact':
-    default:
       return handlers.deploy(makeCtx('deploy', deps, {
         server: a.server,
         artifact_local_path: a.artifact_local_path,

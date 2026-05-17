@@ -69,6 +69,12 @@ test('requireArgs: server is validated like any other required arg', () => {
   assert(r.content[0].text.includes('server'), 'missing server reported');
 });
 
+test('requireArgs: explicit null counts as missing', () => {
+  const r = requireArgs('ssh_run', 'exec', { command: null }, { exec: ['command'] });
+  assert(r, 'null-valued arg is treated as absent');
+  assert(r.content[0].text.includes('command'));
+});
+
 // --- makeCtx -------------------------------------------------------------
 const DEPS = {
   getConnection: () => 'CONN',

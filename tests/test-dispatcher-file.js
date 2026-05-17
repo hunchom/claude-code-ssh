@@ -106,6 +106,17 @@ await test('edit routes to handlers.edit, maps remote_path -> path', async () =>
   assert.deepStrictEqual(edit.calls[0].args.patch, [{ find: 'a', replace: 'b' }]);
 });
 
+await test('edit without old_text or content -> routes, patch undefined', async () => {
+  const edit = spy();
+  await handleSshFile({
+    deps: DEPS, handlers: { edit },
+    args: { server: 's', action: 'edit', remote_path: '/tmp/f' },
+  });
+  assert.strictEqual(edit.calls.length, 1);
+  assert.strictEqual(edit.calls[0].args.path, '/tmp/f');
+  assert.strictEqual(edit.calls[0].args.patch, undefined);
+});
+
 await test('diff routes to handlers.diff', async () => {
   const diff = spy();
   await handleSshFile({

@@ -36,13 +36,15 @@ export async function handleSshRun({ deps, handlers, args } = {}) {
   const bad = requireArgs('ssh_run', action, a, REQUIRED);
   if (bad) return bad;
 
+  // exec + sudo both resolve server default_dir when no cwd given
+  const cfg = (deps && deps.getServerConfig && deps.getServerConfig(a.server)) || {};
+
   if (action === 'exec') {
-    const cfg = (deps.getServerConfig && deps.getServerConfig(a.server)) || {};
     return handlers.execute(makeCtx('conn', deps, {
       server: a.server,
       command: a.command,
       cwd: a.cwd || cfg.default_dir,
-      timeoutMs: a.timeout,
+      timeout: a.timeout,
       raw: a.raw,
       format: a.format,
     }));
@@ -53,8 +55,8 @@ export async function handleSshRun({ deps, handlers, args } = {}) {
       server: a.server,
       command: a.command,
       password: a.sudo_password,
-      cwd: a.cwd,
-      timeoutMs: a.timeout,
+      cwd: a.cwd || cfg.default_dir,
+      timeout: a.timeout,
       raw: a.raw,
       format: a.format,
     }));

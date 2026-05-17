@@ -56,13 +56,13 @@ await test('exec routes to handlers.execute with { getConnection, args }', async
   assert.strictEqual(ctx.resolveGroup, undefined, 'exec ctx carries no resolveGroup');
 });
 
-await test('exec maps timeout -> timeoutMs for the handler', async () => {
+await test('exec forwards timeout to the handler as timeout', async () => {
   const execute = spy();
   await handleSshRun({
     deps: DEPS, handlers: { execute },
     args: { server: 's', action: 'exec', command: 'ls', timeout: 9000 },
   });
-  assert.strictEqual(execute.calls[0].args.timeoutMs, 9000);
+  assert.strictEqual(execute.calls[0].args.timeout, 9000);
 });
 
 await test('sudo routes to handlers.executeSudo with getServerConfig in ctx', async () => {
@@ -75,14 +75,14 @@ await test('sudo routes to handlers.executeSudo with getServerConfig in ctx', as
   assert.strictEqual(executeSudo.calls[0].getServerConfig, DEPS.getServerConfig);
 });
 
-await test('sudo maps sudo_password -> password and timeout -> timeoutMs', async () => {
+await test('sudo maps sudo_password -> password and forwards timeout', async () => {
   const executeSudo = spy();
   await handleSshRun({
     deps: DEPS, handlers: { executeSudo },
     args: { server: 's', action: 'sudo', command: 'id', sudo_password: 'pw', timeout: 5000 },
   });
   assert.strictEqual(executeSudo.calls[0].args.password, 'pw');
-  assert.strictEqual(executeSudo.calls[0].args.timeoutMs, 5000);
+  assert.strictEqual(executeSudo.calls[0].args.timeout, 5000);
 });
 
 await test('fleet routes to handlers.executeGroup with resolveGroup in ctx', async () => {
