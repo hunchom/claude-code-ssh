@@ -51,6 +51,7 @@ import {
 } from './server-groups.js';
 import { loadToolConfig, isToolEnabled } from './tool-config-manager.js';
 import { withAnnotations } from './tool-annotations.js';
+import { V4_TOOL_DESCRIPTIONS } from './tool-descriptions.js';
 
 // Modularized tool handlers (src/tools/*.js) -- 10/10 "gamechanger" versions
 import { handleSshExecute, handleSshExecuteSudo, handleSshExecuteGroup } from './tools/exec-tools.js';
@@ -494,9 +495,7 @@ const DEPS = {
 };
 
 registerToolConditional('ssh_run', {
-  description: 'Run a command on a configured SSH server. Use instead of '
-    + '`ssh host <cmd>` via Bash -- the connection is pooled (no per-call '
-    + 'handshake) and output is bounded and compressed.',
+  description: V4_TOOL_DESCRIPTIONS.ssh_run,
   inputSchema: {
     server: z.string().describe('Server name from configuration'),
     action: z.enum(['exec', 'sudo', 'fleet', 'script', 'detach', 'job-status', 'job-kill'])
@@ -529,10 +528,7 @@ registerToolConditional('ssh_run', {
 }));
 
 registerToolConditional('ssh_find', {
-  description: 'Search and list files on a configured SSH server. Use instead '
-    + 'of `ssh host grep -r` / `ssh host find` / `ssh host ls` via Bash -- '
-    + 'every search is timeout-bounded, prunes pseudo-filesystems, and caps '
-    + 'match count so it will not flood context.',
+  description: V4_TOOL_DESCRIPTIONS.ssh_find,
   inputSchema: {
     server: z.string().describe('Server name from configuration'),
     action: z.enum(['grep', 'locate', 'ls'])
@@ -553,9 +549,7 @@ registerToolConditional('ssh_find', {
 }));
 
 registerToolConditional('ssh_file', {
-  description: 'Transfer, read, edit, diff, or deploy files on a configured '
-    + 'SSH server. Use instead of `scp` / `ssh host cat` / heredocs via Bash '
-    + '-- transfers are sha256-verified and writes avoid shell-quoting hazards.',
+  description: V4_TOOL_DESCRIPTIONS.ssh_file,
   inputSchema: {
     server: z.string().describe('Server name from configuration'),
     action: z.enum(['upload', 'download', 'sync', 'read', 'write', 'edit', 'diff', 'deploy', 'deploy-artifact'])
@@ -600,9 +594,7 @@ registerToolConditional('ssh_file', {
 }));
 
 registerToolConditional('ssh_logs', {
-  description: 'Read remote logs. Use instead of `ssh host journalctl` / '
-    + '`ssh host tail` via Bash -- output is capped and filtered so it will '
-    + 'not flood context.',
+  description: V4_TOOL_DESCRIPTIONS.ssh_logs,
   inputSchema: {
     server: z.string().optional().describe('Server name (actions: tail, follow-start, journal)'),
     action: z.enum(['tail', 'follow-start', 'follow-read', 'follow-stop', 'journal'])
@@ -631,7 +623,7 @@ registerToolConditional('ssh_logs', {
 }));
 
 registerToolConditional('ssh_service', {
-  description: 'Inspect or control a systemd service on a configured SSH server.',
+  description: V4_TOOL_DESCRIPTIONS.ssh_service,
   inputSchema: {
     server: z.string().describe('Server name from configuration'),
     action: z.enum(['status', 'start', 'stop', 'restart', 'enable', 'disable'])
@@ -647,8 +639,7 @@ registerToolConditional('ssh_service', {
 }));
 
 registerToolConditional('ssh_health', {
-  description: 'Server health snapshot, resource watch, process management, '
-    + 'and threshold alerts for a configured SSH server.',
+  description: V4_TOOL_DESCRIPTIONS.ssh_health,
   inputSchema: {
     server: z.string().describe('Server name from configuration'),
     action: z.enum(['check', 'watch', 'procs', 'alerts']).describe('Health operation to perform'),
@@ -677,8 +668,7 @@ registerToolConditional('ssh_health', {
 }));
 
 registerToolConditional('ssh_db', {
-  description: 'Database operations (MySQL, PostgreSQL, MongoDB) on a '
-    + 'configured SSH server. Queries are SELECT-only and token-validated.',
+  description: V4_TOOL_DESCRIPTIONS.ssh_db,
   inputSchema: {
     server: z.string().describe('Server name from configuration'),
     action: z.enum(['query', 'list', 'dump', 'import']).describe('Database operation to perform'),
@@ -707,8 +697,7 @@ registerToolConditional('ssh_db', {
 }));
 
 registerToolConditional('ssh_backup', {
-  description: 'Create, list, restore, or schedule content-addressed backups '
-    + 'on a configured SSH server.',
+  description: V4_TOOL_DESCRIPTIONS.ssh_backup,
   inputSchema: {
     server: z.string().describe('Server name from configuration'),
     action: z.enum(['create', 'list', 'restore', 'schedule']).describe('Backup operation to perform'),
@@ -739,8 +728,7 @@ registerToolConditional('ssh_backup', {
 }));
 
 registerToolConditional('ssh_docker', {
-  description: 'Docker control on a configured SSH server (ps, logs, exec, '
-    + 'restart, inspect).',
+  description: V4_TOOL_DESCRIPTIONS.ssh_docker,
   inputSchema: {
     server: z.string().describe('Server name from configuration'),
     action: z.enum(['ps', 'logs', 'exec', 'restart', 'inspect']).describe('Docker operation to perform'),
@@ -758,8 +746,7 @@ registerToolConditional('ssh_docker', {
 }));
 
 registerToolConditional('ssh_session', {
-  description: 'Persistent SSH sessions with preserved shell state, history '
-    + 'replay, and inferred memory.',
+  description: V4_TOOL_DESCRIPTIONS.ssh_session,
   inputSchema: {
     server: z.string().optional().describe('Server name (action: start)'),
     action: z.enum(['start', 'send', 'list', 'close', 'replay', 'memory'])
@@ -784,8 +771,7 @@ registerToolConditional('ssh_session', {
 }));
 
 registerToolConditional('ssh_net', {
-  description: 'SSH tunnels (local/remote/SOCKS) and outbound port/TLS/HTTP '
-    + 'reachability probes from a configured server.',
+  description: V4_TOOL_DESCRIPTIONS.ssh_net,
   inputSchema: {
     server: z.string().optional().describe('Server name (actions: tunnel-open, port-test)'),
     action: z.enum(['tunnel-open', 'tunnel-list', 'tunnel-close', 'port-test'])
@@ -816,9 +802,7 @@ registerToolConditional('ssh_net', {
 }));
 
 registerToolConditional('ssh_fleet', {
-  description: 'Fleet and configuration metadata: configured servers, server '
-    + 'groups, aliases, profiles, hooks, host keys, command history, '
-    + 'connection pool.',
+  description: V4_TOOL_DESCRIPTIONS.ssh_fleet,
   inputSchema: {
     action: z.enum(['servers', 'groups', 'aliases', 'command_alias', 'profiles', 'hooks', 'keys', 'history', 'connections'])
       .describe('Fleet/config entity to operate on'),
@@ -869,8 +853,7 @@ registerToolConditional('ssh_fleet', {
 }));
 
 registerToolConditional('ssh_plan', {
-  description: 'Declarative multi-step plan executor. Runs an ordered list of '
-    + 'steps with rollback; high-risk steps need a re-run with approve_token.',
+  description: V4_TOOL_DESCRIPTIONS.ssh_plan,
   inputSchema: {
     action: z.enum(['run', 'approve']).describe('run a plan, or approve and re-run a high-risk plan'),
     steps: z.array(z.any()).describe('Ordered list of step objects'),
