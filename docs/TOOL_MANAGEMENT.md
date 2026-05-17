@@ -14,7 +14,6 @@ through an `action` enum (`ssh_run`, `ssh_file`, `ssh_find`, `ssh_logs`,
 `ssh_service`, `ssh_health`, `ssh_db`, `ssh_backup`, `ssh_session`, `ssh_net`,
 `ssh_docker`, `ssh_fleet`, `ssh_plan`). All 13 are registered unconditionally —
 there is nothing to enable or disable.
-3. **Custom** - Pick which groups to enable
 
 ### Enable/Disable Specific Groups
 

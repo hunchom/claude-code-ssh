@@ -72,13 +72,13 @@ export const V4_TOOL_DESCRIPTIONS = Object.freeze({
     + '`ssh host "docker ps"` / `docker logs` / `docker exec` -- container and '
     + 'image names are validated, mutations show a preview, and `ps` / `logs` '
     + 'output is capped so a busy host will not flood context. Actions: ps, '
-    + 'logs, exec, restart, inspect, compose.',
+    + 'logs, exec, restart, inspect.',
   ssh_fleet:
     'Inspect fleet and connection metadata. Use instead of `ssh -G hostname` '
     + 'or hand-grepping ~/.ssh/config -- lists configured servers, '
     + 'groups, aliases, profiles, hooks, keys, history, and live pooled '
     + 'connections as structured tables. Actions: servers, groups, aliases, '
-    + 'profiles, hooks, keys, history, connections.',
+    + 'command_alias, profiles, hooks, keys, history, connections.',
   ssh_plan:
     'Run a declarative multi-step plan across configured servers. Use instead '
     + 'of a hand-sequenced batch of `ssh host cmd` calls -- steps dispatch to '

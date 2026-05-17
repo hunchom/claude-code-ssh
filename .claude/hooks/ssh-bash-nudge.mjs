@@ -8,6 +8,7 @@
  * Wired in .claude/settings.json under hooks.PreToolUse, matcher "Bash".
  */
 import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
 
 // Shell metacharacters => the command line is not a simple invocation. Bail.
 const COMPLEX = /[|&;<>`]|\$\(/;
@@ -110,7 +111,7 @@ function main() {
   }
 
   const command = payload && payload.tool_input && payload.tool_input.command;
-  const envPath = new URL('../../.env', import.meta.url).pathname;
+  const envPath = fileURLToPath(new URL('../../.env', import.meta.url));
   const nudge = detectSshNudge(command, configuredServers(envPath));
   if (nudge) console.log(nudge.message);
   process.exit(0);
