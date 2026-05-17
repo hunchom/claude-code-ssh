@@ -230,3 +230,15 @@ export function indentBody(text, prefix = '  ') {
   if (text == null || text === '') return '';
   return String(text).split('\n').map((l) => prefix + l).join('\n');
 }
+
+/**
+ * Render [key, value] pairs as a column-aligned key/value block. Keys are
+ * left-padded to the longest key; a 2-space gutter separates key and value.
+ */
+export function renderKV(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return '';
+  const width = Math.max(...rows.map(([k]) => String(k).length));
+  return rows
+    .map(([k, v]) => `${String(k).padEnd(width)}  ${v == null ? '' : String(v)}`)
+    .join('\n');
+}

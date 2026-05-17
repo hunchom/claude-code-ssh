@@ -4,7 +4,7 @@
  * Run: node tests/test-render-primitives.js
  */
 import assert from 'assert';
-import { renderHeader, indentBody } from '../src/output-formatter.js';
+import { renderHeader, indentBody, renderKV } from '../src/output-formatter.js';
 
 let passed = 0;
 let failed = 0;
@@ -64,6 +64,21 @@ test('indentBody: custom prefix honored', () => {
 
 test('indentBody: blank lines are still prefixed', () => {
   assert.strictEqual(indentBody('a\n\nb'), '  a\n  \n  b');
+});
+
+// --- renderKV ------------------------------------------------------------
+test('renderKV: aligns keys to the longest, 2-space gutter', () => {
+  const kv = renderKV([['exit', '0'], ['duration', '245 ms']]);
+  assert.strictEqual(kv, 'exit      0\nduration  245 ms');
+});
+
+test('renderKV: empty or non-array -> empty string', () => {
+  assert.strictEqual(renderKV([]), '');
+  assert.strictEqual(renderKV(null), '');
+});
+
+test('renderKV: coerces non-string values, nullish value -> empty', () => {
+  assert.strictEqual(renderKV([['n', 42], ['m', null]]), 'n  42\nm  ');
 });
 
 // --- Summary -------------------------------------------------------------
