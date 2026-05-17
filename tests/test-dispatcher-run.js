@@ -272,6 +272,70 @@ await test('script connection failure -> structured fail', async () => {
   assert(r.content[0].text.includes('host down'));
 });
 
+// --- detach action ------------------------------------------------------
+await test('detach without command -> structured fail, never connects', async () => {
+  const client = fakeClient('');
+  const r = await handleSshRun({
+    deps: { ...DEPS, getConnection: async () => client },
+    handlers: {}, args: { server: 's', action: 'detach' },
+  });
+  assert.strictEqual(r.isError, true);
+  assert.strictEqual(client.script.length, 0);
+});
+
+await test('detach launches a setsid job and returns its job id', async () => {
+  const client = fakeClient('');
+  const r = await handleSshRun({
+    deps: { ...DEPS, getConnection: async () => client },
+    handlers: {},
+    args: { server: 's', action: 'detach', command: 'long-build.sh', format: 'json' },
+  });
+  const res = JSON.parse(r.content[0].text);
+  assert.strictEqual(res.success, true);
+  assert.strictEqual(res.data.action, 'detach');
+  assert(typeof res.data.job_id === 'string' && res.data.job_id.length > 0,
+    'job id returned for later job-status / job-kill');
+  assert(client.script[0].includes('setsid'), 'job detached from the SSH session');
+  assert(client.script[0].includes(res.data.job_id), 'launch command uses the job id');
+});
+
+await test('detach returns the log path for incremental reads', async () => {
+  const client = fakeClient('');
+  const r = await handleSshRun({
+    deps: { ...DEPS, getConnection: async () => client },
+    handlers: {},
+    args: { server: 's', action: 'detach', command: 'make all', format: 'json' },
+  });
+  const res = JSON.parse(r.content[0].text);
+  assert(res.data.log_path.includes(res.data.job_id), 'log path under the job dir');
+});
+
+await test('detach honors an explicit job_id', async () => {
+  const client = fakeClient('');
+  const r = await handleSshRun({
+    deps: { ...DEPS, getConnection: async () => client },
+    handlers: {},
+    args: {
+      server: 's', action: 'detach', command: 'echo hi',
+      job_id: 'my-build-1', format: 'json',
+    },
+  });
+  const res = JSON.parse(r.content[0].text);
+  assert.strictEqual(res.data.job_id, 'my-build-1');
+});
+
+await test('detach with a hostile job_id -> structured fail', async () => {
+  const client = fakeClient('');
+  const r = await handleSshRun({
+    deps: { ...DEPS, getConnection: async () => client },
+    handlers: {},
+    args: { server: 's', action: 'detach', command: 'echo hi', job_id: '../x' },
+  });
+  assert.strictEqual(r.isError, true);
+  assert(r.content[0].text.includes('invalid job id'));
+  assert.strictEqual(client.script.length, 0, 'builder threw before exec');
+});
+
 // --- Summary -------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
