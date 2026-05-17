@@ -129,52 +129,30 @@ export function formatDuration(ms) {
 }
 
 /**
- * Render an ExecResult as cool, scannable Claude Code markdown.
- *
- * Layout:
- *   [ok] **ssh_execute** | `server` | **exit 0** | `2.34 s`
- *   `$ <command>`   *(in /some/cwd)*
- *
- *   ```
- *   <stdout>
- *   ```
- *
- *   **stderr**
- *   ```
- *   <stderr>
- *   ```
- *
- *   > elided: stdout 12.0 KB, stderr 0 B
- *
- * - Success uses [ok] marker and bold "exit 0"; failure uses [err] and bold "exit N".
- * - Empty sections are omitted. cwd suppressed when null.
- * - Language-tagged fenced blocks (`text`) render with a subtle tint in Claude Code.
+ * Render an ExecResult as compact v4 plain text.
+ * Header via renderHeader; command on a plain `$` line; stdout/stderr indented.
  */
 export function renderMarkdown(r) {
-  const ok = r.success;
-  const marker = ok ? '[ok]' : '[err]';
-  const exitText = ok ? 'exit 0' : `exit ${r.exit_code}`;
-  const duration = formatDuration(r.duration_ms);
+  const marker = r.success ? '[ok]' : '[err]';
+  const lines = [renderHeader({
+    marker,
+    tool: 'ssh_execute',
+    server: r.server,
+    status: `exit ${r.exit_code}`,
+    durationMs: r.duration_ms,
+  })];
 
-  const lines = [];
-  lines.push(`${marker} **ssh_execute** | \`${r.server}\` | ${exitText} | ${duration}`);
-
-  const cwdFragment = r.cwd ? `  *(in \`${r.cwd}\`)*` : '';
-  lines.push(`\`$ ${r.command}\`${cwdFragment}`);
+  lines.push(`$ ${r.command}${r.cwd ? `  (in ${r.cwd})` : ''}`);
 
   if (r.stdout) {
     lines.push('');
-    lines.push('```text');
-    lines.push(r.stdout);
-    lines.push('```');
+    lines.push(indentBody(r.stdout));
   }
 
   if (r.stderr) {
     lines.push('');
-    lines.push('**stderr**');
-    lines.push('```text');
-    lines.push(r.stderr);
-    lines.push('```');
+    lines.push('stderr:');
+    lines.push(indentBody(r.stderr));
   }
 
   if (r.truncated.stdout_bytes || r.truncated.stderr_bytes) {
@@ -182,7 +160,7 @@ export function renderMarkdown(r) {
     if (r.truncated.stdout_bytes) parts.push(`stdout ${formatBytes(r.truncated.stdout_bytes)}`);
     if (r.truncated.stderr_bytes) parts.push(`stderr ${formatBytes(r.truncated.stderr_bytes)}`);
     lines.push('');
-    lines.push(`> elided: ${parts.join(', ')}`);
+    lines.push(`elided: ${parts.join(', ')}`);
   }
 
   return lines.join('\n');

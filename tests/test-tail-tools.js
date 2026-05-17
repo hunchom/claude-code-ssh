@@ -126,7 +126,7 @@ await test('handleSshTail: happy path with quoted path and default lines', async
   assert.strictEqual(r.isError, undefined);
   assert.strictEqual(client.lastCommand, 'tail -n 10 \'/var/log/app.log\'');
   const md = r.content[0].text;
-  assert(md.startsWith('[ok] **ssh_execute**'), 'uses exec markdown renderer');
+  assert(md.startsWith('[ok] ssh_execute'), 'uses exec markdown renderer');
   assert(md.includes('a'));
   assert(md.includes('c'));
 });
