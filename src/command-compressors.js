@@ -29,22 +29,30 @@ export function compressLs(text) {
 const PS_KEEP = 15;
 
 /**
- * Keep the ps header line plus the top PS_KEEP rows; drop the idle tail.
- * Input is assumed CPU-sorted (the v4 process tools sort with --sort=-%cpu).
+ * Keep the ps header line plus the top PS_KEEP rows; drop the tail.
+ * Visible order assumed significance-ordered; tail dropped regardless.
+ * Trailing newline (ps always emits one) is preserved, not counted as a row.
  */
 export function compressPs(text) {
   const s = String(text == null ? '' : text);
+  const hadTrailingNl = s.endsWith('\n');
   const lines = s.split('\n');
+  if (hadTrailingNl) lines.pop();
   if (lines.length <= PS_KEEP + 1) return { text: s, dropped: 0 };
   const kept = lines.slice(0, PS_KEEP + 1);
-  return { text: kept.join('\n'), dropped: lines.length - kept.length };
+  return {
+    text: kept.join('\n') + (hadTrailingNl ? '\n' : ''),
+    dropped: lines.length - kept.length,
+  };
 }
+
+// shared command-prefix: start, after pipe/`;`/`&`, or after `sudo `.
+const PREFIX = '(^|[|;&]\\s*|^sudo\\s+)';
 
 // command-prefix -> compressor. First match wins.
 const COMPRESSORS = [
-  { match: /^ls(\s|$)/, fn: compressLs },
-  // ps may appear after `sudo ` or a pipe/`;`/`&`.
-  { match: /(^|[|;&]\s*|^sudo\s+)ps(\s|$)/, fn: compressPs },
+  { match: new RegExp(`${PREFIX}ls(\\s|$)`), fn: compressLs },
+  { match: new RegExp(`${PREFIX}ps(\\s|$)`), fn: compressPs },
 ];
 
 /**

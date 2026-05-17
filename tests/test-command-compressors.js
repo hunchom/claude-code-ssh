@@ -93,6 +93,28 @@ test('compress: ps inside a pipeline is still detected', () => {
   assert(r.includes('compressed'), 'ps after sudo/pipe still matched');
 });
 
+test('compressPs: real ps output (trailing newline) -> dropped is exact', () => {
+  const rows = Array.from({ length: 30 }, (_, i) => `row${i}`).join('\n');
+  const out = compressPs('HEADER\n' + rows + '\n');
+  assert.strictEqual(out.dropped, 15, 'trailing newline not counted as a row');
+  assert(out.text.endsWith('\n'), 'trailing newline preserved');
+});
+
+test('compressPs: exactly PS_KEEP+1 lines (header + 15 rows) -> dropped 0', () => {
+  const rows = Array.from({ length: 15 }, (_, i) => `row${i}`).join('\n');
+  const out = compressPs('HEADER\n' + rows + '\n');
+  assert.strictEqual(out.dropped, 0, 'header + 15 rows is exactly the cap');
+});
+
+// --- negative-match guards -----------------------------------------------
+test('compress: psql / tops / lsof are not matched as ps or ls', () => {
+  const rows = Array.from({ length: 30 }, (_, i) => `r${i}`).join('\n');
+  const long = 'HEAD\n' + rows;
+  assert.strictEqual(compress('psql -c "select 1"', long), long, 'psql != ps');
+  assert.strictEqual(compress('tops', long), long, 'tops != ps');
+  assert.strictEqual(compress('lsof -i :80', long), long, 'lsof != ls');
+});
+
 // --- Summary -------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
