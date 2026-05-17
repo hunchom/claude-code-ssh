@@ -5,7 +5,8 @@
 // not beat the current ~14k-token, 51-tool surface.
 import { z } from 'zod';
 
-const PER_TOOL_CEIL = 1500;  // tokens; no single fat tool may exceed this
+// Loose sanity bound: worst measured fat tool ~394 tokens, so 800 is ~2x headroom.
+const PER_TOOL_CEIL = 800;   // tokens; no single fat tool may exceed this
 const SURFACE_CEIL = 14000;  // tokens; the current 51-tool surface (measured baseline)
 const tokens = (o) => Math.ceil(JSON.stringify(o).length / 4);
 
@@ -71,6 +72,7 @@ for (const [name, schema] of Object.entries(fats)) {
 }
 
 // Extrapolate: 3 fattest measured + 10 thinner tools at ~55% of the fat average.
+// 0.55 = thinner tools carry fewer optional/action params -> roughly half a fat tool.
 const fatAvg = measuredTotal / 3;
 const estTotal = Math.round(measuredTotal + fatAvg * 0.55 * 10);
 console.log(`\nestimated 13-tool surface: ~${estTotal} tokens  (51-tool baseline: ${SURFACE_CEIL})`);

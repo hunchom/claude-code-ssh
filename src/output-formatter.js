@@ -234,12 +234,15 @@ export function indentBody(text, prefix = '  ') {
 /**
  * Render [key, value] pairs as a column-aligned key/value block. Keys are
  * left-padded to the longest key; a 2-space gutter separates key and value.
+ * Cell values must be single-line; multiline payloads belong in indentBody.
+ * Malformed (non-array) rows degrade to a blank key/value, never throw.
  */
 export function renderKV(rows) {
   if (!Array.isArray(rows) || rows.length === 0) return '';
-  const width = Math.max(...rows.map(([k]) => String(k).length));
-  return rows
-    .map(([k, v]) => `${String(k).padEnd(width)}  ${v == null ? '' : String(v)}`)
+  const safe = rows.map((r) => (Array.isArray(r) ? r : []));
+  const width = Math.max(0, ...safe.map(([k]) => String(k ?? '').length));
+  return safe
+    .map(([k, v]) => `${String(k ?? '').padEnd(width)}  ${v == null ? '' : String(v)}`)
     .join('\n');
 }
 
@@ -247,19 +250,21 @@ export function renderKV(rows) {
  * Render rows as a column-aligned ASCII table. `headers` is an array of column
  * labels; `rows` is an array of cell arrays. With an `isFail` predicate, failed
  * rows sort first and an `N/M failed` summary line is prepended.
+ * Cell values must be single-line; multiline payloads belong in indentBody.
+ * Malformed (non-array) rows degrade to a blank row, never throw.
  */
 export function renderRows(headers, rows, { isFail } = {}) {
   if (!Array.isArray(headers) || headers.length === 0) return '';
-  let ordered = Array.isArray(rows) ? rows.slice() : [];
+  let ordered = (Array.isArray(rows) ? rows : []).map((r) => (Array.isArray(r) ? r : []));
   let summary = '';
   if (typeof isFail === 'function') {
     const failed = ordered.filter((r) => isFail(r));
     const rest = ordered.filter((r) => !isFail(r));
     ordered = [...failed, ...rest];
-    if (failed.length > 0) summary = `${failed.length}/${rows.length} failed`;
+    if (failed.length > 0) summary = `${failed.length}/${ordered.length} failed`;
   }
   const widths = headers.map((h, i) =>
-    Math.max(String(h).length, ...ordered.map((r) => String(r[i] ?? '').length)));
+    Math.max(0, String(h).length, ...ordered.map((r) => String(r[i] ?? '').length)));
   const fmt = (cells) =>
     cells
       .map((c, i) => String(c ?? '').padEnd(widths[i]))

@@ -81,6 +81,11 @@ test('renderKV: coerces non-string values, nullish value -> empty', () => {
   assert.strictEqual(renderKV([['n', 42], ['m', null]]), 'n  42\nm  ');
 });
 
+test('renderKV: malformed (non-array) row degrades, does not throw', () => {
+  const kv = renderKV([null, ['k', 'v']]);
+  assert(kv.includes('k  v'));
+});
+
 // --- renderRows ----------------------------------------------------------
 test('renderRows: aligns columns, no trailing whitespace', () => {
   const t = renderRows(['name', 'exit'], [['web1', '0'], ['db1', '1']]);
@@ -106,6 +111,10 @@ test('renderRows: failures sorted to top with summary count', () => {
 test('renderRows: isFail with zero failures adds no summary line', () => {
   const t = renderRows(['n'], [['a'], ['b']], { isFail: () => false });
   assert.strictEqual(t.split('\n')[0], 'n');
+});
+
+test('renderRows: malformed (non-array) row degrades, does not throw', () => {
+  assert.doesNotThrow(() => renderRows(['a'], [null]));
 });
 
 // --- Summary -------------------------------------------------------------
