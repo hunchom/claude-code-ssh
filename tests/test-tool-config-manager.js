@@ -95,6 +95,35 @@ await test('load(): valid minimal config is accepted', async () => {
   assert.strictEqual(m.config.mode, 'minimal');
 });
 
+// --- getDefaultConfig group set must mirror the v4 registry --------------
+await test('getDefaultConfig().groups matches the real v4 TOOL_GROUPS exactly', () => {
+  // A stale group set (pre-v4 core/sessions/monitoring/backup/database/...)
+  // makes custom-mode isToolEnabled fall through to `return true`, silently
+  // re-enabling tools a user disabled. Default groups MUST be the 3 v4 keys.
+  const m = new ToolConfigManager();
+  const defaultGroups = Object.keys(m.getDefaultConfig().groups).sort();
+  const registryGroups = Object.keys(TOOL_GROUPS).sort();
+  assert.deepStrictEqual(defaultGroups, registryGroups,
+    `default groups ${JSON.stringify(defaultGroups)} must equal registry ${JSON.stringify(registryGroups)}`);
+  // No stale pre-v4 group names leak through.
+  for (const stale of ['sessions', 'monitoring', 'database', 'gamechanger']) {
+    assert(!(stale in m.getDefaultConfig().groups), `stale group "${stale}" must be gone`);
+  }
+});
+
+await test('upgrade path: every v4 tool resolves to a default-config group (no silent fall-through)', () => {
+  // Each tool must map to a group key present in getDefaultConfig().groups,
+  // so a custom-mode user's disable choice is actually honored post-upgrade.
+  const m = new ToolConfigManager();
+  const groups = m.getDefaultConfig().groups;
+  for (const name of getAllTools()) {
+    const g = TOOL_GROUPS.core.includes(name) ? 'core'
+      : TOOL_GROUPS.ops.includes(name) ? 'ops'
+        : TOOL_GROUPS.advanced.includes(name) ? 'advanced' : null;
+    assert(g && g in groups, `tool ${name} -> group must exist in default config`);
+  }
+});
+
 // --- isToolEnabled --------------------------------------------------------
 await test('mode=all enables every tool', () => {
   const m = new ToolConfigManager();
