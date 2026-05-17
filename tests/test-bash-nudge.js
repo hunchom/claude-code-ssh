@@ -4,6 +4,8 @@
  * Run: node tests/test-bash-nudge.js
  */
 import assert from 'assert';
+import { execFileSync } from 'child_process';
+import { fileURLToPath } from 'url';
 import { detectSshNudge } from '../.claude/hooks/ssh-bash-nudge.mjs';
 
 let passed = 0;
@@ -106,6 +108,51 @@ test('empty / nullish server list is safe and returns null', () => {
 test('an "ssh" substring inside another word does not trigger', () => {
   // "sshpass" / "myssh" must not be read as the ssh client.
   assert.strictEqual(detectSshNudge('sshpass -p x ssh prod01 ls', SERVERS), null);
+});
+
+// --- CLI shell (end-to-end through stdin/stdout) ------------------------
+const HOOK = fileURLToPath(new URL('../.claude/hooks/ssh-bash-nudge.mjs', import.meta.url));
+
+// Run the hook with a JSON payload on stdin; capture { stdout, status }.
+function runHook(payloadObj) {
+  try {
+    const stdout = execFileSync('node', [HOOK], {
+      input: JSON.stringify(payloadObj), encoding: 'utf8',
+    });
+    return { stdout, status: 0 };
+  } catch (e) {
+    return { stdout: e.stdout || '', status: e.status };
+  }
+}
+
+test('CLI: malformed stdin exits 0 with no output', () => {
+  let status;
+  try {
+    execFileSync('node', [HOOK], { input: 'not json', encoding: 'utf8' });
+    status = 0;
+  } catch (e) {
+    status = e.status;
+  }
+  assert.strictEqual(status, 0, 'fail-open on unparseable payload');
+});
+
+test('CLI: a non-ssh Bash payload exits 0 with no nudge', () => {
+  const r = runHook({ tool_name: 'Bash', tool_input: { command: 'ls -la' } });
+  assert.strictEqual(r.status, 0);
+  assert.strictEqual(r.stdout.trim(), '', 'no nudge for a plain ls');
+});
+
+test('CLI: a complex ssh payload exits 0 with no nudge', () => {
+  const r = runHook({
+    tool_name: 'Bash',
+    tool_input: { command: 'ssh prod01 ps aux | grep node' },
+  });
+  assert.strictEqual(r.status, 0);
+  assert.strictEqual(r.stdout.trim(), '', 'piped command passed through');
+});
+
+test('CLI: empty payload object exits 0', () => {
+  assert.strictEqual(runHook({}).status, 0);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
