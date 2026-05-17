@@ -62,5 +62,18 @@ await test('pMap: concurrency > items still works', async () => {
   assert.deepStrictEqual(r.map(x => x.value), [2, 4]);
 });
 
+// Non-array items must degrade to [] -- never loop forever on undefined.length.
+// (A group dispatcher that hands pMap an object instead of an array used to
+// OOM-crash the whole server.)
+await test('pMap: non-array items degrades to [] instead of looping forever', async () => {
+  let called = 0;
+  const inc = async () => { called++; };
+  for (const bad of [undefined, null, { servers: ['a'] }, 'str', 42]) {
+    const r = await pMap(bad, inc);
+    assert.deepStrictEqual(r, [], `non-array ${JSON.stringify(bad)} -> []`);
+  }
+  assert.strictEqual(called, 0, 'fn never invoked for non-array input');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) { for (const f of fails) console.error(`  [err] ${f.name}\n    ${f.err.stack}`); process.exit(1); }

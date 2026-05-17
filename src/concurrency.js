@@ -9,7 +9,8 @@
  */
 
 export async function pMap(items, fn, { concurrency = 5, stopOnError = false } = {}) {
-  const n = items.length;
+  // non-array items → empty result, never loop forever on undefined .length
+  const n = Array.isArray(items) ? items.length : 0;
   const results = new Array(n);
   let cursor = 0;
   let aborted = false;

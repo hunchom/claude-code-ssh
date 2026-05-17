@@ -489,8 +489,14 @@ const DEPS = {
   getConnection,
   getServerConfig: getServerConfigByName,
   resolveGroup: (groupName) => {
-    const g = getGroup(groupName);
-    return g ? { name: g.name, servers: g.servers } : null;
+    // getGroup throws "Group 'X' not found" on a bad name → null so the
+    // handler renders a clean "group has no servers" fail, not a raw crash.
+    try {
+      const g = getGroup(groupName);
+      return g ? { name: g.name, servers: g.servers } : null;
+    } catch (_) {
+      return null;
+    }
   },
 };
 

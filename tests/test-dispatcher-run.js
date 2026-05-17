@@ -7,6 +7,7 @@
  */
 import assert from 'assert';
 import { handleSshRun } from '../src/dispatchers/ssh-run.js';
+import { handleSshExecuteGroup } from '../src/tools/exec-tools.js';
 
 let passed = 0;
 let failed = 0;
@@ -115,6 +116,41 @@ await test('fleet routes to handlers.executeGroup with resolveGroup in ctx', asy
   assert.strictEqual(executeGroup.calls.length, 1);
   assert.strictEqual(executeGroup.calls[0].resolveGroup, DEPS.resolveGroup);
   assert.strictEqual(executeGroup.calls[0].getConnection, DEPS.getConnection);
+});
+
+// End-to-end through the REAL handleSshExecuteGroup -- DEPS.resolveGroup yields
+// the production { name, servers:[...] } object, not a bare array.
+await test('fleet end-to-end: real handler accepts the production object shape', async () => {
+  const r = await handleSshRun({
+    deps: {
+      ...DEPS,
+      getConnection: async () => fakeClient('uptime-out'),
+      // exact shape DEPS.resolveGroup returns in src/index.js
+      resolveGroup: (g) => ({ name: g, servers: ['a', 'b'] }),
+    },
+    handlers: { executeGroup: handleSshExecuteGroup },
+    args: { action: 'fleet', group: 'web', command: 'uptime', format: 'json' },
+  });
+  const res = JSON.parse(r.content[0].text);
+  assert.strictEqual(res.success, true, 'object-shape group runs, no OOM loop');
+  assert.strictEqual(res.data.total, 2);
+  assert.strictEqual(res.data.succeeded, 2);
+});
+
+// A nonexistent group: production resolveGroup catches getGroup's throw and
+// returns null -> structured fail, never a raw crash through the dispatcher.
+await test('fleet end-to-end: unknown group -> structured isError, no crash', async () => {
+  const r = await handleSshRun({
+    deps: {
+      ...DEPS,
+      getConnection: async () => { throw new Error('should not connect'); },
+      resolveGroup: () => null, // mirrors getGroup-throws-caught path
+    },
+    handlers: { executeGroup: handleSshExecuteGroup },
+    args: { action: 'fleet', group: 'does-not-exist', command: 'uptime' },
+  });
+  assert.strictEqual(r.isError, true);
+  assert(r.content[0].text.includes('has no servers'));
 });
 
 // --- arg validation ------------------------------------------------------

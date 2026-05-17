@@ -180,7 +180,12 @@ export async function handleSshExecuteGroup({ getConnection, resolveGroup, args 
     abortSignal,
   } = args;
 
-  const servers = await resolveGroup(group);
+  // resolveGroup yields either a bare array or the production object
+  // { name, servers:[...] } (or null). Accept both, normalize to array.
+  const resolved = await resolveGroup(group);
+  const servers = Array.isArray(resolved)
+    ? resolved
+    : (resolved && Array.isArray(resolved.servers) ? resolved.servers : null);
   if (!servers || servers.length === 0) {
     return toMcp(fail('ssh_execute_group', `group "${group}" has no servers`), { format });
   }

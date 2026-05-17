@@ -314,6 +314,48 @@ await test('ssh_execute_group: empty group returns structured failure', async ()
   assert(r.content[0].text.includes('has no servers'));
 });
 
+// resolveGroup PRODUCTION shape is the object { name, servers:[...] }, not a
+// bare array (see DEPS.resolveGroup in src/index.js). A bare-array stub misses
+// this -- before the fix the object shape OOM-looped pMap and crashed the server.
+await test('ssh_execute_group: accepts the production { name, servers:[...] } object shape', async () => {
+  const clients = {
+    s1: new FakeClient({ script: () => ({ stdout: 'ok1', code: 0 }) }),
+    s2: new FakeClient({ script: () => ({ stdout: 'ok2', code: 0 }) }),
+  };
+  const r = await handleSshExecuteGroup({
+    getConnection: async (s) => clients[s],
+    // exact shape DEPS.resolveGroup returns in production
+    resolveGroup: async (g) => ({ name: g, servers: ['s1', 's2'] }),
+    args: { group: 'web', command: 'uptime', format: 'json' },
+  });
+  const parsed = JSON.parse(r.content[0].text);
+  assert.strictEqual(parsed.success, true, 'object-shape group resolves, no infinite loop');
+  assert.strictEqual(parsed.data.total, 2);
+  assert.strictEqual(parsed.data.succeeded, 2);
+  assert.deepStrictEqual(parsed.data.results.map(x => x.server), ['s1', 's2']);
+});
+
+await test('ssh_execute_group: production object with empty servers -> structured failure', async () => {
+  const r = await handleSshExecuteGroup({
+    getConnection: async () => { throw new Error('nope'); },
+    resolveGroup: async (g) => ({ name: g, servers: [] }),
+    args: { group: 'empty', command: 'x' },
+  });
+  assert.strictEqual(r.isError, true);
+  assert(r.content[0].text.includes('has no servers'));
+});
+
+// Unknown group: DEPS.resolveGroup catches getGroup's throw and returns null.
+await test('ssh_execute_group: resolveGroup returning null -> structured failure, no crash', async () => {
+  const r = await handleSshExecuteGroup({
+    getConnection: async () => { throw new Error('nope'); },
+    resolveGroup: async () => null,
+    args: { group: 'ghost', command: 'x' },
+  });
+  assert.strictEqual(r.isError, true);
+  assert(r.content[0].text.includes('has no servers'));
+});
+
 await test('ssh_execute_group: preview shows fan-out plan, never connects', async () => {
   let called = false;
   const r = await handleSshExecuteGroup({
