@@ -330,6 +330,51 @@ await test('timeout: command finishes before deadline -> resolves normally', asy
   await sleep(10);
 });
 
+await test('timeout: escalates to KILL when the stream ignores INT', async () => {
+  const client = new FakeClient();
+  const p = streamExecCommand(client, 'sleep 9999', {
+    timeoutMs: 30, debounceMs: 5, killGraceMs: 20,
+  });
+  await sleep(5);
+  const s = client.streams[0];
+  // The fake stream's signal() records signals but its close() is NOT
+  // auto-driven here, so the stream stays "open" past the grace window.
+  await assert.rejects(() => p, /timeout after 30ms/);
+  assert(s.signals.includes('INT'), 'INT sent first');
+  // Wait out the kill grace; KILL must follow.
+  await sleep(40);
+  assert(s.signals.includes('KILL'), 'KILL escalation after the grace window');
+  assert(s.signals.indexOf('INT') < s.signals.indexOf('KILL'), 'INT precedes KILL');
+});
+
+await test('timeout: a stream that closes within grace is never sent KILL', async () => {
+  const client = new FakeClient();
+  const p = streamExecCommand(client, 'sleep 1', {
+    timeoutMs: 20, debounceMs: 5, killGraceMs: 60,
+  });
+  await sleep(5);
+  const s = client.streams[0];
+  await assert.rejects(() => p, /timeout after 20ms/);
+  // Stream closes promptly after the INT (well within the 60ms grace).
+  s.finish(0, 'INT');
+  await sleep(80);
+  assert(s.signals.includes('INT'), 'INT was sent');
+  assert(!s.signals.includes('KILL'), 'no KILL -- stream closed within grace');
+});
+
+await test('timeout: a normal completion arms no kill timer', async () => {
+  const client = new FakeClient();
+  const p = streamExecCommand(client, 'ok', {
+    timeoutMs: 500, debounceMs: 5, killGraceMs: 20,
+  });
+  await sleep(5);
+  client.streams[0].finish(0);
+  const r = await p;
+  await sleep(40);
+  assert.strictEqual(r.code, 0);
+  assert(!client.streams[0].signals.includes('KILL'), 'no KILL on a clean finish');
+});
+
 // --- Error surfaces ------------------------------------------------------
 await test('exec callback error -> rejects with that error', async () => {
   const boom = new Error('connection dropped');

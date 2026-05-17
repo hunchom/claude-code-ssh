@@ -67,6 +67,7 @@ export function streamExecCommand(client, command, options = {}) {
     debounceMs = 50,
     maxBufferedBytes = 1_000_000,
     timeoutMs,
+    killGraceMs = 5_000,
     onChunk,
     stdin,
   } = options;
@@ -85,6 +86,7 @@ export function streamExecCommand(client, command, options = {}) {
     let stream = null;
     let resolved = false;
     let timeoutId = null;
+    let streamClosed = false; // true only when the 'close' event fires
 
     function emit(kind, text) {
       if (!onChunk || !text) return;
@@ -146,11 +148,27 @@ export function streamExecCommand(client, command, options = {}) {
       abortSignal.addEventListener('abort', onAbort);
     }
 
-    // Overall deadline
+    // Overall deadline. On expiry: INT immediately and reject; then, on a
+    // detached timer, escalate to KILL+close if the stream is still open.
+    // Only INT is sent on the hot path -- the kill timer handles close so it
+    // can tell whether the stream already closed on its own. Server-side,
+    // wrapWithTimeout adds an OS `timeout` wall as a backstop.
     if (timeoutMs && timeoutMs > 0) {
       timeoutId = setTimeout(() => {
-        teardownStream();
+        const hung = stream;
+        // INT only -- do NOT call stream.close() here so the kill timer can
+        // distinguish "closed on its own" (finish() called) from "still hung".
+        try { hung && hung.signal && hung.signal('INT'); } catch (_) { /* ignore */ }
         finish(null, new Error(`Command timeout after ${timeoutMs}ms`));
+        if (hung) {
+          const kt = setTimeout(() => {
+            // Only escalate if the 'close' event never fired -- process hung.
+            if (streamClosed) return;
+            try { hung.signal && hung.signal('KILL'); } catch (_) { /* ignore */ }
+            try { hung.close && hung.close(); } catch (_) { /* ignore */ }
+          }, killGraceMs);
+          if (kt.unref) kt.unref();
+        }
       }, timeoutMs);
     }
 
@@ -193,6 +211,7 @@ export function streamExecCommand(client, command, options = {}) {
       });
 
       stream.on('close', (code, signal) => {
+        streamClosed = true;
         finish({ stdout, stderr, code: code || 0, signal: signal || null }, null);
       });
 
