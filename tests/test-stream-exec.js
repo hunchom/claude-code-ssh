@@ -7,7 +7,9 @@
 
 import assert from 'assert';
 import { EventEmitter } from 'events';
-import { streamExecCommand, shQuote, buildRemoteCommand } from '../src/stream-exec.js';
+import {
+  streamExecCommand, shQuote, buildRemoteCommand, wrapWithTimeout,
+} from '../src/stream-exec.js';
 
 let passed = 0;
 let failed = 0;
@@ -234,6 +236,39 @@ await test('debounce: pending chunk flushed on close before resolve', async () =
   assert.strictEqual(r.stdout, 'late-arriving');
   assert.strictEqual(chunks.length, 1);
   assert.strictEqual(chunks[0].text, 'late-arriving');
+});
+
+// --- wrapWithTimeout -----------------------------------------------------
+await test('wrapWithTimeout: prefixes the OS timeout utility with a seconds wall', () => {
+  const w = wrapWithTimeout('make build', 30000);
+  // 30000 ms -> 30 s wall, with a small ceiling buffer is fine; assert >= 30.
+  assert(/^timeout -k \d+ \d+ /.test(w), 'timeout -k <kill> <wall> prefix');
+  assert(w.includes('make build'), 'original command preserved');
+});
+
+await test('wrapWithTimeout: -k grace lets the OS escalate to KILL itself', () => {
+  const w = wrapWithTimeout('cmd', 10000);
+  // `timeout -k N` sends KILL N seconds after the initial TERM.
+  const m = w.match(/^timeout -k (\d+) (\d+) /);
+  assert(m, 'wrapped');
+  assert(Number(m[1]) >= 1, 'a non-zero kill grace');
+});
+
+await test('wrapWithTimeout: rounds sub-second timeouts up to at least 1 s', () => {
+  const w = wrapWithTimeout('cmd', 200);
+  const m = w.match(/^timeout -k \d+ (\d+) /);
+  assert(m, 'wrapped');
+  assert(Number(m[1]) >= 1, 'wall is at least 1 s -- timeout rejects 0');
+});
+
+await test('wrapWithTimeout: no timeout (0 / undefined) returns the command unchanged', () => {
+  assert.strictEqual(wrapWithTimeout('cmd', 0), 'cmd');
+  assert.strictEqual(wrapWithTimeout('cmd', undefined), 'cmd');
+  assert.strictEqual(wrapWithTimeout('cmd'), 'cmd');
+});
+
+await test('wrapWithTimeout: empty command returned unchanged (nothing to wrap)', () => {
+  assert.strictEqual(wrapWithTimeout('', 5000), '');
 });
 
 // --- Abort semantics -----------------------------------------------------

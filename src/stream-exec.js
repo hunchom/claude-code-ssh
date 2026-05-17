@@ -29,6 +29,23 @@ export function buildRemoteCommand(command, cwd) {
 }
 
 /**
+ * Wrap a command in the OS `timeout` utility so a process that ignores
+ * SIGINT is still bounded server-side. `timeout -k <grace> <wall> CMD`
+ * sends TERM at <wall> seconds, then KILL <grace> seconds later.
+ *
+ * timeoutMs is the same millisecond budget the in-process timer uses; here
+ * it is converted to whole seconds (timeout rejects a 0 wall, so the floor
+ * is 1 s). A falsy timeout returns the command unchanged -- raw / untimed
+ * callers are not wrapped.
+ */
+export function wrapWithTimeout(command, timeoutMs) {
+  if (!command || !timeoutMs || timeoutMs <= 0) return command;
+  const wallSecs = Math.max(1, Math.ceil(timeoutMs / 1000));
+  const killGraceSecs = 5;
+  return `timeout -k ${killGraceSecs} ${wallSecs} ${command}`;
+}
+
+/**
  * Stream a command through an ssh2 Client.
  *
  * @param {Object} client    ssh2 Client (must support client.exec(cmd, cb))
