@@ -16,8 +16,8 @@ import { ok, fail, toMcp } from '../structured-result.js';
 const DEFAULT_PROBE_TIMEOUT_MS = 5000;
 const DEFAULT_CHAIN = ['dns', 'tcp', 'tls', 'http'];
 
-// target_host allowlist -- hostname / IPv4 / IPv6 chars only; blocks shell metacharacters.
-const SAFE_HOST_RE = /^[A-Za-z0-9._:-]+$/;
+// target_host allowlist -- hostname / IPv4 / IPv6; no shell metachars, no leading dash.
+const SAFE_HOST_RE = /^[A-Za-z0-9:][A-Za-z0-9._:-]*$/;
 
 // --------------------------------------------------------------------------
 // Parsers -- pure, exported for tests.
