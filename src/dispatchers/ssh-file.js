@@ -130,8 +130,7 @@ export async function handleSshFile({ deps, handlers, args } = {}) {
         post_hooks: a.post_hooks,
         health_check: a.health_check,
         rollback_on_fail: a.rollback_on_fail,
-        permissions: a.permissions,
-        owner: a.owner,
+        rollback_hook: a.rollback_hook,
         preview: a.preview,
         format: a.format,
       }));

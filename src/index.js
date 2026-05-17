@@ -583,6 +583,7 @@ registerToolConditional('ssh_file', {
     post_hooks: z.array(z.string()).optional().describe('Post-deploy commands (actions: deploy, deploy-artifact)'),
     health_check: z.string().optional().describe('Health check command (actions: deploy, deploy-artifact)'),
     rollback_on_fail: z.boolean().optional().describe('Auto-rollback on failure (actions: deploy, deploy-artifact)'),
+    rollback_hook: z.string().optional().describe('Command run after a rollback to restore service (actions: deploy, deploy-artifact)'),
     preview: z.boolean().optional().describe('Show the plan without executing'),
     format: FORMAT,
   },
