@@ -79,6 +79,24 @@ import { handleSshDocker } from './tools/docker-tools.js';
 import { handleSshPortTest } from './tools/port-test-tools.js';
 import { handleSshPlan } from './tools/plan-tools.js';
 
+// v4 dispatcher facade -- 12 fat verb-tools over the handlers above.
+import { handleSshRun } from './dispatchers/ssh-run.js';
+import { handleSshFile } from './dispatchers/ssh-file.js';
+import { handleSshLogs } from './dispatchers/ssh-logs.js';
+import { handleSshService } from './dispatchers/ssh-service.js';
+import { handleSshHealth } from './dispatchers/ssh-health.js';
+import { handleSshDb } from './dispatchers/ssh-db.js';
+import { handleSshBackup } from './dispatchers/ssh-backup.js';
+import { handleSshSession } from './dispatchers/ssh-session.js';
+import { handleSshNet } from './dispatchers/ssh-net.js';
+import { handleSshDockerTool } from './dispatchers/ssh-docker.js';
+import { handleSshFleet } from './dispatchers/ssh-fleet.js';
+import { handleSshPlanTool } from './dispatchers/ssh-plan.js';
+import {
+  fleetServers, fleetGroups, fleetAliases, fleetProfiles,
+  fleetHooks, fleetHistory, fleetConnections,
+} from './fleet-adapters.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -453,1792 +471,392 @@ function getServerConfigByName(serverName) {
   return servers[resolved];
 }
 
-registerToolConditional(
-  'ssh_execute',
-  {
-    description: 'Execute command on remote SSH server (streaming, UTF-8 safe, ANSI-clean markdown)',
-    inputSchema: {
-      server: z.string().describe('Server name from configuration'),
-      // Cap at 512 KB -- keeps us well under every UNIX ARG_MAX (typical 128KB-2MB)
-      // even after shQuote expansion, which can ~2x the size for quote-heavy input.
-      command: z.string().min(1).max(524_288).describe('Command to execute (max 512 KB)'),
-      cwd: z.string().optional().describe('Working directory (uses default_dir if configured)'),
-      timeout: z.number().optional().describe('Command timeout in ms (default 120000, max 300000)'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
+// --- v4 fat verb-tool registration ----------------------------------------
+// Shared schema fragments. Every action-scoped arg is optional; each
+// dispatcher enforces its per-action required-arg map and returns a
+// structured fail() naming any missing args.
+const FORMAT = z.enum(['compact', 'json', 'markdown']).optional()
+  .describe('Output format (default compact)');
+const RAW = z.boolean().optional()
+  .describe('Disable output compression and truncation');
+
+// deps bundle handed to every dispatcher.
+const DEPS = {
+  getConnection,
+  getServerConfig: getServerConfigByName,
+  resolveGroup: (groupName) => {
+    const g = getGroup(groupName);
+    return g ? { name: g.name, servers: g.servers } : null;
   },
-  async (args) => {
-    const cfg = getServerConfigByName(args.server) || {};
-    return handleSshExecute({
-      getConnection,
-      args: {
-        ...args,
-        command: expandCommandAlias(args.command),
-        cwd: args.cwd || cfg.default_dir,
-        timeoutMs: args.timeout,
+};
+
+registerToolConditional('ssh_run', {
+  description: 'Run a command on a configured SSH server. Use instead of '
+    + '`ssh host <cmd>` via Bash -- the connection is pooled (no per-call '
+    + 'handshake) and output is bounded and compressed.',
+  inputSchema: {
+    server: z.string().describe('Server name from configuration'),
+    action: z.enum(['exec', 'sudo', 'fleet']).describe('exec a command, sudo a command, or fleet-exec across a group'),
+    command: z.string().optional().describe('Command to run (actions: exec, sudo)'),
+    cwd: z.string().optional().describe('Working directory (actions: exec, sudo, fleet)'),
+    group: z.string().optional().describe('Server group name (action: fleet)'),
+    sudo_password: z.string().optional().describe('Sudo password, streamed via stdin (action: sudo)'),
+    timeout: z.number().optional().describe('Command timeout in ms (actions: exec, sudo)'),
+    raw: RAW,
+    format: FORMAT,
+  },
+}, async (args) => handleSshRun({
+  deps: DEPS,
+  handlers: {
+    execute: handleSshExecute,
+    executeSudo: handleSshExecuteSudo,
+    executeGroup: handleSshExecuteGroup,
+  },
+  args,
+}));
+
+registerToolConditional('ssh_file', {
+  description: 'Transfer, read, edit, diff, or deploy files on a configured '
+    + 'SSH server. Use instead of `scp` / `ssh host cat` / heredocs via Bash '
+    + '-- transfers are sha256-verified and writes avoid shell-quoting hazards.',
+  inputSchema: {
+    server: z.string().describe('Server name from configuration'),
+    action: z.enum(['upload', 'download', 'sync', 'read', 'write', 'edit', 'diff', 'deploy', 'deploy-artifact'])
+      .describe('File operation to perform'),
+    local_path: z.string().optional().describe('Local path (actions: upload, download)'),
+    remote_path: z.string().optional().describe('Remote path (actions: upload, download, read, write, edit)'),
+    content: z.string().optional().describe('File content to write (action: write)'),
+    old_text: z.string().optional().describe('Text to replace (action: edit)'),
+    new_text: z.string().optional().describe('Replacement text (action: edit)'),
+    source: z.string().optional().describe('Sync source, "local:"/"remote:" prefixed (action: sync)'),
+    destination: z.string().optional().describe('Sync destination, "local:"/"remote:" prefixed (action: sync)'),
+    exclude: z.array(z.string()).optional().describe('Exclude patterns (action: sync)'),
+    delete_extra: z.boolean().optional().describe('Delete files absent from source (action: sync)'),
+    head: z.number().optional().describe('Read first N lines (action: read)'),
+    tail: z.number().optional().describe('Read last N lines (action: read)'),
+    grep: z.string().optional().describe('Extended-regex filter (action: read)'),
+    line_start: z.number().optional().describe('Start line, 1-indexed (action: read)'),
+    line_end: z.number().optional().describe('End line, 1-indexed (action: read)'),
+    path_a: z.string().optional().describe('First file (action: diff)'),
+    path_b: z.string().optional().describe('Second file (action: diff)'),
+    server_b: z.string().optional().describe('Other server hosting path_b for a cross-server diff (action: diff)'),
+    artifact_local_path: z.string().optional().describe('Local artifact (actions: deploy, deploy-artifact)'),
+    target_path: z.string().optional().describe('Remote target path (actions: deploy, deploy-artifact)'),
+    post_hooks: z.array(z.string()).optional().describe('Post-deploy commands (actions: deploy, deploy-artifact)'),
+    health_check: z.string().optional().describe('Health check command (actions: deploy, deploy-artifact)'),
+    rollback_on_fail: z.boolean().optional().describe('Auto-rollback on failure (actions: deploy, deploy-artifact)'),
+    preview: z.boolean().optional().describe('Show the plan without executing'),
+    format: FORMAT,
+  },
+}, async (args) => handleSshFile({
+  deps: DEPS,
+  handlers: {
+    upload: handleSshUpload,
+    download: handleSshDownload,
+    sync: handleSshSync,
+    cat: handleSshCat,
+    edit: handleSshEdit,
+    diff: handleSshDiff,
+    deploy: handleSshDeploy,
+  },
+  args,
+}));
+
+registerToolConditional('ssh_logs', {
+  description: 'Read remote logs. Use instead of `ssh host journalctl` / '
+    + '`ssh host tail` via Bash -- output is capped and filtered so it will '
+    + 'not flood context.',
+  inputSchema: {
+    server: z.string().optional().describe('Server name (actions: tail, follow-start, journal)'),
+    action: z.enum(['tail', 'follow-start', 'follow-read', 'follow-stop', 'journal'])
+      .describe('Log operation to perform'),
+    file: z.string().optional().describe('Log file path (actions: tail, follow-start)'),
+    lines: z.number().optional().describe('Trailing line count (actions: tail, follow-start, journal)'),
+    grep: z.string().optional().describe('Extended-regex filter (actions: tail, follow-start, journal)'),
+    session_id: z.string().optional().describe('Tail session id (actions: follow-read, follow-stop)'),
+    since_offset: z.number().optional().describe('Resume byte offset (action: follow-read)'),
+    unit: z.string().optional().describe('systemd unit to filter (action: journal)'),
+    since: z.string().optional().describe('Time lower bound (action: journal)'),
+    until: z.string().optional().describe('Time upper bound (action: journal)'),
+    priority: z.string().optional().describe('Priority filter (action: journal)'),
+    format: FORMAT,
+  },
+}, async (args) => handleSshLogs({
+  deps: DEPS,
+  handlers: {
+    tail: handleSshTail,
+    tailStart: handleSshTailStart,
+    tailRead: handleSshTailRead,
+    tailStop: handleSshTailStop,
+    journal: handleSshJournalctl,
+  },
+  args,
+}));
+
+registerToolConditional('ssh_service', {
+  description: 'Inspect or control a systemd service on a configured SSH server.',
+  inputSchema: {
+    server: z.string().describe('Server name from configuration'),
+    action: z.enum(['status', 'start', 'stop', 'restart', 'enable', 'disable'])
+      .describe('Service operation to perform'),
+    service: z.string().describe('Service unit name, e.g. "nginx" or "nginx.service"'),
+    preview: z.boolean().optional().describe('Preview a mutating action without running it'),
+    format: FORMAT,
+  },
+}, async (args) => handleSshService({
+  deps: DEPS,
+  handlers: { serviceStatus: handleSshServiceStatus, systemctl: handleSshSystemctl },
+  args,
+}));
+
+registerToolConditional('ssh_health', {
+  description: 'Server health snapshot, resource watch, process management, '
+    + 'and threshold alerts for a configured SSH server.',
+  inputSchema: {
+    server: z.string().describe('Server name from configuration'),
+    action: z.enum(['check', 'watch', 'procs', 'alerts']).describe('Health operation to perform'),
+    watch_type: z.enum(['overview', 'cpu', 'memory', 'disk', 'network', 'process'])
+      .optional().describe('Subsystem to snapshot (action: watch)'),
+    proc_action: z.enum(['list', 'kill', 'info']).optional().describe('Process operation (action: procs, default list)'),
+    pid: z.number().optional().describe('Process id (action: procs, proc_action kill/info)'),
+    signal: z.enum(['TERM', 'KILL', 'HUP', 'INT', 'QUIT']).optional().describe('Kill signal (action: procs)'),
+    sort_by: z.enum(['cpu', 'memory']).optional().describe('Process sort key (action: procs)'),
+    limit: z.number().optional().describe('Process row cap (action: procs)'),
+    filter: z.string().optional().describe('Process name/command filter (action: procs)'),
+    alert_action: z.enum(['set', 'get', 'check']).optional().describe('Alert operation (action: alerts)'),
+    cpu_threshold: z.number().min(0).max(100).optional().describe('CPU alert threshold percent (action: alerts)'),
+    memory_threshold: z.number().min(0).max(100).optional().describe('Memory alert threshold percent (action: alerts)'),
+    disk_threshold: z.number().min(0).max(100).optional().describe('Disk alert threshold percent (action: alerts)'),
+    enabled: z.boolean().optional().describe('Enable/disable alert evaluation (action: alerts)'),
+    preview: z.boolean().optional().describe('Preview a process kill without running it'),
+    format: FORMAT,
+  },
+}, async (args) => handleSshHealth({
+  deps: DEPS,
+  handlers: {
+    healthCheck: handleSshHealthCheck,
+    monitor: handleSshMonitor,
+    processManager: handleSshProcessManager,
+    alertSetup: handleSshAlertSetup,
+  },
+  args,
+}));
+
+registerToolConditional('ssh_db', {
+  description: 'Database operations (MySQL, PostgreSQL, MongoDB) on a '
+    + 'configured SSH server. Queries are SELECT-only and token-validated.',
+  inputSchema: {
+    server: z.string().describe('Server name from configuration'),
+    action: z.enum(['query', 'list', 'dump', 'import']).describe('Database operation to perform'),
+    db_type: z.enum(['mysql', 'postgresql', 'mongodb']).optional().describe('Database engine'),
+    database: z.string().optional().describe('Database name (actions: query, dump, import)'),
+    query: z.string().optional().describe('SELECT-only SQL or Mongo find (action: query)'),
+    collection: z.string().optional().describe('MongoDB collection (action: query)'),
+    output_file: z.string().optional().describe('Dump output path (action: dump)'),
+    tables: z.array(z.string()).optional().describe('Specific tables (action: dump)'),
+    input_file: z.string().optional().describe('Import input path (action: import)'),
+    gzip: z.boolean().optional().describe('Gzip the dump (action: dump)'),
+    drop: z.boolean().optional().describe('Drop existing before import, Mongo (action: import)'),
+    user: z.string().optional().describe('Database user'),
+    password: z.string().optional().describe('Database password'),
+    host: z.string().optional().describe('Database host'),
+    port: z.number().optional().describe('Database port'),
+    preview: z.boolean().optional().describe('Show the plan without importing (action: import)'),
+    format: FORMAT,
+  },
+}, async (args) => handleSshDb({
+  deps: DEPS,
+  handlers: {
+    query: handleSshDbQuery,
+    list: handleSshDbList,
+    dump: handleSshDbDump,
+    import: handleSshDbImport,
+  },
+  args,
+}));
+
+registerToolConditional('ssh_backup', {
+  description: 'Create, list, restore, or schedule content-addressed backups '
+    + 'on a configured SSH server.',
+  inputSchema: {
+    server: z.string().describe('Server name from configuration'),
+    action: z.enum(['create', 'list', 'restore', 'schedule']).describe('Backup operation to perform'),
+    backup_type: z.enum(['mysql', 'postgresql', 'mongodb', 'files']).optional().describe('Backup type'),
+    name: z.string().optional().describe('Backup name (actions: create, schedule)'),
+    database: z.string().optional().describe('Database name (actions: create, restore, schedule)'),
+    paths: z.array(z.string()).optional().describe('Paths to back up (actions: create, schedule)'),
+    exclude: z.array(z.string()).optional().describe('Exclude patterns (action: create)'),
+    backup_dir: z.string().optional().describe('Backup directory'),
+    backup_id: z.string().optional().describe('Backup id (action: restore)'),
+    target_path: z.string().optional().describe('Restore target path for file backups (action: restore)'),
+    cron: z.string().optional().describe('Cron schedule (action: schedule)'),
+    retention: z.number().optional().describe('Retention days (action: schedule)'),
+    gzip: z.boolean().optional().describe('Gzip the backup (action: create)'),
+    verify: z.boolean().optional().describe('Compute/verify sha256 (actions: create, restore)'),
+    preview: z.boolean().optional().describe('Show the plan without executing'),
+    format: FORMAT,
+  },
+}, async (args) => handleSshBackup({
+  deps: DEPS,
+  handlers: {
+    create: handleSshBackupCreate,
+    list: handleSshBackupList,
+    restore: handleSshBackupRestore,
+    schedule: handleSshBackupSchedule,
+  },
+  args,
+}));
+
+registerToolConditional('ssh_docker', {
+  description: 'Docker control on a configured SSH server (ps, logs, exec, '
+    + 'restart, inspect).',
+  inputSchema: {
+    server: z.string().describe('Server name from configuration'),
+    action: z.enum(['ps', 'logs', 'exec', 'restart', 'inspect']).describe('Docker operation to perform'),
+    container: z.string().optional().describe('Container name/id (actions: logs, exec, restart, inspect)'),
+    image: z.string().optional().describe('Image reference'),
+    command: z.string().optional().describe('Command for docker exec (action: exec)'),
+    tail_lines: z.number().optional().describe('Log tail line count (action: logs)'),
+    preview: z.boolean().optional().describe('Preview a mutating action without running it'),
+    format: FORMAT,
+  },
+}, async (args) => handleSshDockerTool({
+  deps: DEPS,
+  handlers: { docker: handleSshDocker },
+  args,
+}));
+
+registerToolConditional('ssh_session', {
+  description: 'Persistent SSH sessions with preserved shell state, history '
+    + 'replay, and inferred memory.',
+  inputSchema: {
+    server: z.string().optional().describe('Server name (action: start)'),
+    action: z.enum(['start', 'send', 'list', 'close', 'replay', 'memory'])
+      .describe('Session operation to perform'),
+    session_id: z.string().optional().describe('Session id (actions: send, close, replay, memory)'),
+    command: z.string().optional().describe('Command to send (action: send)'),
+    timeout: z.number().optional().describe('Command timeout in ms (action: send)'),
+    limit: z.number().optional().describe('Max commands to replay (action: replay)'),
+    format: FORMAT,
+  },
+}, async (args) => handleSshSession({
+  deps: DEPS,
+  handlers: {
+    start: handleSshSessionStartNew,
+    send: handleSshSessionSendNew,
+    list: handleSshSessionListNew,
+    close: handleSshSessionCloseNew,
+    replay: handleSshSessionReplay,
+    memory: handleSshSessionMemory,
+  },
+  args,
+}));
+
+registerToolConditional('ssh_net', {
+  description: 'SSH tunnels (local/remote/SOCKS) and outbound port/TLS/HTTP '
+    + 'reachability probes from a configured server.',
+  inputSchema: {
+    server: z.string().optional().describe('Server name (actions: tunnel-open, port-test)'),
+    action: z.enum(['tunnel-open', 'tunnel-list', 'tunnel-close', 'port-test'])
+      .describe('Network operation to perform'),
+    tunnel_type: z.enum(['local', 'remote', 'dynamic']).optional().describe('Tunnel kind (action: tunnel-open)'),
+    local_host: z.string().optional().describe('Local host (action: tunnel-open)'),
+    local_port: z.number().optional().describe('Local port (action: tunnel-open)'),
+    remote_host: z.string().optional().describe('Remote host (action: tunnel-open)'),
+    remote_port: z.number().optional().describe('Remote port (action: tunnel-open)'),
+    tunnel_id: z.string().optional().describe('Tunnel id (action: tunnel-close)'),
+    target_host: z.string().optional().describe('Probe target host (action: port-test)'),
+    target_port: z.number().optional().describe('Probe target port (action: port-test)'),
+    probe_chain: z.array(z.enum(['dns', 'tcp', 'tls', 'http'])).optional().describe('Probe ordering (action: port-test)'),
+    timeout_ms_per_probe: z.number().optional().describe('Per-probe timeout in ms (action: port-test)'),
+    continue_on_fail: z.boolean().optional().describe('Keep probing after a failure (action: port-test)'),
+    preview: z.boolean().optional().describe('Probe reachability without opening the tunnel (action: tunnel-open)'),
+    format: FORMAT,
+  },
+}, async (args) => handleSshNet({
+  deps: DEPS,
+  handlers: {
+    tunnelCreate: handleSshTunnelCreate,
+    tunnelList: handleSshTunnelList,
+    tunnelClose: handleSshTunnelClose,
+    portTest: handleSshPortTest,
+  },
+  args,
+}));
+
+registerToolConditional('ssh_fleet', {
+  description: 'Fleet and configuration metadata: configured servers, server '
+    + 'groups, aliases, profiles, hooks, host keys, command history, '
+    + 'connection pool.',
+  inputSchema: {
+    action: z.enum(['servers', 'groups', 'aliases', 'profiles', 'hooks', 'keys', 'history', 'connections'])
+      .describe('Fleet/config entity to operate on'),
+    op: z.enum(['list', 'add', 'remove', 'update', 'status', 'reconnect', 'disconnect', 'cleanup', 'verify', 'accept', 'check', 'show'])
+      .optional().describe('Sub-operation (default list/status)'),
+    name: z.string().optional().describe('Entity name (group, alias, profile, hook)'),
+    members: z.array(z.string()).optional().describe('Member server names (action: groups)'),
+    target: z.string().optional().describe('Alias target server (action: aliases)'),
+    server: z.string().optional().describe('Server name (actions: keys, connections, history)'),
+    host: z.string().optional().describe('Raw host (action: keys)'),
+    port: z.number().optional().describe('Port (action: keys)'),
+    auto_accept: z.boolean().optional().describe('Auto-accept new host keys (action: keys)'),
+    limit: z.number().optional().describe('Row limit (action: history)'),
+    format: FORMAT,
+  },
+}, async (args) => handleSshFleet({
+  deps: DEPS,
+  handlers: {
+    servers: ({ args: a }) => fleetServers({ args: a, deps: { loadServerConfig } }),
+    groups: ({ args: a }) => fleetGroups({
+      args: a,
+      deps: { listGroups, createGroup, updateGroup, deleteGroup, addServersToGroup, removeServersFromGroup },
+    }),
+    aliases: ({ args: a }) => fleetAliases({
+      args: a, deps: { listAliases, addAlias, removeAlias, loadServerConfig, resolveServerName },
+    }),
+    profiles: ({ args: a }) => fleetProfiles({
+      args: a, deps: { listProfiles, setActiveProfile, getActiveProfileName, loadProfile },
+    }),
+    hooks: ({ args: a }) => fleetHooks({ args: a, deps: { listHooks, toggleHook } }),
+    history: ({ args: a }) => fleetHistory({ args: a, deps: { logger } }),
+    connections: ({ args: a }) => fleetConnections({
+      args: a,
+      deps: {
+        connections, connectionTimestamps, keepaliveIntervals,
+        isConnectionValid, closeConnection, cleanupOldConnections, getConnection,
       },
-    });
-  }
-);
-
-registerToolConditional(
-  'ssh_upload',
-  {
-    description: 'Upload file to remote SSH server (sha256-verified, preview-capable)',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      localPath: z.string().optional().describe('Local file path (alias for local_path)'),
-      remotePath: z.string().optional().describe('Remote destination path (alias for remote_path)'),
-      local_path: z.string().optional().describe('Local file path'),
-      remote_path: z.string().optional().describe('Remote destination path'),
-      preview: z.boolean().optional().describe('Show plan without uploading'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
+    }),
+    keys: handleSshKeyManage,
   },
-  async (args) => handleSshUpload({
-    getConnection,
-    args: {
-      ...args,
-      local_path: args.local_path || args.localPath,
-      remote_path: args.remote_path || args.remotePath,
-    }
-  })
-);
+  args,
+}));
 
-registerToolConditional(
-  'ssh_download',
-  {
-    description: 'Download file from remote SSH server (sha256-verified)',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      remotePath: z.string().optional().describe('Remote file path (alias for remote_path)'),
-      localPath: z.string().optional().describe('Local destination path (alias for local_path)'),
-      remote_path: z.string().optional().describe('Remote file path'),
-      local_path: z.string().optional().describe('Local destination path'),
-      preview: z.boolean().optional().describe('Show plan without downloading'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
+registerToolConditional('ssh_plan', {
+  description: 'Declarative multi-step plan executor. Runs an ordered list of '
+    + 'steps with rollback; high-risk steps need a re-run with approve_token.',
+  inputSchema: {
+    action: z.enum(['run', 'approve']).describe('run a plan, or approve and re-run a high-risk plan'),
+    steps: z.array(z.any()).describe('Ordered list of step objects'),
+    server: z.string().optional().describe('Plan-level default server for steps that omit one'),
+    approve_token: z.string().optional().describe('Any non-empty token; required for high-risk plans (action: approve)'),
+    rollback_on_fail: z.boolean().optional().describe('Walk completed steps in reverse and roll back on failure'),
+    format: FORMAT,
   },
-  async (args) => handleSshDownload({
-    getConnection,
-    args: {
-      ...args,
-      local_path: args.local_path || args.localPath,
-      remote_path: args.remote_path || args.remotePath,
-    }
-  })
-);
-
-registerToolConditional(
-  'ssh_sync',
-  {
-    description: 'Synchronize files/folders between local and remote via rsync (preview-capable)',
-    inputSchema: {
-      server: z.string().describe('Server name from configuration'),
-      source: z.string().describe('Source path (use "local:" or "remote:" prefix)'),
-      destination: z.string().describe('Destination path (use "local:" or "remote:" prefix)'),
-      exclude: z.array(z.string()).optional().describe('Patterns to exclude from sync'),
-      dryRun: z.boolean().optional().describe('Perform dry run without actual changes'),
-      delete: z.boolean().optional().describe('Delete files in destination not in source'),
-      compress: z.boolean().optional().describe('Compress during transfer'),
-      verbose: z.boolean().optional().describe('Show detailed progress'),
-      checksum: z.boolean().optional().describe('Use checksum instead of timestamp'),
-      timeout: z.number().optional().describe('Timeout in milliseconds'),
-      preview: z.boolean().optional().describe('Show plan without syncing'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
+}, async (args) => handleSshPlanTool({
+  deps: DEPS,
+  handlers: {
+    execute: handleSshExecute,
+    executeSudo: handleSshExecuteSudo,
+    upload: handleSshUpload,
+    download: handleSshDownload,
+    edit: handleSshEdit,
+    systemctl: handleSshSystemctl,
+    backupCreate: handleSshBackupCreate,
+    healthCheck: handleSshHealthCheck,
   },
-  async (args) => handleSshSync({
-    getConnection,
-    getServerConfig: getServerConfigByName,
-    args: { ...args, dry_run: args.dry_run ?? args.dryRun }
-  })
-);
-
-registerToolConditional(
-  'ssh_tail',
-  {
-    description: 'Tail remote log file once (last N lines, optional grep). For live streaming use ssh_tail_start.',
-    inputSchema: {
-      server: z.string().describe('Server name from configuration'),
-      file: z.string().describe('Path to the log file to tail'),
-      lines: z.number().optional().describe('Number of trailing lines to return (default: 50)'),
-      grep: z.string().optional().describe('Extended-regex filter applied before output truncation'),
-      timeout: z.number().optional().describe('Command timeout in ms (default 120000)'),
-      maxLen: z.number().optional().describe('Output truncation cap in chars (default 10000)'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshTail({ getConnection, args })
-);
-
-registerToolConditional(
-  'ssh_monitor',
-  {
-    description: 'Point-in-time system snapshot: cpu, memory, disk, network, process, or full overview',
-    inputSchema: {
-      server: z.string().describe('Server name from configuration'),
-      type: z.enum(['overview', 'cpu', 'memory', 'disk', 'network', 'process']).optional().describe('Which subsystem to snapshot (default: overview)'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshMonitor({ getConnection, args })
-);
-
-registerToolConditional(
-  'ssh_history',
-  {
-    description: 'View SSH command history',
-    inputSchema: {
-      limit: z.number().optional().describe('Number of commands to show (default: 20)'),
-      server: z.string().optional().describe('Filter by server name'),
-      success: z.boolean().optional().describe('Filter by success/failure'),
-      search: z.string().optional().describe('Search in commands')
-    }
-  },
-  async ({ limit = 20, server, success, search }) => {
-    try {
-      // Get history from logger
-      let history = logger.getHistory(limit * 2); // Get more to account for filtering
-
-      // Apply filters
-      if (server) {
-        history = history.filter(h => h.server?.toLowerCase().includes(server.toLowerCase()));
-      }
-
-      if (success !== undefined) {
-        history = history.filter(h => h.success === success);
-      }
-
-      if (search) {
-        history = history.filter(h => h.command?.toLowerCase().includes(search.toLowerCase()));
-      }
-
-      // Limit results
-      history = history.slice(-limit);
-
-      // Format output
-      let output = '[log] SSH Command History\n';
-      output += `Showing last ${history.length} commands`;
-
-      const filters = [];
-      if (server) filters.push(`server: ${server}`);
-      if (success !== undefined) filters.push(success ? 'successful only' : 'failed only');
-      if (search) filters.push(`search: ${search}`);
-
-      if (filters.length > 0) {
-        output += ` (filtered: ${filters.join(', ')})`;
-      }
-
-      output += '\n' + '-'.repeat(60) + '\n\n';
-
-      if (history.length === 0) {
-        output += 'No commands found matching the criteria.\n';
-      } else {
-        history.forEach((entry, index) => {
-          const time = new Date(entry.timestamp).toLocaleString();
-          const status = entry.success ? '[ok]' : '[err]';
-          const duration = entry.duration || 'N/A';
-
-          output += `${history.length - index}. ${status} [${time}]\n`;
-          output += `   Server: ${entry.server || 'unknown'}\n`;
-          output += `   Command: ${entry.command?.substring(0, 100) || 'N/A'}`;
-          if (entry.command && entry.command.length > 100) {
-            output += '...';
-          }
-          output += '\n';
-          output += `   Duration: ${duration}`;
-
-          if (!entry.success && entry.error) {
-            output += `\n   Error: ${entry.error}`;
-          }
-
-          output += '\n\n';
-        });
-      }
-
-      output += '-'.repeat(60) + '\n';
-      output += `Total commands in history: ${logger.getHistory(1000).length}\n`;
-
-      logger.info('Command history retrieved', {
-        limit,
-        filters: filters.length,
-        results: history.length
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: output
-          }
-        ]
-      };
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `[err] Error retrieving history: ${error.message}`
-          }
-        ],
-        isError: true
-      };
-    }
-  }
-);
-
-// SSH Session Management Tools
-
-registerToolConditional(
-  'ssh_session_start',
-  {
-    description: 'Start a persistent SSH session (marker-prompt protocol, typed state)',
-    inputSchema: {
-      server: z.string().describe('Server name from configuration'),
-      name: z.string().optional().describe('Optional session name'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshSessionStartNew({ getConnection, args })
-);
-
-registerToolConditional(
-  'ssh_session_send',
-  {
-    description: 'Send a command to an existing SSH session (marker-aware, UTF-8 safe)',
-    inputSchema: {
-      session: z.string().optional().describe('Session ID (alias for session_id)'),
-      session_id: z.string().optional().describe('Session ID'),
-      command: z.string().describe('Command to execute'),
-      timeout: z.number().optional().describe('Command timeout in ms'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshSessionSendNew({
-    args: { ...args, session_id: args.session_id || args.session, timeoutMs: args.timeout }
-  })
-);
-
-registerToolConditional(
-  'ssh_session_list',
-  {
-    description: 'List all active SSH sessions (typed state info)',
-    inputSchema: {
-      server: z.string().optional().describe('Filter by server name'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshSessionListNew({ args })
-);
-
-registerToolConditional(
-  'ssh_session_close',
-  {
-    description: 'Close an SSH session (idempotent)',
-    inputSchema: {
-      session: z.string().optional().describe('Session ID or "all" (alias for session_id)'),
-      session_id: z.string().optional().describe('Session ID or "all"'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshSessionCloseNew({
-    args: { ...args, session_id: args.session_id || args.session }
-  })
-);
-
-// Server Group Management Tools
-
-registerToolConditional(
-  'ssh_execute_group',
-  {
-    description: 'Execute command on a group of servers (bounded concurrency, typed per-server results)',
-    inputSchema: {
-      group: z.string().describe('Group name'),
-      command: z.string().describe('Command to execute'),
-      strategy: z.enum(['parallel', 'sequential', 'rolling']).optional().describe('Execution strategy'),
-      concurrency: z.number().optional().describe('Max parallel connections'),
-      delay: z.number().optional().describe('Delay between servers in ms'),
-      stopOnError: z.boolean().optional().describe('Stop on first error'),
-      cwd: z.string().optional().describe('Working directory'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshExecuteGroup({
-    getConnection,
-    resolveGroup: (groupName) => {
-      const g = getGroup(groupName);
-      if (!g) return null;
-      return { name: g.name, servers: g.servers };
-    },
-    args: { ...args, stop_on_error: args.stop_on_error ?? args.stopOnError },
-  })
-);
-
-registerToolConditional(
-  'ssh_group_manage',
-  {
-    description: 'Manage server groups (create, update, delete, list)',
-    inputSchema: {
-      action: z.enum(['create', 'update', 'delete', 'list', 'add-servers', 'remove-servers']).describe('Action to perform'),
-      name: z.string().optional().describe('Group name'),
-      servers: z.array(z.string()).optional().describe('Server names'),
-      description: z.string().optional().describe('Group description'),
-      strategy: z.enum(['parallel', 'sequential', 'rolling']).optional().describe('Execution strategy'),
-      delay: z.number().optional().describe('Delay between servers in ms'),
-      stopOnError: z.boolean().optional().describe('Stop on error flag')
-    }
-  },
-  async ({ action, name, servers, description, strategy, delay, stopOnError }) => {
-    try {
-      let result;
-      let output = '';
-
-      switch (action) {
-        case 'create':
-          if (!name) throw new Error('Group name required for create');
-          result = createGroup(name, servers || [], {
-            description,
-            strategy,
-            delay,
-            stopOnError
-          });
-          output = `[ok] Group '${name}' created\n`;
-          output += `Servers: ${result.servers.join(', ') || 'none'}\n`;
-          output += `Strategy: ${result.strategy}\n`;
-          break;
-
-        case 'update':
-          if (!name) throw new Error('Group name required for update');
-          result = updateGroup(name, {
-            servers,
-            description,
-            strategy,
-            delay,
-            stopOnError
-          });
-          output = `[ok] Group '${name}' updated\n`;
-          output += `Servers: ${result.servers.join(', ')}\n`;
-          break;
-
-        case 'delete':
-          if (!name) throw new Error('Group name required for delete');
-          deleteGroup(name);
-          output = `[ok] Group '${name}' deleted`;
-          break;
-
-        case 'add-servers':
-          if (!name) throw new Error('Group name required');
-          if (!servers || servers.length === 0) throw new Error('Servers required');
-          result = addServersToGroup(name, servers);
-          output = `[ok] Added ${servers.length} servers to '${name}'\n`;
-          output += `Total servers: ${result.servers.length}\n`;
-          output += `Members: ${result.servers.join(', ')}`;
-          break;
-
-        case 'remove-servers':
-          if (!name) throw new Error('Group name required');
-          if (!servers || servers.length === 0) throw new Error('Servers required');
-          result = removeServersFromGroup(name, servers);
-          output = `[ok] Removed ${servers.length} servers from '${name}'\n`;
-          output += `Remaining: ${result.servers.length}\n`;
-          output += `Members: ${result.servers.join(', ') || 'none'}`;
-          break;
-
-        case 'list': {
-          const groups = listGroups();
-          output = '[list] Server Groups\n';
-          output += '-'.repeat(60) + '\n\n';
-
-          groups.forEach(group => {
-            output += `[dir] ${group.name}`;
-            if (group.dynamic) output += ' (dynamic)';
-            output += '\n';
-            output += `   Description: ${group.description}\n`;
-            output += `   Servers: ${group.serverCount} servers\n`;
-            if (group.servers.length > 0) {
-              output += `   Members: ${group.servers.slice(0, 5).join(', ')}`;
-              if (group.servers.length > 5) output += ` ... +${group.servers.length - 5} more`;
-              output += '\n';
-            }
-            output += `   Strategy: ${group.strategy || 'parallel'}\n`;
-            if (group.delay) output += `   Delay: ${group.delay}ms\n`;
-            if (group.stopOnError) output += '   Stop on error: yes\n';
-            output += '\n';
-          });
-
-          output += '-'.repeat(60) + '\n';
-          output += `Total groups: ${groups.length}`;
-          break;
-        }
-
-        default:
-          throw new Error(`Unknown action: ${action}`);
-      }
-
-      logger.info('Group management action completed', {
-        action,
-        name,
-        servers: servers?.length
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: output
-          }
-        ]
-      };
-    } catch (error) {
-      logger.error('Group management failed', {
-        action,
-        name,
-        error: error.message
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `[err] Group management error: ${error.message}`
-          }
-        ],
-        isError: true
-      };
-    }
-  }
-);
-
-registerToolConditional(
-  'ssh_list_servers',
-  {
-    description: 'List all configured SSH servers',
-    inputSchema: {}
-  },
-  async () => {
-    const servers = loadServerConfig();
-    const serverInfo = Object.entries(servers).map(([name, config]) => ({
-      name,
-      host: config.host,
-      user: config.user,
-      port: config.port || '22',
-      auth: config.password ? 'password' : 'key',
-      defaultDir: config.default_dir || '',
-      description: config.description || ''
-    }));
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(serverInfo, null, 2),
-        },
-      ],
-    };
-  }
-);
-
-// New deploy tool for automated deployment
-registerToolConditional(
-  'ssh_deploy',
-  {
-    description: 'Deploy files to remote server with automatic permission handling',
-    inputSchema: {
-      server: z.string().describe('Server name or alias'),
-      files: z.array(z.object({
-        local: z.string().describe('Local file path'),
-        remote: z.string().describe('Remote file path')
-      })).describe('Array of files to deploy'),
-      options: z.object({
-        owner: z.string().optional().describe('Set file owner (e.g., "user:group")'),
-        permissions: z.string().optional().describe('Set file permissions (e.g., "644")'),
-        backup: z.boolean().optional().default(true).describe('Backup existing files'),
-        restart: z.string().optional().describe('Service to restart after deployment'),
-        sudoPassword: z.string().optional().describe('Sudo password if needed (use with caution)')
-      }).optional().describe('Deployment options')
-    }
-  },
-  async ({ server, files, options = {} }) => {
-    try {
-      const ssh = await getConnection(server);
-
-      // Execute pre-deploy hook
-      await executeHook('pre-deploy', {
-        server: server,
-        files: files.map(f => f.local).join(', ')
-      });
-
-      const deployments = [];
-      const results = [];
-
-      // Prepare deployment for each file
-      for (const file of files) {
-        const tempFile = getTempFilename(path.basename(file.local));
-        const needs = detectDeploymentNeeds(file.remote);
-
-        // Merge detected needs with user options
-        const deployOptions = {
-          ...options,
-          owner: options.owner || needs.suggestedOwner,
-          permissions: options.permissions || needs.suggestedPerms
-        };
-
-        const strategy = buildDeploymentStrategy(file.remote, deployOptions);
-
-        // Upload file to temp location first
-        await ssh.putFile(file.local, tempFile);
-        results.push(`[ok] Uploaded ${path.basename(file.local)} to temp location`);
-
-        // Execute deployment strategy
-        const deployServers = loadServerConfig();
-        const deployServerConfig = deployServers[server.toLowerCase()];
-        for (const step of strategy.steps) {
-          const command = step.command.replace('{{tempFile}}', tempFile);
-
-          const result = await execCommandWithTimeout(ssh, command, { platform: deployServerConfig?.platform }, 15000);
-
-          if (result.code !== 0 && step.type !== 'backup') {
-            throw new Error(`${step.type} failed: ${result.stderr}`);
-          }
-
-          if (step.type !== 'cleanup') {
-            results.push(`[ok] ${step.type}: ${file.remote}`);
-          }
-        }
-
-        deployments.push({
-          local: file.local,
-          remote: file.remote,
-          tempFile,
-          strategy
-        });
-      }
-
-      // Execute post-deploy hook
-      await executeHook('post-deploy', {
-        server: server,
-        files: files.map(f => f.remote).join(', ')
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `[run] Deployment successful!\n\n${results.join('\n')}`,
-          },
-        ],
-      };
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `[err] Deployment failed: ${error.message}`,
-          },
-        ],
-        isError: true,
-      };
-    }
-  }
-);
-
-// Execute command with sudo support (password via stdin, never argv)
-registerToolConditional(
-  'ssh_execute_sudo',
-  {
-    description: 'Execute command with sudo (password via stdin, never argv-leaked)',
-    inputSchema: {
-      server: z.string().describe('Server name or alias'),
-      command: z.string().describe('Command to execute with sudo'),
-      password: z.string().optional().describe('Sudo password (streamed via stdin)'),
-      cwd: z.string().optional().describe('Working directory'),
-      timeout: z.number().optional().describe('Command timeout in ms'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshExecuteSudo({
-    getConnection,
-    getServerConfig: getServerConfigByName,
-    args: { ...args, timeoutMs: args.timeout }
-  })
-);
-
-// Manage command aliases
-registerToolConditional(
-  'ssh_command_alias',
-  {
-    description: 'Manage command aliases for frequently used commands',
-    inputSchema: {
-      action: z.enum(['add', 'remove', 'list', 'suggest']).describe('Action to perform'),
-      alias: z.string().optional().describe('Alias name (for add/remove)'),
-      command: z.string().optional().describe('Command to alias (for add) or search term (for suggest)')
-    }
-  },
-  async ({ action, alias, command }) => {
-    try {
-      switch (action) {
-        case 'add': {
-          if (!alias || !command) {
-            throw new Error('Both alias and command are required for add action');
-          }
-
-          addCommandAlias(alias, command);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `[ok] Command alias created: ${alias} -> ${command}`,
-              },
-            ],
-          };
-        }
-
-        case 'remove': {
-          if (!alias) {
-            throw new Error('Alias is required for remove action');
-          }
-
-          removeCommandAlias(alias);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `[ok] Command alias removed: ${alias}`,
-              },
-            ],
-          };
-        }
-
-        case 'list': {
-          const aliases = listCommandAliases();
-
-          const aliasInfo = aliases.map(({ alias, command, isFromProfile, isCustom }) =>
-            `  ${alias} -> ${command}${isFromProfile ? ' (profile)' : ''}${isCustom ? ' (custom)' : ''}`
-          ).join('\n');
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: aliases.length > 0 ?
-                  `[log] Command aliases:\n${aliasInfo}` :
-                  '[log] No command aliases configured',
-              },
-            ],
-          };
-        }
-
-        case 'suggest': {
-          if (!command) {
-            throw new Error('Command search term is required for suggest action');
-          }
-
-          const suggestions = suggestAliases(command);
-
-          const suggestionInfo = suggestions.map(({ alias, command }) =>
-            `  ${alias} -> ${command}`
-          ).join('\n');
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: suggestions.length > 0 ?
-                  `[tip] Suggested aliases for "${command}":\n${suggestionInfo}` :
-                  `[tip] No aliases found matching "${command}"`,
-              },
-            ],
-          };
-        }
-      }
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `[err] Command alias operation failed: ${error.message}`,
-          },
-        ],
-        isError: true,
-      };
-    }
-  }
-);
-
-// Manage hooks
-registerToolConditional(
-  'ssh_hooks',
-  {
-    description: 'Manage automation hooks for SSH operations',
-    inputSchema: {
-      action: z.enum(['list', 'enable', 'disable', 'status']).describe('Action to perform'),
-      hook: z.string().optional().describe('Hook name (for enable/disable)')
-    }
-  },
-  async ({ action, hook }) => {
-    try {
-      switch (action) {
-        case 'list': {
-          const hooks = listHooks();
-
-          const hooksInfo = hooks.map(({ name, enabled, description, actionCount }) =>
-            `  ${enabled ? '[ok]' : '[err]'} ${name}: ${description} (${actionCount} actions)`
-          ).join('\n');
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: hooks.length > 0 ?
-                  `[hook] Available hooks:\n${hooksInfo}` :
-                  '[hook] No hooks configured',
-              },
-            ],
-          };
-        }
-
-        case 'enable': {
-          if (!hook) {
-            throw new Error('Hook name is required for enable action');
-          }
-
-          toggleHook(hook, true);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `[ok] Hook enabled: ${hook}`,
-              },
-            ],
-          };
-        }
-
-        case 'disable': {
-          if (!hook) {
-            throw new Error('Hook name is required for disable action');
-          }
-
-          toggleHook(hook, false);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `[ok] Hook disabled: ${hook}`,
-              },
-            ],
-          };
-        }
-
-        case 'status': {
-          const hooks = listHooks();
-          const enabledHooks = hooks.filter(h => h.enabled);
-          const disabledHooks = hooks.filter(h => !h.enabled);
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `[hook] Hook status:\n  Enabled: ${enabledHooks.map(h => h.name).join(', ') || 'none'}\n  Disabled: ${disabledHooks.map(h => h.name).join(', ') || 'none'}`,
-              },
-            ],
-          };
-        }
-      }
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `[err] Hook operation failed: ${error.message}`,
-          },
-        ],
-        isError: true,
-      };
-    }
-  }
-);
-
-// Manage profiles
-registerToolConditional(
-  'ssh_profile',
-  {
-    description: 'Manage SSH Manager profiles for different project types',
-    inputSchema: {
-      action: z.enum(['list', 'switch', 'current']).describe('Action to perform'),
-      profile: z.string().optional().describe('Profile name (for switch)')
-    }
-  },
-  async ({ action, profile }) => {
-    try {
-      switch (action) {
-        case 'list': {
-          const profiles = listProfiles();
-
-          const profileInfo = profiles.map(p =>
-            `  ${p.name}: ${p.description} (${p.aliasCount} aliases, ${p.hookCount} hooks)`
-          ).join('\n');
-
-          const current = getActiveProfileName();
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: profiles.length > 0 ?
-                  `[docs] Available profiles (current: ${current}):\n${profileInfo}` :
-                  '[docs] No profiles found',
-              },
-            ],
-          };
-        }
-
-        case 'switch': {
-          if (!profile) {
-            throw new Error('Profile name is required for switch action');
-          }
-
-          if (setActiveProfile(profile)) {
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: `[ok] Switched to profile: ${profile}\n[warn]  Restart Claude Code to apply profile changes`,
-                },
-              ],
-            };
-          } else {
-            throw new Error(`Failed to switch to profile: ${profile}`);
-          }
-        }
-
-        case 'current': {
-          const current = getActiveProfileName();
-          const profile = loadProfile();
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `[pkg] Current profile: ${current}\n[log] Description: ${profile.description || 'No description'}\n[conf] Aliases: ${Object.keys(profile.commandAliases || {}).length}\n[hook] Hooks: ${Object.keys(profile.hooks || {}).length}`,
-              },
-            ],
-          };
-        }
-      }
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `[err] Profile operation failed: ${error.message}`,
-          },
-        ],
-        isError: true,
-      };
-    }
-  }
-);
-
-// Connection management tool
-registerToolConditional(
-  'ssh_connection_status',
-  {
-    description: 'Check status of SSH connections and manage connection pool',
-    inputSchema: {
-      action: z.enum(['status', 'reconnect', 'disconnect', 'cleanup']).describe('Action to perform'),
-      server: z.string().optional().describe('Server name (for reconnect/disconnect)')
-    }
-  },
-  async ({ action, server }) => {
-    try {
-      switch (action) {
-        case 'status': {
-          const activeConnections = [];
-          const now = Date.now();
-
-          for (const [serverName, ssh] of connections.entries()) {
-            const timestamp = connectionTimestamps.get(serverName);
-            const ageMinutes = Math.floor((now - timestamp) / 1000 / 60);
-            const isValid = await isConnectionValid(ssh);
-
-            activeConnections.push({
-              server: serverName,
-              status: isValid ? '[ok] Active' : '[err] Dead',
-              age: `${ageMinutes} minutes`,
-              keepalive: keepaliveIntervals.has(serverName) ? '[ok]' : '[err]'
-            });
-          }
-
-          const statusInfo = activeConnections.length > 0 ?
-            activeConnections.map(c => `  ${c.server}: ${c.status} (age: ${c.age}, keepalive: ${c.keepalive})`).join('\n') :
-            '  No active connections';
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `[conn] Connection Pool Status:\n${statusInfo}\n\nSettings:\n  Timeout: ${CONNECTION_TIMEOUT / 1000 / 60} minutes\n  Keepalive: Every ${KEEPALIVE_INTERVAL / 1000 / 60} minutes`,
-              },
-            ],
-          };
-        }
-
-        case 'reconnect': {
-          if (!server) {
-            throw new Error('Server name is required for reconnect action');
-          }
-
-          const normalizedName = server.toLowerCase();
-          if (connections.has(normalizedName)) {
-            closeConnection(normalizedName);
-          }
-
-          await getConnection(server);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `[recycle]  Reconnected to ${server}`,
-              },
-            ],
-          };
-        }
-
-        case 'disconnect': {
-          if (!server) {
-            throw new Error('Server name is required for disconnect action');
-          }
-
-          closeConnection(server);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `[conn] Disconnected from ${server}`,
-              },
-            ],
-          };
-        }
-
-        case 'cleanup': {
-          const oldCount = connections.size;
-          cleanupOldConnections();
-
-          // Also check and remove dead connections
-          for (const [serverName, ssh] of connections.entries()) {
-            const isValid = await isConnectionValid(ssh);
-            if (!isValid) {
-              closeConnection(serverName);
-            }
-          }
-
-          const cleaned = oldCount - connections.size;
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `[clean] Cleanup complete: ${cleaned} connections closed, ${connections.size} active`,
-              },
-            ],
-          };
-        }
-      }
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `[err] Connection management failed: ${error.message}`,
-          },
-        ],
-        isError: true,
-      };
-    }
-  }
-);
-
-// SSH Tunnel Management - Create tunnel
-registerToolConditional(
-  'ssh_tunnel_create',
-  {
-    description: 'Create SSH tunnel (DNS+TCP reachability preview, typed state)',
-    inputSchema: {
-      server: z.string().describe('Server name or alias'),
-      type: z.enum(['local', 'remote', 'dynamic']).describe('local port forward, remote reverse tunnel, or dynamic SOCKS5 proxy'),
-      localHost: z.string().optional().describe('Local host (alias for local_host)'),
-      local_host: z.string().optional().describe('Local host'),
-      localPort: z.number().optional().describe('Local port (alias for local_port)'),
-      local_port: z.number().optional().describe('Local port'),
-      remoteHost: z.string().optional().describe('Remote host (alias for remote_host)'),
-      remote_host: z.string().optional().describe('Remote host'),
-      remotePort: z.number().optional().describe('Remote port (alias for remote_port)'),
-      remote_port: z.number().optional().describe('Remote port'),
-      preview: z.boolean().optional().describe('Probe reachability without opening tunnel'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshTunnelCreate({
-    getConnection,
-    args: {
-      ...args,
-      local_host: args.local_host ?? args.localHost,
-      local_port: args.local_port ?? args.localPort,
-      remote_host: args.remote_host ?? args.remoteHost,
-      remote_port: args.remote_port ?? args.remotePort,
-    }
-  })
-);
-
-registerToolConditional(
-  'ssh_tunnel_list',
-  {
-    description: 'List active SSH tunnels (typed state)',
-    inputSchema: {
-      server: z.string().optional().describe('Filter by server name'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshTunnelList({ args })
-);
-
-registerToolConditional(
-  'ssh_tunnel_close',
-  {
-    description: 'Close an SSH tunnel (idempotent)',
-    inputSchema: {
-      tunnelId: z.string().optional().describe('Tunnel ID (alias for tunnel_id)'),
-      tunnel_id: z.string().optional().describe('Tunnel ID'),
-      server: z.string().optional().describe('Close all tunnels for this server'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshTunnelClose({
-    args: { ...args, tunnel_id: args.tunnel_id || args.tunnelId }
-  })
-);
-
-// Manage SSH host keys -- real SHA256 fingerprint comparison, no regex guessing
-registerToolConditional(
-  'ssh_key_manage',
-  {
-    description: 'Manage SSH host keys (real SHA256:base64-nopad fingerprints, no TOFU)',
-    inputSchema: {
-      action: z.enum(['verify', 'accept', 'remove', 'list', 'check', 'show']).describe('Action to perform'),
-      server: z.string().optional().describe('Server name (or raw host for show/verify)'),
-      host: z.string().optional().describe('Hostname (alternative to server)'),
-      port: z.number().optional().describe('Port (default: 22)'),
-      autoAccept: z.boolean().optional().describe('Automatically accept new keys'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => {
-    const cfg = args.server ? getServerConfigByName(args.server) : null;
-    const host = args.host || (cfg && cfg.host);
-    const port = args.port || (cfg && parseInt(cfg.port || '22'));
-    return handleSshKeyManage({ args: { ...args, host, port } });
-  }
-);
-
-// Manage server aliases
-registerToolConditional(
-  'ssh_alias',
-  {
-    description: 'Manage server aliases for easier access',
-    inputSchema: {
-      action: z.enum(['add', 'remove', 'list']).describe('Action to perform'),
-      alias: z.string().optional().describe('Alias name (for add/remove)'),
-      server: z.string().optional().describe('Server name (for add)')
-    }
-  },
-  async ({ action, alias, server }) => {
-    try {
-      switch (action) {
-        case 'add': {
-          if (!alias || !server) {
-            throw new Error('Both alias and server are required for add action');
-          }
-
-          const servers = loadServerConfig();
-          const resolvedName = resolveServerName(server, servers);
-
-          if (!resolvedName) {
-            throw new Error(`Server "${server}" not found`);
-          }
-
-          addAlias(alias, resolvedName);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `[ok] Alias created: ${alias} -> ${resolvedName}`,
-              },
-            ],
-          };
-        }
-
-        case 'remove': {
-          if (!alias) {
-            throw new Error('Alias is required for remove action');
-          }
-
-          removeAlias(alias);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `[ok] Alias removed: ${alias}`,
-              },
-            ],
-          };
-        }
-
-        case 'list': {
-          const aliases = listAliases();
-          const servers = loadServerConfig();
-
-          const aliasInfo = aliases.map(({ alias, target }) => {
-            const server = servers[target];
-            return `  ${alias} -> ${target} (${server?.host || 'unknown'})`;
-          }).join('\n');
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: aliases.length > 0 ?
-                  `[log] Server aliases:\n${aliasInfo}` :
-                  '[log] No aliases configured',
-              },
-            ],
-          };
-        }
-      }
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `[err] Alias operation failed: ${error.message}`,
-          },
-        ],
-        isError: true,
-      };
-    }
-  }
-);
-
-// ============================================================================
-// BACKUP & RESTORE TOOLS
-// ============================================================================
-
-registerToolConditional(
-  'ssh_backup_create',
-  {
-    description: 'Create content-addressed backup with sha256 verification + preview',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      backup_type: z.enum(['mysql', 'postgresql', 'mongodb', 'files']).optional().describe('Backup type'),
-      type: z.enum(['mysql', 'postgresql', 'mongodb', 'files']).optional().describe('Alias for backup_type'),
-      name: z.string().optional().describe('Backup name'),
-      database: z.string().optional().describe('Database name'),
-      user: z.string().optional().describe('DB user'),
-      dbUser: z.string().optional().describe('DB user (alias)'),
-      password: z.string().optional().describe('DB password'),
-      dbPassword: z.string().optional().describe('DB password (alias)'),
-      host: z.string().optional().describe('DB host'),
-      dbHost: z.string().optional().describe('DB host (alias)'),
-      port: z.number().optional().describe('DB port'),
-      dbPort: z.number().optional().describe('DB port (alias)'),
-      paths: z.array(z.string()).optional().describe('Paths to backup'),
-      exclude: z.array(z.string()).optional().describe('Exclude patterns'),
-      backup_dir: z.string().optional().describe('Backup directory'),
-      backupDir: z.string().optional().describe('Backup directory (alias)'),
-      gzip: z.boolean().optional().describe('Gzip the backup'),
-      compress: z.boolean().optional().describe('Alias for gzip'),
-      verify: z.boolean().optional().describe('Compute sha256 after backup'),
-      preview: z.boolean().optional().describe('Show plan without backing up'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshBackupCreate({
-    getConnection,
-    args: {
-      ...args,
-      backup_type: args.backup_type || args.type,
-      user: args.user || args.dbUser,
-      password: args.password || args.dbPassword,
-      host: args.host || args.dbHost,
-      port: args.port || args.dbPort,
-      backup_dir: args.backup_dir || args.backupDir,
-      gzip: args.gzip ?? args.compress,
-    },
-  })
-);
-
-registerToolConditional(
-  'ssh_backup_list',
-  {
-    description: 'List backups (typed list with sha256, newest-first, meta sidecar parsing)',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      backup_type: z.enum(['mysql', 'postgresql', 'mongodb', 'files']).optional().describe('Filter'),
-      type: z.enum(['mysql', 'postgresql', 'mongodb', 'files']).optional().describe('Alias'),
-      backup_dir: z.string().optional().describe('Backup directory'),
-      backupDir: z.string().optional().describe('Backup directory (alias)'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshBackupList({
-    getConnection,
-    args: {
-      ...args,
-      backup_type: args.backup_type || args.type,
-      backup_dir: args.backup_dir || args.backupDir,
-    }
-  })
-);
-
-registerToolConditional(
-  'ssh_backup_restore',
-  {
-    description: 'Restore backup (sha256-verified, high-risk preview)',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      backup_id: z.string().optional().describe('Backup ID'),
-      backupId: z.string().optional().describe('Backup ID (alias)'),
-      database: z.string().optional().describe('Target database'),
-      user: z.string().optional().describe('DB user'),
-      dbUser: z.string().optional().describe('DB user (alias)'),
-      password: z.string().optional().describe('DB password'),
-      dbPassword: z.string().optional().describe('DB password (alias)'),
-      host: z.string().optional().describe('DB host'),
-      dbHost: z.string().optional().describe('DB host (alias)'),
-      port: z.number().optional().describe('DB port'),
-      dbPort: z.number().optional().describe('DB port (alias)'),
-      target_path: z.string().optional().describe('Target path for files'),
-      targetPath: z.string().optional().describe('Target path (alias)'),
-      backup_dir: z.string().optional().describe('Backup directory'),
-      backupDir: z.string().optional().describe('Backup directory (alias)'),
-      verify: z.boolean().optional().describe('Verify sha256 before restore'),
-      preview: z.boolean().optional().describe('Show plan without restoring'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshBackupRestore({
-    getConnection,
-    args: {
-      ...args,
-      backup_id: args.backup_id || args.backupId,
-      user: args.user || args.dbUser,
-      password: args.password || args.dbPassword,
-      host: args.host || args.dbHost,
-      port: args.port || args.dbPort,
-      target_path: args.target_path || args.targetPath,
-      backup_dir: args.backup_dir || args.backupDir,
-    }
-  })
-);
-
-registerToolConditional(
-  'ssh_backup_schedule',
-  {
-    description: 'Schedule automatic backups via cron (preview-capable)',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      cron: z.string().optional().describe('Cron schedule'),
-      schedule: z.string().optional().describe('Cron schedule (alias)'),
-      backup_type: z.enum(['mysql', 'postgresql', 'mongodb', 'files']).optional().describe('Backup type'),
-      type: z.enum(['mysql', 'postgresql', 'mongodb', 'files']).optional().describe('Alias'),
-      name: z.string().optional().describe('Backup name'),
-      database: z.string().optional().describe('Database name'),
-      paths: z.array(z.string()).optional().describe('Paths to backup'),
-      retention: z.number().optional().describe('Retention days'),
-      preview: z.boolean().optional().describe('Show cron plan without installing'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshBackupSchedule({
-    getConnection,
-    args: {
-      ...args,
-      cron: args.cron || args.schedule,
-      backup_type: args.backup_type || args.type,
-    }
-  })
-);
-
-// ============================================================================
-// HEALTH CHECKS & MONITORING TOOLS
-// ============================================================================
-
-registerToolConditional(
-  'ssh_health_check',
-  {
-    description: 'Comprehensive health snapshot (cpu, memory, disk, load, uptime, cores) via one bash -c call with marker-delimited sections',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshHealthCheck({ getConnection, args })
-);
-
-registerToolConditional(
-  'ssh_service_status',
-  {
-    description: 'Typed systemd service status (ActiveState/SubState/LoadState/UnitFileState + last 10 status lines)',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      service: z.string().describe('Service unit name (e.g. "nginx" or "nginx.service")'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshServiceStatus({ getConnection, args })
-);
-
-registerToolConditional(
-  'ssh_process_manager',
-  {
-    description: 'List/kill/info processes (typed, preview-capable for kills)',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      action: z.enum(['list', 'kill', 'info']).describe('Action'),
-      pid: z.number().optional().describe('Process ID'),
-      signal: z.enum(['TERM', 'KILL', 'HUP', 'INT', 'QUIT']).optional().describe('Signal'),
-      sortBy: z.enum(['cpu', 'memory']).optional().describe('Sort key'),
-      sort_by: z.enum(['cpu', 'memory']).optional().describe('Sort key (alias)'),
-      limit: z.number().optional().describe('Row cap'),
-      filter: z.string().optional().describe('Name/command filter'),
-      preview: z.boolean().optional().describe('Preview the kill'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshProcessManager({
-    getConnection,
-    args: { ...args, sort_by: args.sort_by || args.sortBy }
-  })
-);
-
-registerToolConditional(
-  'ssh_alert_setup',
-  {
-    description: 'Configure and check health-threshold alerts. Stores config per server on the operator machine; `check` compares current health_check metrics to thresholds. No background runner -- wire `check` into cron or ssh_hooks for continuous monitoring.',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      action: z.enum(['set', 'get', 'check']).describe('set thresholds, get config, or check current metrics against thresholds'),
-      cpuThreshold: z.number().min(0).max(100).optional().describe('CPU usage threshold percent (0-100)'),
-      memoryThreshold: z.number().min(0).max(100).optional().describe('Memory usage threshold percent (0-100)'),
-      diskThreshold: z.number().min(0).max(100).optional().describe('Disk usage threshold percent applied to every mount (0-100)'),
-      enabled: z.boolean().optional().describe('Enable or disable alert evaluation (default true)'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format'),
-    }
-  },
-  async (args) => handleSshAlertSetup({ getConnection, args })
-);
-
-// ============================================================================
-// DATABASE MANAGEMENT TOOLS
-// ============================================================================
-
-registerToolConditional(
-  'ssh_db_dump',
-  {
-    description: 'Dump database (password via env, never argv)',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      db_type: z.enum(['mysql', 'postgresql', 'mongodb']).optional().describe('DB type'),
-      type: z.enum(['mysql', 'postgresql', 'mongodb']).optional().describe('Alias'),
-      database: z.string().describe('Database name'),
-      output_file: z.string().optional().describe('Output path'),
-      outputFile: z.string().optional().describe('Output path (alias)'),
-      user: z.string().optional().describe('DB user'),
-      dbUser: z.string().optional().describe('DB user (alias)'),
-      password: z.string().optional().describe('DB password'),
-      dbPassword: z.string().optional().describe('DB password (alias)'),
-      host: z.string().optional().describe('DB host'),
-      dbHost: z.string().optional().describe('DB host (alias)'),
-      port: z.number().optional().describe('DB port'),
-      dbPort: z.number().optional().describe('DB port (alias)'),
-      gzip: z.boolean().optional().describe('Gzip output'),
-      compress: z.boolean().optional().describe('Alias for gzip'),
-      tables: z.array(z.string()).optional().describe('Specific tables'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshDbDump({
-    getConnection,
-    args: {
-      ...args,
-      db_type: args.db_type || args.type,
-      output_file: args.output_file || args.outputFile,
-      user: args.user || args.dbUser,
-      password: args.password || args.dbPassword,
-      host: args.host || args.dbHost,
-      port: args.port || args.dbPort,
-      gzip: args.gzip ?? args.compress,
-    }
-  })
-);
-
-registerToolConditional(
-  'ssh_db_import',
-  {
-    description: 'Import DB (preview-capable, high-risk guardrails)',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      db_type: z.enum(['mysql', 'postgresql', 'mongodb']).optional().describe('DB type'),
-      type: z.enum(['mysql', 'postgresql', 'mongodb']).optional().describe('Alias'),
-      database: z.string().describe('Target database'),
-      input_file: z.string().optional().describe('Input path'),
-      inputFile: z.string().optional().describe('Input path (alias)'),
-      user: z.string().optional().describe('DB user'),
-      dbUser: z.string().optional().describe('DB user (alias)'),
-      password: z.string().optional().describe('DB password'),
-      dbPassword: z.string().optional().describe('DB password (alias)'),
-      host: z.string().optional().describe('DB host'),
-      dbHost: z.string().optional().describe('DB host (alias)'),
-      port: z.number().optional().describe('DB port'),
-      dbPort: z.number().optional().describe('DB port (alias)'),
-      drop: z.boolean().optional().describe('Drop existing before import (Mongo)'),
-      preview: z.boolean().optional().describe('Show plan without importing'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshDbImport({
-    getConnection,
-    args: {
-      ...args,
-      db_type: args.db_type || args.type,
-      input_file: args.input_file || args.inputFile,
-      user: args.user || args.dbUser,
-      password: args.password || args.dbPassword,
-      host: args.host || args.dbHost,
-      port: args.port || args.dbPort,
-    }
-  })
-);
-
-registerToolConditional(
-  'ssh_db_list',
-  {
-    description: 'List databases or tables/collections (typed)',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      db_type: z.enum(['mysql', 'postgresql', 'mongodb']).optional().describe('DB type'),
-      type: z.enum(['mysql', 'postgresql', 'mongodb']).optional().describe('Alias'),
-      database: z.string().optional().describe('DB (lists tables) or omit for databases'),
-      user: z.string().optional().describe('DB user'),
-      dbUser: z.string().optional().describe('DB user (alias)'),
-      password: z.string().optional().describe('DB password'),
-      dbPassword: z.string().optional().describe('DB password (alias)'),
-      host: z.string().optional().describe('DB host'),
-      dbHost: z.string().optional().describe('DB host (alias)'),
-      port: z.number().optional().describe('DB port'),
-      dbPort: z.number().optional().describe('DB port (alias)'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshDbList({
-    getConnection,
-    args: {
-      ...args,
-      db_type: args.db_type || args.type,
-      user: args.user || args.dbUser,
-      password: args.password || args.dbPassword,
-      host: args.host || args.dbHost,
-      port: args.port || args.dbPort,
-    }
-  })
-);
-
-registerToolConditional(
-  'ssh_db_query',
-  {
-    description: 'Execute SELECT query (token-level SQL safety, no substring matching)',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      db_type: z.enum(['mysql', 'postgresql', 'mongodb']).optional().describe('DB type'),
-      type: z.enum(['mysql', 'postgresql', 'mongodb']).optional().describe('Alias'),
-      database: z.string().describe('Database name'),
-      query: z.string().describe('SELECT-only SQL or Mongo find'),
-      collection: z.string().optional().describe('Collection (MongoDB)'),
-      user: z.string().optional().describe('DB user'),
-      dbUser: z.string().optional().describe('DB user (alias)'),
-      password: z.string().optional().describe('DB password'),
-      dbPassword: z.string().optional().describe('DB password (alias)'),
-      host: z.string().optional().describe('DB host'),
-      dbHost: z.string().optional().describe('DB host (alias)'),
-      port: z.number().optional().describe('DB port'),
-      dbPort: z.number().optional().describe('DB port (alias)'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshDbQuery({
-    getConnection,
-    args: {
-      ...args,
-      db_type: args.db_type || args.type,
-      user: args.user || args.dbUser,
-      password: args.password || args.dbPassword,
-      host: args.host || args.dbHost,
-      port: args.port || args.dbPort,
-    }
-  })
-);
-
-// ===========================================================================
-// NEW "gamechanger" tools -- modular handlers not present in v1
-// ===========================================================================
-
-registerToolConditional(
-  'ssh_cat',
-  {
-    description: 'Read remote file slices (head/tail/grep/byte-offset+limit/line-range) -- UTF-8 safe',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      file: z.string().describe('Remote file path'),
-      head: z.number().optional().describe('Read first N lines'),
-      tail: z.number().optional().describe('Read last N lines'),
-      grep: z.string().optional().describe('Extended-regex filter (grep -E)'),
-      line_start: z.number().optional().describe('Start line (1-indexed) for line range mode'),
-      line_end: z.number().optional().describe('End line (1-indexed) for line range mode'),
-      offset: z.number().optional().describe('Byte offset for byte slice mode'),
-      limit: z.number().optional().describe('Byte limit for byte slice mode'),
-      timeout: z.number().optional().describe('Timeout in ms (default 15000)'),
-      maxLen: z.number().optional().describe('Output truncation cap (default 10000 chars)'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshCat({ getConnection, args })
-);
-
-registerToolConditional(
-  'ssh_systemctl',
-  {
-    description: 'systemctl wrapper (whitelisted actions, unit-name validated)',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      action: z.enum(['status', 'start', 'stop', 'restart', 'reload', 'enable', 'disable', 'list-units', 'list-unit-files', 'daemon-reload']).describe('Action (use status for is-active/is-enabled info)'),
-      unit: z.string().optional().describe('Unit name, e.g. "nginx.service" (not required for list-units, list-unit-files, daemon-reload)'),
-      pattern: z.string().optional().describe('Unit-name glob for list-units/list-unit-files'),
-      use_sudo: z.boolean().optional().describe('Force sudo on/off (defaults: on for mutating actions, off for read-only)'),
-      preview: z.boolean().optional().describe('Preview mutating actions without running them'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshSystemctl({ getConnection, args })
-);
-
-registerToolConditional(
-  'ssh_journalctl',
-  {
-    description: 'Read systemd journal (typed JSONL; priority normalization; no follow -- use ssh_tail_start for streaming)',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      unit: z.string().optional().describe('Unit to filter by (e.g. "sshd.service")'),
-      since: z.string().optional().describe('Time lower bound (e.g., "1 hour ago", "2026-04-14 12:00")'),
-      until: z.string().optional().describe('Time upper bound'),
-      priority: z.string().optional().describe('Priority filter (debug/info/notice/warning/err/crit/alert/emerg, default info)'),
-      lines: z.number().optional().describe('Max lines'),
-      grep: z.string().optional().describe('Extended-regex filter on message body'),
-      follow: z.boolean().optional().describe('Rejected -- use ssh_tail_start for streaming'),
-      json: z.boolean().optional().describe('Parse journal output as JSONL (default true); set false to parse as plain text'),
-      format: z.enum(['markdown', 'json']).optional().describe('Tool output format')
-    }
-  },
-  async (args) => handleSshJournalctl({ getConnection, args })
-);
-
-registerToolConditional(
-  'ssh_docker',
-  {
-    description: 'Docker CLI wrapper (container/image regex validation, preview on mutations)',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      action: z.enum(['ps', 'images', 'inspect', 'logs', 'start', 'stop', 'restart', 'rm', 'rmi', 'pull', 'exec']).describe('Docker action'),
-      container: z.string().optional().describe('Container name/ID'),
-      image: z.string().optional().describe('Image reference'),
-      command: z.string().optional().describe('exec command (for action=exec)'),
-      tail_lines: z.number().optional().describe('logs tail line count'),
-      follow: z.boolean().optional().describe('logs -f streaming (only meaningful for action=logs)'),
-      preview: z.boolean().optional().describe('Preview mutating actions (start/stop/restart/rm/rmi/pull/exec)'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshDocker({ getConnection, args })
-);
-
-registerToolConditional(
-  'ssh_port_test',
-  {
-    description: 'Port reachability probe (configurable DNS -> TCP -> TLS -> HTTP chain)',
-    inputSchema: {
-      server: z.string().optional().describe('Server to launch the outbound probe from (omit for local probe)'),
-      target_host: z.string().describe('Target host or IP'),
-      target_port: z.number().optional().describe('Target port (required for tcp/tls/http probes)'),
-      probe_chain: z.array(z.enum(['dns', 'tcp', 'tls', 'http'])).optional().describe('Probe ordering (default ["dns","tcp","tls","http"])'),
-      timeout_ms_per_probe: z.number().optional().describe('Per-probe timeout in ms'),
-      continue_on_fail: z.boolean().optional().describe('Continue running later probes even if an earlier one fails'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshPortTest({ getConnection, args })
-);
-
-registerToolConditional(
-  'ssh_diff',
-  {
-    description: 'Diff two files (same-server remote:remote, or cross-server by specifying server_b)',
-    inputSchema: {
-      server: z.string().describe('Server hosting path_a'),
-      path_a: z.string().describe('First file path'),
-      path_b: z.string().describe('Second file path (on `server` unless server_b set)'),
-      server_b: z.string().optional().describe('If set, path_b lives on this other server (cross-server diff)'),
-      preview: z.boolean().optional().describe('Show plan without running diff'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshDiff({ getConnection, args })
-);
-
-registerToolConditional(
-  'ssh_edit',
-  {
-    description: 'Atomic safe-edit (tmp -> optional syntax-check -> cp backup -> mv swap, preview-capable)',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      path: z.string().describe('Remote file path'),
-      new_content: z.string().optional().describe('Replacement content for the whole file (mutually exclusive with patch)'),
-      patch: z.array(z.object({
-        find: z.string().describe('Literal string to replace'),
-        replace: z.string().describe('Replacement'),
-      })).optional().describe('List of find/replace edits to apply in order (mutually exclusive with new_content)'),
-      syntax_check: z.union([z.string(), z.enum(['auto', 'off'])]).optional().describe('Syntax checker: "auto" picks by extension, "off" disables, or a literal command'),
-      preview: z.boolean().optional().describe('Show plan without editing'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshEdit({ getConnection, args })
-);
-
-registerToolConditional(
-  'ssh_tail_start',
-  {
-    description: 'Start a sessionized tail follow. Returns session_id; read new output later with ssh_tail_read; stop with ssh_tail_stop.',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      file: z.string().describe('Path to log file'),
-      lines: z.number().optional().describe('Initial trailing lines to emit (default 50)'),
-      grep: z.string().optional().describe('Extended-regex filter'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshTailStart({ getConnection, args })
-);
-
-registerToolConditional(
-  'ssh_tail_read',
-  {
-    description: 'Pull buffered output from a tail session started with ssh_tail_start. Cursor-style: pass since_offset to resume from a known point.',
-    inputSchema: {
-      session_id: z.string().describe('Tail session ID returned by ssh_tail_start'),
-      since_offset: z.number().optional().describe('Resume from this byte offset (returned as total_bytes on prior read). Omit to return the current ring buffer window.'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshTailRead({ args })
-);
-
-registerToolConditional(
-  'ssh_tail_stop',
-  {
-    description: 'Stop a tail session (idempotent)',
-    inputSchema: {
-      session_id: z.string().describe('Tail session ID'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshTailStop({ args })
-);
-
-registerToolConditional(
-  'ssh_session_replay',
-  {
-    description: 'Replay command history from a session',
-    inputSchema: {
-      session_id: z.string().describe('Session ID'),
-      limit: z.number().optional().describe('Max commands to replay'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshSessionReplay({ args })
-);
-
-registerToolConditional(
-  'ssh_session_memory',
-  {
-    description: 'Snapshot the inferred memory/state of a running session (env vars set, cwd, last exit code, etc.)',
-    inputSchema: {
-      session_id: z.string().describe('Session ID returned by ssh_session_start'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshSessionMemory({ args })
-);
-
-registerToolConditional(
-  'ssh_deploy_artifact',
-  {
-    description: 'Declarative artifact deploy (snapshot -> upload -> post_hooks -> health_check -> rollback)',
-    inputSchema: {
-      server: z.string().describe('Server name'),
-      artifact_local_path: z.string().describe('Local artifact to deploy'),
-      target_path: z.string().describe('Remote target path'),
-      post_hooks: z.array(z.string()).optional().describe('Post-deploy commands'),
-      health_check: z.string().optional().describe('Health check command'),
-      rollback_on_fail: z.boolean().optional().describe('Auto-rollback on failure (default: true)'),
-      preview: z.boolean().optional().describe('Show plan without deploying'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => handleSshDeploy({ getConnection, args })
-);
-
-registerToolConditional(
-  'ssh_plan',
-  {
-    description: 'Declarative multi-step plan executor with approve_token gate for high-risk steps',
-    inputSchema: {
-      steps: z.array(z.any()).describe('Ordered list of tool invocations'),
-      mode: z.enum(['preview', 'dry_run', 'run']).optional().describe('Execution mode'),
-      approve_token: z.string().optional().describe('Token required for high-risk steps'),
-      format: z.enum(['markdown', 'json']).optional().describe('Output format')
-    }
-  },
-  async (args) => {
-    const dispatch = {
-      ssh_execute: (a) => handleSshExecute({ getConnection, args: a }),
-      ssh_execute_sudo: (a) => handleSshExecuteSudo({ getConnection, getServerConfig: getServerConfigByName, args: a }),
-      ssh_upload: (a) => handleSshUpload({ getConnection, args: a }),
-      ssh_download: (a) => handleSshDownload({ getConnection, args: a }),
-      ssh_cat: (a) => handleSshCat({ getConnection, args: a }),
-      ssh_edit: (a) => handleSshEdit({ getConnection, args: a }),
-      ssh_docker: (a) => handleSshDocker({ getConnection, args: a }),
-      ssh_systemctl: (a) => handleSshSystemctl({ getConnection, args: a }),
-      ssh_journalctl: (a) => handleSshJournalctl({ getConnection, args: a }),
-      ssh_health_check: (a) => handleSshHealthCheck({ getConnection, args: a }),
-      ssh_service_status: (a) => handleSshServiceStatus({ getConnection, args: a }),
-      ssh_backup_create: (a) => handleSshBackupCreate({ getConnection, args: a }),
-      ssh_backup_restore: (a) => handleSshBackupRestore({ getConnection, args: a }),
-      ssh_deploy_artifact: (a) => handleSshDeploy({ getConnection, args: a }),
-      ssh_db_query: (a) => handleSshDbQuery({ getConnection, args: a }),
-      ssh_port_test: (a) => handleSshPortTest({ getConnection, args: a }),
-      ssh_tunnel_create: (a) => handleSshTunnelCreate({ getConnection, args: a }),
-    };
-    return handleSshPlan({ dispatch, args });
-  }
-);
+  planFn: handleSshPlan,
+  args,
+}));
 
 // Clean up connections on shutdown
 process.on('SIGINT', async () => {
