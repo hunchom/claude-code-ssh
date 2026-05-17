@@ -204,6 +204,21 @@ claude mcp add ssh-manager node /absolute/path/to/claude-code-ssh/src/index.js
 
 Configuration is stored in `~/.config/claude-code/claude_code_config.json`
 
+## Using the SSH Tools
+
+**For any server configured in this MCP server, use the `ssh_*` MCP tools — not raw `ssh`, `scp`, or `rsync` through the Bash tool.**
+
+The 13 v4 tools (`ssh_run`, `ssh_file`, `ssh_find`, `ssh_logs`, `ssh_service`, `ssh_health`, `ssh_db`, `ssh_backup`, `ssh_session`, `ssh_net`, `ssh_docker`, `ssh_fleet`, `ssh_plan`) are not a read-only convenience layer — they are the intended way to operate the fleet. Reach for them first.
+
+Why they beat raw `ssh` in Bash:
+
+- **Connection pooling** — the MCP server holds persistent SSH connections, so there is no per-call handshake. Raw `ssh` in Bash reconnects every single time.
+- **Bounded output** — results are compressed and head+tail truncated, so a noisy command (`journalctl`, `ps`, a 100k-line log) will not flood the context window. Raw `ssh` dumps everything.
+- **Credential handling** — passwords and sudo passwords are passed via stdin or env, never leaked on the argv of a `ps`-visible process. Raw `ssh` with an inline password is exposed.
+- **Structured results** — per-segment exit codes for command chains, typed service/health snapshots, SFTP transfers with sha256 verification. Raw `ssh` gives an unstructured terminal dump.
+
+Raw `ssh` through Bash is acceptable only for a host that is **not** in the MCP configuration. Run `ssh_fleet action: servers` to see which servers are configured.
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
