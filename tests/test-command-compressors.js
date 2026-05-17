@@ -44,6 +44,15 @@ test('compress: ls command routes to compressLs and appends footer', () => {
   assert(r.includes('re-run with raw: true'), 'escape-hatch footer present');
 });
 
+test('compress: ls footer names the dropped total-line, not a misleading line count', () => {
+  // The dropped line is always the `total N` header -- "1 line compressed"
+  // wrongly implies a content row was hidden. Footer must say total-line.
+  const r = compress('ls -la /tmp', 'total 8\nfile1\nfile2');
+  assert(r.includes('total-line dropped'), `footer should name the total line, got: ${JSON.stringify(r)}`);
+  assert(!/\b1 line compressed\b/.test(r), 'must not claim "1 line compressed"');
+  assert(r.includes('re-run with raw: true'), 'raw escape-hatch hint still present');
+});
+
 test('compress: raw:true bypasses compression entirely', () => {
   const r = compress('ls -la', 'total 8\nfile1', { raw: true });
   assert.strictEqual(r, 'total 8\nfile1');

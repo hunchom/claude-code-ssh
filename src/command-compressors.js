@@ -6,21 +6,29 @@
  * a footer naming the raw escape hatch whenever a compressor dropped anything.
  */
 
+/** Escape-hatch suffix appended to every compression footer. */
+const RAW_HINT = ' -- re-run with raw: true for full output';
+
 /** Escape-hatch footer appended when output was compressed. */
 function footer(dropped) {
-  return `\n... ${dropped} line${dropped === 1 ? '' : 's'} compressed`
-    + ' -- re-run with raw: true for full output';
+  return `\n... ${dropped} line${dropped === 1 ? '' : 's'} compressed` + RAW_HINT;
 }
 
 /**
  * Drop a leading `total N` summary line (the `ls -l` block-count header).
+ * Sets `note` so the footer says "total-line dropped" -- the dropped line is
+ * always that header, never N rows of content, so a line count would mislead.
  */
 export function compressLs(text) {
   const s = String(text == null ? '' : text);
   const nl = s.indexOf('\n');
   const first = (nl === -1 ? s : s.slice(0, nl)).trim();
   if (/^total \d+$/.test(first)) {
-    return { text: nl === -1 ? '' : s.slice(nl + 1), dropped: 1 };
+    return {
+      text: nl === -1 ? '' : s.slice(nl + 1),
+      dropped: 1,
+      note: '\n... ls total-line dropped' + RAW_HINT,
+    };
   }
   return { text: s, dropped: 0 };
 }
@@ -67,7 +75,10 @@ export function compress(command, text, { raw = false } = {}) {
   for (const { match, fn } of COMPRESSORS) {
     if (match.test(cmd)) {
       const out = fn(s);
-      return out.dropped > 0 ? out.text + footer(out.dropped) : out.text;
+      if (out.dropped <= 0) return out.text;
+      // A compressor may supply its own footer `note` when a line count
+      // would mislead (e.g. ls drops a header, not N content rows).
+      return out.text + (out.note || footer(out.dropped));
     }
   }
   return s;
