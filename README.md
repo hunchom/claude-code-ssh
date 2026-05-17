@@ -103,7 +103,7 @@ flowchart LR
     C[Claude Code]
   end
   subgraph mcp["claude-code-ssh (MCP server)"]
-    T[51 typed tools]
+    T[13 verb-tools]
     P[ssh2 connection pool]
     O[head+tail output]
     T --> P
@@ -121,9 +121,9 @@ flowchart LR
   B --> H1
 ```
 
-- **51 typed tools across 7 groups** — shell, files, databases, backups, deploys, tunnels, sessions. Claude picks; you never enumerate.
+- **13 fat verb-tools** — one per domain (run, files, logs, db, docker, services, ...), each with an action enum. Claude picks; you never enumerate.
 - **Pooled connections** — 30-minute idle timeout. Reconnects cost zero.
-- **Opt-in per group** — minimal mode (5 tools, ~3.5k tokens) to full mode (51 tools, ~43k tokens).
+- **Always loaded** — the 13-tool schema is small enough (~5k tokens) to stay un-deferred. No per-group opt-in to manage.
 
 ## Install
 
@@ -224,8 +224,8 @@ Claude already has a bash tool. Why this server?
 | Sudo password handling | argv / `echo pwd \| sudo -S` (leaks to `ps`) | stdin only, never argv |
 | DB query safety | Claude can send `DROP TABLE` | token-level SQL parser, SELECT only |
 | Host key verification | TOFU by default, no MITM check | SHA256 fingerprint match, strict mode available |
-| Tool surface | 1 generic shell exec | 51 typed tools with JSON schemas |
-| Context cost | unbounded per command | ~3.5k tokens minimal mode, ~43k full |
+| Tool surface | 1 generic shell exec | 13 verb-tools with JSON schemas |
+| Context cost | unbounded per command | ~5k tokens, always loaded |
 
 The pitch isn't "Claude couldn't SSH before." The pitch is "Claude could SSH, but badly — and one bad command on prod is one too many."
 
@@ -241,7 +241,7 @@ What this doesn't do, today, honestly:
 ## Testing
 
 ```bash
-npm test       # 551 tests across 26 suites
+npm test       # 1028 tests
 ```
 
 ## Layout

@@ -497,7 +497,8 @@ const DEPS = {
 registerToolConditional('ssh_run', {
   description: V4_TOOL_DESCRIPTIONS.ssh_run,
   inputSchema: {
-    server: z.string().describe('Server name from configuration'),
+    server: z.string().optional()
+      .describe('Server name; omit only for action fleet, which targets a group'),
     action: z.enum(['exec', 'sudo', 'fleet', 'script', 'detach', 'job-status', 'job-kill'])
       .describe('exec/sudo a command, fleet-exec across a group, run a script '
         + 'of commands, detach a long job, or check/kill a detached job'),

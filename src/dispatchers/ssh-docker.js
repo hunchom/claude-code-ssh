@@ -2,8 +2,8 @@
  * ssh_docker -- v4 fat verb-tool dispatcher.
  *
  * Thin pass-through over handleSshDocker, which already owns its own action
- * enum. v4 advertises ps/logs/exec/restart/inspect/compose. compose has no
- * handler path and is rejected here; the other five forward straight through.
+ * enum. v4 advertises ps/logs/exec/restart/inspect. compose is unadvertised
+ * but still rejected here defensively; the five forward straight through.
  *
  * handlers (injected): { docker }.
  */

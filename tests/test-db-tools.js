@@ -355,6 +355,20 @@ await test('ssh_db_list: MongoDB lists collections when database given', async (
   assert.strictEqual(parsed.data.db_type, 'mongodb');
 });
 
+await test('ssh_db_list: markdown render lists each database on its own line', async () => {
+  const client = new FakeClient({ script: () => ({ stdout: 'app\nanalytics\nstaging\n', code: 0 }) });
+  const r = await handleSshDbList({
+    getConnection: async () => client,
+    args: { server: 's', db_type: 'mysql' },
+  });
+  const text = r.content[0].text;
+  assert(text.includes('\n- app'), 'app on its own line');
+  assert(text.includes('\n- analytics'), 'analytics on its own line');
+  assert(text.includes('\n- staging'), 'staging on its own line');
+  assert(text.includes('3 databases'), 'count rendered');
+  assert(!text.includes('["app"'), 'array not JSON-collapsed');
+});
+
 // --------------------------------------------------------------------------
 // handleSshDbDump
 // --------------------------------------------------------------------------
