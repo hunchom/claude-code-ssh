@@ -13,6 +13,7 @@
  */
 
 import { OUTPUT_LIMITS } from './config.js';
+import { compress } from './command-compressors.js';
 
 // ANSI CSI / OSC stripping. Covers color, cursor, title sequences.
 // eslint-disable-next-line no-control-regex
@@ -72,8 +73,11 @@ export function truncateHeadTail(s, max = OUTPUT_LIMITS.MAX_OUTPUT_LENGTH) {
 
 /**
  * Build the structured ExecResult from raw stream output.
- * Input: { server, command, cwd?, stdout, stderr, code, durationMs, maxLen? }
+ * Input: { server, command, cwd?, stdout, stderr, code, durationMs, maxLen?, raw? }
  * Output: wire-schema JSON object.
+ *
+ * stdout passes through compress() (per-command shaping) before truncation;
+ * raw:true bypasses compression. stderr is never compressed -- errors stay whole.
  */
 export function formatExecResult({
   server,
@@ -84,8 +88,10 @@ export function formatExecResult({
   code,
   durationMs,
   maxLen = OUTPUT_LIMITS.MAX_OUTPUT_LENGTH,
+  raw = false,
 }) {
-  const out = truncateHeadTail(stripAnsi(stdout), maxLen);
+  const shapedStdout = compress(command, stripAnsi(stdout), { raw });
+  const out = truncateHeadTail(shapedStdout, maxLen);
   const err = truncateHeadTail(stripAnsi(stderr), maxLen);
   return {
     server,

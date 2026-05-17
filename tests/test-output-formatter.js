@@ -189,6 +189,34 @@ test('formatExecResult: negative durationMs clamps to 0', () => {
   assert.strictEqual(r.duration_ms, 0);
 });
 
+test('formatExecResult: ps stdout is compressed by default', () => {
+  const rows = Array.from({ length: 40 }, (_, i) => `r${i}`).join('\n');
+  const r = formatExecResult({
+    server: 's', command: 'ps -eo pid,args', stdout: 'HEAD\n' + rows,
+    stderr: '', code: 0, durationMs: 1,
+  });
+  assert(r.stdout.includes('compressed'), 'compressor footer present');
+  assert(r.stdout.split('\n').length < 41, 'tail rows dropped');
+});
+
+test('formatExecResult: raw:true skips compression', () => {
+  const rows = Array.from({ length: 40 }, (_, i) => `r${i}`).join('\n');
+  const r = formatExecResult({
+    server: 's', command: 'ps -eo pid,args', stdout: 'HEAD\n' + rows,
+    stderr: '', code: 0, durationMs: 1, raw: true,
+  });
+  assert(!r.stdout.includes('compressed'), 'no compression when raw');
+  assert.strictEqual(r.stdout, 'HEAD\n' + rows);
+});
+
+test('formatExecResult: non-ps/ls command output is untouched', () => {
+  const r = formatExecResult({
+    server: 's', command: 'echo hi', stdout: 'hi\nthere',
+    stderr: '', code: 0, durationMs: 1,
+  });
+  assert.strictEqual(r.stdout, 'hi\nthere');
+});
+
 // --- formatBytes ---------------------------------------------------------
 test('formatBytes: 0 -> "0 B"', () => assert.strictEqual(formatBytes(0), '0 B'));
 test('formatBytes: sub-KB stays in bytes', () => assert.strictEqual(formatBytes(512), '512 B'));
