@@ -799,6 +799,85 @@ await test('ssh_edit: patch-mode regex rules applied and base64-encoded new cont
   assert.strictEqual(decoded, 'version: 2.0\nname: beta\n');
 });
 
+await test('ssh_edit: literal:true patch matches regex metachars verbatim, replaces exact substring', async () => {
+  // old_text-style literal: 'a.b(c)' must hit the literal "a.b(c)", NOT the
+  // regex it would otherwise compile to (which also matches "axbZcY").
+  const original = 'keep axbZcY\nhit a.b(c) here\n';
+  const client = new FakeClient({
+    script: (cmd) => {
+      if (cmd.startsWith('cat ')) return { stdout: original, code: 0 };
+      return { stdout: '', code: 0 };
+    },
+  });
+  const r = await handleSshEdit({
+    getConnection: async () => client,
+    args: {
+      server: 's', path: '/etc/app.txt',
+      patch: [{ find: 'a.b(c)', replace: 'X', literal: true }],
+      syntax_check: 'none',
+      format: 'json',
+    },
+  });
+  const parsed = JSON.parse(r.content[0].text);
+  assert.strictEqual(parsed.success, true, parsed.error);
+  const writeIdx = client.commands.findIndex(c => c.includes('base64 -d >'));
+  const decoded = Buffer.from(client.streams[writeIdx].writes[0], 'base64').toString('utf8');
+  // "axbZcY" untouched (regex would have eaten it); only the literal span swapped.
+  assert.strictEqual(decoded, 'keep axbZcY\nhit X here\n');
+});
+
+await test('ssh_edit: literal:true with an unbalanced bracket in find does NOT throw', async () => {
+  // '[unclosed' is an invalid regex -- under literal mode it must be escaped,
+  // so a literal-looking edit never dies with "invalid patch regex".
+  const original = 'cfg[unclosed value\n';
+  const client = new FakeClient({
+    script: (cmd) => {
+      if (cmd.startsWith('cat ')) return { stdout: original, code: 0 };
+      return { stdout: '', code: 0 };
+    },
+  });
+  const r = await handleSshEdit({
+    getConnection: async () => client,
+    args: {
+      server: 's', path: '/etc/app.txt',
+      patch: [{ find: '[unclosed', replace: 'OK', literal: true }],
+      syntax_check: 'none',
+      format: 'json',
+    },
+  });
+  const parsed = JSON.parse(r.content[0].text);
+  assert.strictEqual(parsed.success, true, parsed.error);
+  const writeIdx = client.commands.findIndex(c => c.includes('base64 -d >'));
+  const decoded = Buffer.from(client.streams[writeIdx].writes[0], 'base64').toString('utf8');
+  assert.strictEqual(decoded, 'cfgOK value\n');
+});
+
+await test('ssh_edit: literal:true keeps $-sequences in the replacement literal', async () => {
+  // Under literal mode "$1" in replace must stay "$1", not be read as a
+  // capture-group backreference.
+  const original = 'price = OLD\n';
+  const client = new FakeClient({
+    script: (cmd) => {
+      if (cmd.startsWith('cat ')) return { stdout: original, code: 0 };
+      return { stdout: '', code: 0 };
+    },
+  });
+  const r = await handleSshEdit({
+    getConnection: async () => client,
+    args: {
+      server: 's', path: '/etc/app.txt',
+      patch: [{ find: 'OLD', replace: '$1.99', literal: true }],
+      syntax_check: 'none',
+      format: 'json',
+    },
+  });
+  const parsed = JSON.parse(r.content[0].text);
+  assert.strictEqual(parsed.success, true, parsed.error);
+  const writeIdx = client.commands.findIndex(c => c.includes('base64 -d >'));
+  const decoded = Buffer.from(client.streams[writeIdx].writes[0], 'base64').toString('utf8');
+  assert.strictEqual(decoded, 'price = $1.99\n');
+});
+
 await test('ssh_edit: missing new_content AND patch -> structured failure', async () => {
   const r = await handleSshEdit({
     getConnection: async () => ({}),

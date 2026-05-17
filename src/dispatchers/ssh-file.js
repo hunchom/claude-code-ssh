@@ -98,10 +98,14 @@ export async function handleSshFile({ deps, handlers, args } = {}) {
       }));
 
     case 'edit':
+      // old_text is literal user text → literal:true so regex metachars (. ( [ * ?)
+      // match verbatim, never silently patch the wrong span.
       return handlers.edit(makeCtx('conn', deps, {
         server: a.server,
         path: a.remote_path,
-        patch: a.old_text != null ? [{ find: a.old_text, replace: a.new_text ?? '' }] : undefined,
+        patch: a.old_text != null
+          ? [{ find: a.old_text, replace: a.new_text ?? '', literal: true }]
+          : undefined,
         preview: a.preview,
         format: a.format,
       }));

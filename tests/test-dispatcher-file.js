@@ -103,7 +103,22 @@ await test('edit routes to handlers.edit, maps remote_path -> path', async () =>
   });
   assert.strictEqual(edit.calls.length, 1);
   assert.strictEqual(edit.calls[0].args.path, '/tmp/f');
-  assert.deepStrictEqual(edit.calls[0].args.patch, [{ find: 'a', replace: 'b' }]);
+  // old_text is literal user text -> patch carries literal:true
+  assert.deepStrictEqual(edit.calls[0].args.patch, [{ find: 'a', replace: 'b', literal: true }]);
+});
+
+await test('edit marks the patch literal so regex metachars in old_text match verbatim', async () => {
+  const edit = spy();
+  await handleSshFile({
+    deps: DEPS, handlers: { edit },
+    args: {
+      server: 's', action: 'edit', remote_path: '/tmp/f',
+      old_text: 'a.b(c)[d]*?', new_text: 'X',
+    },
+  });
+  const p = edit.calls[0].args.patch[0];
+  assert.strictEqual(p.literal, true, 'literal flag set so applyPatches escapes the find');
+  assert.strictEqual(p.find, 'a.b(c)[d]*?', 'find passed through unescaped -- applyPatches escapes it');
 });
 
 await test('edit without old_text or content -> routes, patch undefined', async () => {
