@@ -336,6 +336,119 @@ await test('detach with a hostile job_id -> structured fail', async () => {
   assert.strictEqual(client.script.length, 0, 'builder threw before exec');
 });
 
+// --- job-status action --------------------------------------------------
+await test('job-status without job_id -> structured fail, never connects', async () => {
+  const client = fakeClient('');
+  const r = await handleSshRun({
+    deps: { ...DEPS, getConnection: async () => client },
+    handlers: {}, args: { server: 's', action: 'job-status' },
+  });
+  assert.strictEqual(r.isError, true);
+  assert.strictEqual(client.script.length, 0);
+});
+
+await test('job-status reports a finished job with its exit code', async () => {
+  const client = fakeClient(
+    'STATE=present\nRC=0\nPID=1234\nLOGSIZE=512\n##LOG##\nbuild complete');
+  const r = await handleSshRun({
+    deps: { ...DEPS, getConnection: async () => client },
+    handlers: {},
+    args: { server: 's', action: 'job-status', job_id: 'job-7', format: 'json' },
+  });
+  const res = JSON.parse(r.content[0].text);
+  assert.strictEqual(res.success, true);
+  assert.strictEqual(res.data.action, 'job-status');
+  assert.strictEqual(res.data.state, 'done');
+  assert.strictEqual(res.data.exit_code, 0);
+  assert.strictEqual(res.data.log_size, 512);
+  assert.strictEqual(res.data.log_chunk, 'build complete');
+});
+
+await test('job-status reports a still-running job (rc absent)', async () => {
+  const client = fakeClient(
+    'STATE=present\nRC=\nPID=4567\nLOGSIZE=88\n##LOG##\npartial');
+  const r = await handleSshRun({
+    deps: { ...DEPS, getConnection: async () => client },
+    handlers: {},
+    args: { server: 's', action: 'job-status', job_id: 'job-8', format: 'json' },
+  });
+  const res = JSON.parse(r.content[0].text);
+  assert.strictEqual(res.data.state, 'running');
+  assert.strictEqual(res.data.exit_code, null);
+});
+
+await test('job-status threads since_offset into the status command', async () => {
+  const client = fakeClient('STATE=present\nRC=\nPID=1\nLOGSIZE=9000\n##LOG##\ntail');
+  await handleSshRun({
+    deps: { ...DEPS, getConnection: async () => client },
+    handlers: {},
+    args: { server: 's', action: 'job-status', job_id: 'j', since_offset: 4096 },
+  });
+  // tail -c is 1-indexed: offset 4096 -> +4097
+  assert(client.script[0].includes('4097'), 'since_offset + 1 threaded into tail -c');
+});
+
+await test('job-status of a missing job -> unknown state', async () => {
+  const client = fakeClient('STATE=missing');
+  const r = await handleSshRun({
+    deps: { ...DEPS, getConnection: async () => client },
+    handlers: {},
+    args: { server: 's', action: 'job-status', job_id: 'gone', format: 'json' },
+  });
+  const res = JSON.parse(r.content[0].text);
+  assert.strictEqual(res.data.state, 'unknown');
+});
+
+await test('job-status with a hostile job_id -> structured fail', async () => {
+  const client = fakeClient('');
+  const r = await handleSshRun({
+    deps: { ...DEPS, getConnection: async () => client },
+    handlers: {},
+    args: { server: 's', action: 'job-status', job_id: 'a;b' },
+  });
+  assert.strictEqual(r.isError, true);
+  assert(r.content[0].text.includes('invalid job id'));
+  assert.strictEqual(client.script.length, 0);
+});
+
+// --- job-kill action ----------------------------------------------------
+await test('job-kill without job_id -> structured fail', async () => {
+  const client = fakeClient('');
+  const r = await handleSshRun({
+    deps: { ...DEPS, getConnection: async () => client },
+    handlers: {}, args: { server: 's', action: 'job-kill' },
+  });
+  assert.strictEqual(r.isError, true);
+  assert.strictEqual(client.script.length, 0);
+});
+
+await test('job-kill signals the job process group and reports back', async () => {
+  const client = fakeClient('killed 4567');
+  const r = await handleSshRun({
+    deps: { ...DEPS, getConnection: async () => client },
+    handlers: {},
+    args: { server: 's', action: 'job-kill', job_id: 'job-9', format: 'json' },
+  });
+  const res = JSON.parse(r.content[0].text);
+  assert.strictEqual(res.success, true);
+  assert.strictEqual(res.data.action, 'job-kill');
+  assert(client.script[0].includes('TERM'), 'graceful TERM in the kill command');
+  assert(client.script[0].includes('KILL'), 'KILL escalation in the kill command');
+  assert(String(res.data.result).includes('killed'), 'kill confirmation surfaced');
+});
+
+await test('job-kill with a hostile job_id -> structured fail', async () => {
+  const client = fakeClient('');
+  const r = await handleSshRun({
+    deps: { ...DEPS, getConnection: async () => client },
+    handlers: {},
+    args: { server: 's', action: 'job-kill', job_id: '$(x)' },
+  });
+  assert.strictEqual(r.isError, true);
+  assert(r.content[0].text.includes('invalid job id'));
+  assert.strictEqual(client.script.length, 0);
+});
+
 // --- Summary -------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
