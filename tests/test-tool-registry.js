@@ -52,73 +52,48 @@ function assertTrue(condition, message) {
 
 console.log('\n' + YELLOW + 'Running Tool Registry Tests...' + NC + '\n');
 
-// Test 1: All tools are accounted for
-test('All 51 tools are defined in groups', () => {
-  const allTools = getAllTools();
-  assertEqual(allTools.length, 51, 'Should have exactly 51 tools');
+test('All 12 v4 tools are defined in groups', () => {
+  assertEqual(getAllTools().length, 12, 'Should have exactly 12 tools');
 });
 
-// Test 2: No duplicate tools
 test('No duplicate tools across groups', () => {
-  const allTools = getAllTools();
-  const uniqueTools = new Set(allTools);
-  assertEqual(uniqueTools.size, 51, 'All 51 tools should be unique');
+  const all = getAllTools();
+  assertEqual(new Set(all).size, 12, 'All 12 tools should be unique');
 });
 
-// Test 3: Tool group counts are correct
 test('Tool group counts match TOOL_GROUP_COUNTS', () => {
   for (const [groupName, tools] of Object.entries(TOOL_GROUPS)) {
-    assertEqual(
-      tools.length,
-      TOOL_GROUP_COUNTS[groupName],
-      `Group ${groupName} count mismatch`
-    );
+    assertEqual(tools.length, TOOL_GROUP_COUNTS[groupName], `Group ${groupName} count mismatch`);
   }
 });
 
-// Test 4: All groups have descriptions
 test('All groups have descriptions', () => {
   for (const groupName of Object.keys(TOOL_GROUPS)) {
-    assertTrue(
-      groupName in TOOL_GROUP_DESCRIPTIONS,
-      `Group ${groupName} missing description`
-    );
-    assertTrue(
-      TOOL_GROUP_DESCRIPTIONS[groupName].length > 0,
-      `Group ${groupName} has empty description`
-    );
+    assertTrue(groupName in TOOL_GROUP_DESCRIPTIONS, `Group ${groupName} missing description`);
+    assertTrue(TOOL_GROUP_DESCRIPTIONS[groupName].length > 0, `Group ${groupName} has empty description`);
   }
 });
 
-// Test 5: findToolGroup works correctly
 test('findToolGroup returns correct group', () => {
-  assertEqual(findToolGroup('ssh_execute'), 'core', 'ssh_execute should be in core group');
-  assertEqual(findToolGroup('ssh_session_start'), 'sessions', 'ssh_session_start should be in sessions group');
-  assertEqual(findToolGroup('ssh_backup_create'), 'backup', 'ssh_backup_create should be in backup group');
+  assertEqual(findToolGroup('ssh_run'), 'core', 'ssh_run should be in core group');
+  assertEqual(findToolGroup('ssh_health'), 'ops', 'ssh_health should be in ops group');
+  assertEqual(findToolGroup('ssh_plan'), 'advanced', 'ssh_plan should be in advanced group');
   assertEqual(findToolGroup('nonexistent_tool'), null, 'Should return null for unknown tool');
 });
 
-// Test 6: getGroupTools returns correct tools
 test('getGroupTools returns correct tools', () => {
-  const coreTools = getGroupTools('core');
-  assertEqual(coreTools.length, 5, 'Core group should have 5 tools');
-  assertTrue(coreTools.includes('ssh_execute'), 'Core should include ssh_execute');
-
-  const advancedTools = getGroupTools('advanced');
-  assertEqual(advancedTools.length, 14, 'Advanced group should have 14 tools');
+  assertEqual(getGroupTools('core').length, 3, 'core group should have 3 tools');
+  assertTrue(getGroupTools('core').includes('ssh_run'), 'core should include ssh_run');
+  assertEqual(getGroupTools('ops').length, 5, 'ops group should have 5 tools');
 });
 
-// Test 7: Core tools are correct
-test('Core group contains expected tools', () => {
-  const coreTools = getGroupTools('core');
-  const expectedCore = ['ssh_list_servers', 'ssh_execute', 'ssh_upload', 'ssh_download', 'ssh_sync'];
-
-  for (const tool of expectedCore) {
-    assertTrue(coreTools.includes(tool), `Core should include ${tool}`);
+test('core group contains expected tools', () => {
+  const core = getGroupTools('core');
+  for (const tool of ['ssh_run', 'ssh_file', 'ssh_logs']) {
+    assertTrue(core.includes(tool), `core should include ${tool}`);
   }
 });
 
-// Test 8: Verify integrity check
 test('verifyIntegrity returns valid', () => {
   const integrity = verifyIntegrity();
   assertTrue(integrity.valid, 'Integrity check should pass');
@@ -126,59 +101,41 @@ test('verifyIntegrity returns valid', () => {
   assertEqual(integrity.issues.length, 0, 'Should have no issues');
 });
 
-// Test 9: getToolStats returns correct stats
 test('getToolStats returns correct statistics', () => {
   const stats = getToolStats();
-  assertEqual(stats.totalGroups, 7, 'Should have 7 groups');
-  assertEqual(stats.totalTools, 51, 'Should have 51 total tools');
-  assertEqual(stats.groups.length, 7, 'Should have 7 group entries');
+  assertEqual(stats.totalGroups, 3, 'Should have 3 groups');
+  assertEqual(stats.totalTools, 12, 'Should have 12 total tools');
+  assertEqual(stats.groups.length, 3, 'Should have 3 group entries');
 });
 
-// Test 10: All tool names follow naming convention
 test('All tools follow ssh_* naming convention', () => {
-  const allTools = getAllTools();
-  for (const tool of allTools) {
-    assertTrue(
-      tool.startsWith('ssh_'),
-      `Tool ${tool} should start with 'ssh_'`
-    );
+  for (const tool of getAllTools()) {
+    assertTrue(tool.startsWith('ssh_'), `Tool ${tool} should start with 'ssh_'`);
   }
 });
 
-// Test 11: validateToolRegistry works
 test('validateToolRegistry identifies correct tools', () => {
-  const allTools = getAllTools();
-  const validation = validateToolRegistry(allTools);
-
+  const validation = validateToolRegistry(getAllTools());
   assertTrue(validation.valid, 'Validation should pass for all tools');
   assertEqual(validation.missing.length, 0, 'Should have no missing tools');
   assertEqual(validation.unexpected.length, 0, 'Should have no unexpected tools');
-  assertEqual(validation.total, 51, 'Should expect 51 tools');
-  assertEqual(validation.registered, 51, 'Should register 51 tools');
+  assertEqual(validation.total, 12, 'Should expect 12 tools');
+  assertEqual(validation.registered, 12, 'Should register 12 tools');
 });
 
-// Test 12: validateToolRegistry catches missing tools
 test('validateToolRegistry detects missing tools', () => {
-  const partialTools = ['ssh_execute', 'ssh_upload'];
-  const validation = validateToolRegistry(partialTools);
-
+  const validation = validateToolRegistry(['ssh_run', 'ssh_file']);
   assertTrue(!validation.valid, 'Validation should fail for partial list');
   assertEqual(validation.registered, 2, 'Should show 2 registered');
   assertTrue(validation.missing.length > 0, 'Should have missing tools');
 });
 
-// Test 13: Specific group sizes
 test('Group sizes match specifications', () => {
-  assertEqual(TOOL_GROUPS.core.length, 5, 'Core should have 5 tools');
-  assertEqual(TOOL_GROUPS.sessions.length, 6, 'Sessions should have 6 tools');
-  assertEqual(TOOL_GROUPS.monitoring.length, 6, 'Monitoring should have 6 tools');
-  assertEqual(TOOL_GROUPS.backup.length, 4, 'Backup should have 4 tools');
-  assertEqual(TOOL_GROUPS.database.length, 4, 'Database should have 4 tools');
-  assertEqual(TOOL_GROUPS.advanced.length, 14, 'Advanced should have 14 tools');
-  assertEqual(TOOL_GROUPS.gamechanger.length, 12, 'Gamechanger should have 12 tools');
+  assertEqual(TOOL_GROUPS.core.length, 3, 'core should have 3 tools');
+  assertEqual(TOOL_GROUPS.ops.length, 5, 'ops should have 5 tools');
+  assertEqual(TOOL_GROUPS.advanced.length, 4, 'advanced should have 4 tools');
 });
 
-// Summary
 console.log('\n' + '='.repeat(60));
 console.log(`${GREEN}Passed: ${passedTests}${NC}`);
 console.log(`${RED}Failed: ${failedTests}${NC}`);
