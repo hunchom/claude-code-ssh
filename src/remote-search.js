@@ -118,3 +118,66 @@ export function buildLsCommand({
   const root = /^\/+$/.test(p) ? '/' : p.replace(/\/+$/, '') || '/';
   return `timeout ${timeoutSecs | 0} ls -la ${shQuote(root)}`;
 }
+
+/**
+ * Parse grep/rg `file:line:text` output to {file, line, text} objects.
+ * Splits on the first two colons only -- a colon in the match text survives.
+ * grep context separators (`--`) and blank lines are dropped.
+ */
+export function parseGrepHits(text) {
+  const s = text == null ? '' : String(text);
+  const hits = [];
+  for (const raw of s.split('\n')) {
+    const ln = raw;
+    if (ln === '' || ln === '--') continue;
+    const c1 = ln.indexOf(':');
+    if (c1 === -1) continue;
+    const c2 = ln.indexOf(':', c1 + 1);
+    if (c2 === -1) continue;
+    const lineNo = Number(ln.slice(c1 + 1, c2));
+    if (!Number.isFinite(lineNo)) continue;
+    hits.push({
+      file: ln.slice(0, c1),
+      line: lineNo,
+      text: ln.slice(c2 + 1),
+    });
+  }
+  return hits;
+}
+
+/** Parse `find` output (one path per line) to a trimmed string array. */
+export function parseLocateHits(text) {
+  const s = text == null ? '' : String(text);
+  return s.split('\n').map((l) => l.trim()).filter((l) => l !== '');
+}
+
+/** Map an `ls -l` permission char to a coarse type label. */
+function lsType(perms) {
+  const c = perms.charAt(0);
+  if (c === 'd') return 'dir';
+  if (c === 'l') return 'link';
+  return 'file';
+}
+
+/**
+ * Parse `ls -la` long-format output to {perms, size, name, type} rows.
+ * The leading `total N` line is skipped; a `name -> target` symlink keeps
+ * only the name. Filenames with spaces survive (name = everything from
+ * field 9 onward).
+ */
+export function parseLsRows(text) {
+  const s = text == null ? '' : String(text);
+  const rows = [];
+  for (const raw of s.split('\n')) {
+    const ln = raw.trim();
+    if (ln === '' || /^total \d+$/.test(ln)) continue;
+    // perms links owner group size mon day time name...
+    const m = ln.match(/^(\S+)\s+\S+\s+\S+\s+\S+\s+(\S+)\s+\S+\s+\S+\s+\S+\s+(.+)$/);
+    if (!m) continue;
+    let name = m[3];
+    const arrow = name.indexOf(' -> ');
+    if (arrow !== -1) name = name.slice(0, arrow);
+    rows.push({ perms: m[1], size: m[2], name, type: lsType(m[1]) });
+  }
+  return rows;
+}

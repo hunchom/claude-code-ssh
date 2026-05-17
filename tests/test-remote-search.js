@@ -10,6 +10,9 @@ import {
   buildGrepCommand,
   buildLocateCommand,
   buildLsCommand,
+  parseGrepHits,
+  parseLocateHits,
+  parseLsRows,
 } from '../src/remote-search.js';
 
 let passed = 0;
@@ -184,6 +187,79 @@ test('buildLsCommand: empty path is rejected', () => {
 test('buildLsCommand: bare root is allowed -- listing / is cheap and safe', () => {
   const cmd = buildLsCommand({ path: '/' });
   assert(cmd.includes("ls -la '/'"), 'root listing permitted');
+});
+
+// --- parseGrepHits -------------------------------------------------------
+test('parseGrepHits: file:line:text rows parsed to objects', () => {
+  const hits = parseGrepHits(
+    '/srv/app/main.js:42:  const TODO = 1;\n'
+    + '/srv/app/util.js:7:// TODO refactor',
+  );
+  assert.strictEqual(hits.length, 2);
+  assert.deepStrictEqual(hits[0], {
+    file: '/srv/app/main.js', line: 42, text: '  const TODO = 1;',
+  });
+  assert.strictEqual(hits[1].line, 7);
+});
+
+test('parseGrepHits: a colon inside the matched text is preserved', () => {
+  const hits = parseGrepHits('/etc/hosts:3:127.0.0.1 ::1 localhost');
+  assert.strictEqual(hits[0].text, '127.0.0.1 ::1 localhost');
+  assert.strictEqual(hits[0].line, 3);
+});
+
+test('parseGrepHits: blank lines and grep context "--" separators dropped', () => {
+  const hits = parseGrepHits('/a:1:x\n--\n\n/a:5:y');
+  assert.strictEqual(hits.length, 2);
+});
+
+test('parseGrepHits: empty / nullish input -> empty array', () => {
+  assert.deepStrictEqual(parseGrepHits(''), []);
+  assert.deepStrictEqual(parseGrepHits(null), []);
+});
+
+// --- parseLocateHits -----------------------------------------------------
+test('parseLocateHits: one path per line, trimmed, blanks dropped', () => {
+  const hits = parseLocateHits('/etc/nginx/nginx.conf\n\n/etc/ssl/openssl.conf\n');
+  assert.deepStrictEqual(hits, ['/etc/nginx/nginx.conf', '/etc/ssl/openssl.conf']);
+});
+
+test('parseLocateHits: empty input -> empty array', () => {
+  assert.deepStrictEqual(parseLocateHits(''), []);
+});
+
+// --- parseLsRows ---------------------------------------------------------
+test('parseLsRows: long-format rows parsed, "total" line skipped', () => {
+  const rows = parseLsRows(
+    'total 12\n'
+    + '-rw-r--r-- 1 root root 1024 May 17 10:00 app.conf\n'
+    + 'drwxr-xr-x 2 root root 4096 May 16 09:30 logs',
+  );
+  assert.strictEqual(rows.length, 2);
+  assert.deepStrictEqual(rows[0], {
+    perms: '-rw-r--r--', size: '1024', name: 'app.conf', type: 'file',
+  });
+  assert.strictEqual(rows[1].type, 'dir');
+  assert.strictEqual(rows[1].name, 'logs');
+});
+
+test('parseLsRows: a filename containing spaces is kept whole', () => {
+  const rows = parseLsRows(
+    'total 4\n-rw-r--r-- 1 u g 9 May 17 10:00 my notes.txt',
+  );
+  assert.strictEqual(rows[0].name, 'my notes.txt');
+});
+
+test('parseLsRows: symlink target is stripped from the name', () => {
+  const rows = parseLsRows(
+    'total 0\nlrwxrwxrwx 1 u g 7 May 17 10:00 cur -> /opt/v2',
+  );
+  assert.strictEqual(rows[0].name, 'cur');
+  assert.strictEqual(rows[0].type, 'link');
+});
+
+test('parseLsRows: empty input -> empty array', () => {
+  assert.deepStrictEqual(parseLsRows(''), []);
 });
 
 // --- Summary -------------------------------------------------------------
