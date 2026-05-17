@@ -3,6 +3,7 @@
 import assert from 'assert';
 import { EventEmitter } from 'events';
 import { handleSshCat, buildCatCommand } from '../src/tools/cat-tools.js';
+import { unwrapTimeout } from './util-timeout-unwrap.js';
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
@@ -17,7 +18,8 @@ class FakeStream extends EventEmitter {
 class FakeClient {
   constructor({ script } = {}) { this.script = script || (() => ({ stdout: '', code: 0 })); this.streams = []; this.lastCommand = null; }
   exec(rawCmd, cb) {
-    const cmd = rawCmd.replace(/^timeout -k \d+ \d+ /, '');
+    // Recover inner command from `timeout -k N N sh -c '<cmd>'` wrapper.
+    const cmd = unwrapTimeout(rawCmd);
     this.lastCommand = cmd;
     const s = new FakeStream(); this.streams.push(s);
     setImmediate(() => {

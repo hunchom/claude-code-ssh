@@ -825,7 +825,7 @@ registerToolConditional('ssh_fleet', {
       args: a,
       deps: {
         connections, connectionTimestamps, keepaliveIntervals,
-        isConnectionValid, closeConnection, cleanupOldConnections, getConnection,
+        closeConnection, cleanupOldConnections, getConnection,
       },
     }),
     keys: handleSshKeyManage,

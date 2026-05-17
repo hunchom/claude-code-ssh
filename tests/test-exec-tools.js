@@ -10,6 +10,7 @@ import {
   handleSshExecuteSudo,
   handleSshExecuteGroup,
 } from '../src/tools/exec-tools.js';
+import { unwrapTimeout } from './util-timeout-unwrap.js';
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
@@ -33,11 +34,13 @@ class FakeClient {
     this.script = script || (() => ({ stdout: '', stderr: '', code: 0 }));
     this.streams = [];
     this.lastCommand = null;
+    this.lastRawCommand = null; // verbatim, wrapper intact -- for raw-bypass checks
   }
   exec(rawCmd, cb) {
-    // Strip OS timeout wrapper so script dispatch and lastCommand assertions
-    // see the bare command, not `timeout -k N N <cmd>`.
-    const cmd = rawCmd.replace(/^timeout -k \d+ \d+ /, '');
+    // Recover inner command from `timeout -k N N sh -c '<cmd>'` wrapper so
+    // script dispatch + lastCommand assertions see the real command.
+    this.lastRawCommand = rawCmd;
+    const cmd = unwrapTimeout(rawCmd);
     this.lastCommand = cmd;
     const s = new FakeStream();
     this.streams.push(s);
@@ -80,6 +83,26 @@ await test('ssh_execute: cwd shell-safely quoted in remote command', async () =>
     args: { server: 's', command: 'ls', cwd: '/tmp; rm -rf /' },
   });
   assert.strictEqual(client.lastCommand, 'cd \'/tmp; rm -rf /\' && ls');
+});
+
+await test('ssh_execute: non-raw command IS wrapped in the OS timeout utility', async () => {
+  const client = new FakeClient({ script: () => ({ stdout: 'ok', code: 0 }) });
+  await handleSshExecute({
+    getConnection: async () => client,
+    args: { server: 's', command: 'ls' },
+  });
+  // Default exec is timed -> wrapped via `timeout -k N N sh -c '<cmd>'`.
+  assert(/^timeout -k \d+ \d+ sh -c /.test(client.lastRawCommand), 'timeout wrapper applied');
+});
+
+await test('ssh_execute: raw:true bypasses the OS timeout wrapper', async () => {
+  const client = new FakeClient({ script: () => ({ stdout: 'ok', code: 0 }) });
+  await handleSshExecute({
+    getConnection: async () => client,
+    args: { server: 's', command: 'exec mybinary', raw: true },
+  });
+  // raw:true -> command sent verbatim, no `timeout` prefix.
+  assert.strictEqual(client.lastRawCommand, 'exec mybinary', 'raw command sent verbatim');
 });
 
 await test('ssh_execute: non-zero exit renders [err] marker (not isError)', async () => {

@@ -15,6 +15,7 @@ import {
   _sessionsForTest,
   _stoppedIdsForTest,
 } from '../src/tools/tail-tools.js';
+import { unwrapTimeout } from './util-timeout-unwrap.js';
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
@@ -44,7 +45,8 @@ class OneShotClient {
     this.lastCommand = null;
   }
   exec(rawCmd, cb) {
-    const cmd = rawCmd.replace(/^timeout -k \d+ \d+ /, '');
+    // Recover inner command from `timeout -k N N sh -c '<cmd>'` wrapper.
+    const cmd = unwrapTimeout(rawCmd);
     this.lastCommand = cmd;
     const s = new FakeStream();
     this.streams.push(s);

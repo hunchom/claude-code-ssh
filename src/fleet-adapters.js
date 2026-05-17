@@ -224,8 +224,10 @@ export async function fleetConnections({ args, deps }) {
       case 'cleanup': {
         const before = deps.connections.size;
         deps.cleanupOldConnections();
+        // Real on-wire probe -- isConnectionValid is now a synchronous socket
+        // check that would call a half-open dead connection Active.
         for (const [n, ssh] of deps.connections.entries()) {
-          if (!(await deps.isConnectionValid(ssh))) deps.closeConnection(n);
+          if (!(await ssh.ping())) deps.closeConnection(n);
         }
         return mcp(`[clean] ${before - deps.connections.size} closed, ${deps.connections.size} active`);
       }
@@ -235,7 +237,8 @@ export async function fleetConnections({ args, deps }) {
         const rows = [];
         for (const [name, ssh] of deps.connections.entries()) {
           const age = Math.floor((now - deps.connectionTimestamps.get(name)) / 60000);
-          const valid = await deps.isConnectionValid(ssh);
+          // Real on-wire probe for this diagnostic view (see cleanup note).
+          const valid = await ssh.ping();
           rows.push(`  ${name}: ${valid ? '[ok] Active' : '[err] Dead'} (age ${age}m)`);
         }
         return mcp(`[conn] Connection Pool:\n${rows.join('\n') || '  No active connections'}`);

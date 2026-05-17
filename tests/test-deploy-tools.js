@@ -6,6 +6,7 @@ import os from 'os';
 import path from 'path';
 import { EventEmitter } from 'events';
 import { handleSshDeploy } from '../src/tools/deploy-tools.js';
+import { unwrapTimeout } from './util-timeout-unwrap.js';
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
@@ -24,7 +25,8 @@ function makeClient(script) {
     commands,
     _script: script,
     exec(rawCmd, cb) {
-      const cmd = rawCmd.replace(/^timeout -k \d+ \d+ /, '');
+      // Recover inner command from `timeout -k N N sh -c '<cmd>'` wrapper.
+      const cmd = unwrapTimeout(rawCmd);
       commands.push(cmd);
       const s = new FakeStream();
       setImmediate(() => {

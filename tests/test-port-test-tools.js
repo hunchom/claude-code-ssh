@@ -7,6 +7,7 @@ import {
   buildDnsCommand, buildTlsCommand, buildHttpCommand,
   handleSshPortTest,
 } from '../src/tools/port-test-tools.js';
+import { unwrapTimeout } from './util-timeout-unwrap.js';
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
@@ -21,7 +22,8 @@ class FakeStream extends EventEmitter {
 class FakeClient {
   constructor({ script } = {}) { this.script = script || (() => ({ stdout: '', code: 0 })); this.commands = []; this.streams = []; }
   exec(rawCmd, cb) {
-    const cmd = rawCmd.replace(/^timeout -k \d+ \d+ /, '');
+    // Recover inner command from `timeout -k N N sh -c '<cmd>'` wrapper.
+    const cmd = unwrapTimeout(rawCmd);
     this.commands.push(cmd);
     const s = new FakeStream(); this.streams.push(s);
     setImmediate(() => {

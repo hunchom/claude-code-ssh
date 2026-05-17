@@ -27,6 +27,7 @@ import {
   handleSshEdit,
   buildRsyncArgv,
 } from '../src/tools/transfer-tools.js';
+import { unwrapTimeout } from './util-timeout-unwrap.js';
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
@@ -75,7 +76,8 @@ class FakeClient {
     this.sftpCalls = 0;
   }
   exec(rawCmd, cb) {
-    const cmd = rawCmd.replace(/^timeout -k \d+ \d+ /, '');
+    // Recover inner command from `timeout -k N N sh -c '<cmd>'` wrapper.
+    const cmd = unwrapTimeout(rawCmd);
     this.commands.push(cmd);
     const s = new FakeStream();
     this.streams.push(s);

@@ -10,6 +10,7 @@ import { EventEmitter } from 'events';
 import {
   streamExecCommand, shQuote, buildRemoteCommand, wrapWithTimeout,
 } from '../src/stream-exec.js';
+import { unwrapTimeout } from './util-timeout-unwrap.js';
 
 let passed = 0;
 let failed = 0;
@@ -245,8 +246,9 @@ await test('streamExecCommand: non-raw timed command gets the OS timeout wrapper
   await sleep(5);
   client.streams[0].finish(0);
   await p;
-  assert(/^timeout -k \d+ \d+ /.test(client.lastCommand), 'OS timeout wrapper applied');
-  assert(client.lastCommand.includes('make all'), 'original command preserved');
+  // Wrapped form: timeout bounds `sh -c '<cmd>'`, NOT the bare cmd.
+  assert(/^timeout -k \d+ \d+ sh -c /.test(client.lastCommand), 'timeout -> sh -c wrapper');
+  assert.strictEqual(unwrapTimeout(client.lastCommand), 'make all', 'inner command intact');
 });
 
 await test('streamExecCommand: raw:true command is NOT wrapped', async () => {
@@ -275,30 +277,39 @@ await test('streamExecCommand: timeout wrapper composes with the cwd prefix', as
   await sleep(5);
   client.streams[0].finish(0);
   await p;
-  // cwd prefix is inside the timeout-wrapped command.
-  assert(client.lastCommand.startsWith('timeout -k '), 'timeout outermost');
-  assert(client.lastCommand.includes("cd '/srv/app' && ls"), 'cwd prefix preserved');
+  // timeout outermost; the cd && cmd runs INSIDE `sh -c` so the shell -- not
+  // timeout -- parses `&&`. Unwrapped, the inner command is the cd prefix.
+  assert(/^timeout -k \d+ \d+ sh -c /.test(client.lastCommand), 'timeout -> sh -c outermost');
+  assert.strictEqual(unwrapTimeout(client.lastCommand), "cd '/srv/app' && ls", 'cd prefix runs in shell');
 });
 
 // --- wrapWithTimeout -----------------------------------------------------
-await test('wrapWithTimeout: prefixes the OS timeout utility with a seconds wall', () => {
+await test('wrapWithTimeout: wraps via sh -c so a shell parses the command', () => {
   const w = wrapWithTimeout('make build', 30000);
-  // 30000 ms -> 30 s wall, with a small ceiling buffer is fine; assert >= 30.
-  assert(/^timeout -k \d+ \d+ /.test(w), 'timeout -k <kill> <wall> prefix');
-  assert(w.includes('make build'), 'original command preserved');
+  // 30000 ms -> 30 s wall. timeout runs `sh -c '<cmd>'`, never the bare cmd.
+  assert(/^timeout -k \d+ \d+ sh -c /.test(w), 'timeout -k <kill> <wall> sh -c prefix');
+  assert.strictEqual(unwrapTimeout(w), 'make build', 'inner command recoverable');
+});
+
+await test('wrapWithTimeout: shell metachars survive into the sh -c argument', () => {
+  // The whole reason for sh -c: &&, |, env-prefix, set -e must reach a shell.
+  const cmd = "SSH_MGR_DB_PASS='p' mysql -e 'show databases' | head";
+  const w = wrapWithTimeout(cmd, 5000);
+  assert(/^timeout -k \d+ \d+ sh -c /.test(w), 'sh -c wrapper');
+  assert.strictEqual(unwrapTimeout(w), cmd, 'env-prefix + pipe preserved verbatim');
 });
 
 await test('wrapWithTimeout: -k grace lets the OS escalate to KILL itself', () => {
   const w = wrapWithTimeout('cmd', 10000);
   // `timeout -k N` sends KILL N seconds after the initial TERM.
-  const m = w.match(/^timeout -k (\d+) (\d+) /);
+  const m = w.match(/^timeout -k (\d+) (\d+) sh -c /);
   assert(m, 'wrapped');
   assert(Number(m[1]) >= 1, 'a non-zero kill grace');
 });
 
 await test('wrapWithTimeout: rounds sub-second timeouts up to at least 1 s', () => {
   const w = wrapWithTimeout('cmd', 200);
-  const m = w.match(/^timeout -k \d+ (\d+) /);
+  const m = w.match(/^timeout -k \d+ (\d+) sh -c /);
   assert(m, 'wrapped');
   assert(Number(m[1]) >= 1, 'wall is at least 1 s -- timeout rejects 0');
 });

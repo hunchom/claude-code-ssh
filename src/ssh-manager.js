@@ -405,8 +405,9 @@ class SSHManager {
   // a reused pooled connection must not pay an echo round-trip per command.
   // A truly dead connection surfaces on the next command's own failure and
   // is reconnected then. Distinct from ping() (an explicit on-wire probe).
+  // Delegates to isConnected(); Boolean() guarantees a strict boolean.
   isAlive() {
-    return Boolean(this.connected && this.client && !this.client.destroyed);
+    return Boolean(this.isConnected());
   }
 
   dispose() {

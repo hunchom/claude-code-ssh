@@ -33,6 +33,12 @@ export function buildRemoteCommand(command, cwd) {
  * SIGINT is still bounded server-side. `timeout -k <grace> <wall> CMD`
  * sends TERM at <wall> seconds, then KILL <grace> seconds later.
  *
+ * `timeout` execvp's its argument -- it does NOT spawn a shell. So the
+ * command is run via `sh -c <shQuote(command)>`: timeout bounds the shell,
+ * the shell parses cd / && / | / VAR=val / set -e correctly. Wrapping the
+ * bare command instead would make timeout try to execvp `cd` or `VAR=...`
+ * -> exit 127.
+ *
  * timeoutMs is the same millisecond budget the in-process timer uses; here
  * it is converted to whole seconds (timeout rejects a 0 wall, so the floor
  * is 1 s). A falsy timeout returns the command unchanged -- raw / untimed
@@ -42,7 +48,7 @@ export function wrapWithTimeout(command, timeoutMs) {
   if (!command || !timeoutMs || timeoutMs <= 0) return command;
   const wallSecs = Math.max(1, Math.ceil(timeoutMs / 1000));
   const killGraceSecs = 5;
-  return `timeout -k ${killGraceSecs} ${wallSecs} ${command}`;
+  return `timeout -k ${killGraceSecs} ${wallSecs} sh -c ${shQuote(command)}`;
 }
 
 /**
@@ -73,8 +79,9 @@ export function streamExecCommand(client, command, options = {}) {
     stdin,
   } = options;
 
-  // cwd prefix first, then the OS timeout wrapper outside it -- so `timeout`
-  // bounds the whole `cd ... && cmd`. raw:true skips the wrapper entirely.
+  // cwd prefix first, then the OS timeout wrapper -- wrapWithTimeout runs the
+  // whole `cd ... && cmd` through `sh -c` so timeout bounds a real shell.
+  // raw:true skips the wrapper entirely.
   const withCwd = buildRemoteCommand(command, cwd);
   const fullCommand = raw ? withCwd : wrapWithTimeout(withCwd, timeoutMs);
 
@@ -90,6 +97,7 @@ export function streamExecCommand(client, command, options = {}) {
     let stream = null;
     let resolved = false;
     let timeoutId = null;
+    let killTimerId = null; // grace->KILL escalation timer
     let streamClosed = false; // true only when the 'close' event fires
 
     function emit(kind, text) {
@@ -121,6 +129,11 @@ export function streamExecCommand(client, command, options = {}) {
     }
 
     function finish(result, err) {
+      // Clear the kill-escalation timer on ANY finish (incl. a 2nd call from
+      // the close/error path after a timeout) -- before the resolved guard,
+      // so KILL cannot fire on an already-settled stream. The timeout path
+      // arms the timer AFTER its own finish() call, so it still survives.
+      if (killTimerId) { clearTimeout(killTimerId); killTimerId = null; }
       if (resolved) return;
       resolved = true;
 
@@ -165,13 +178,16 @@ export function streamExecCommand(client, command, options = {}) {
         try { hung && hung.signal && hung.signal('INT'); } catch (_) { /* ignore */ }
         finish(null, new Error(`Command timeout after ${timeoutMs}ms`));
         if (hung) {
-          const kt = setTimeout(() => {
+          // Armed AFTER finish() so finish() does not clear it; a later
+          // close/error finish() does (kill-on-settled-stream guard).
+          killTimerId = setTimeout(() => {
+            killTimerId = null;
             // Only escalate if the 'close' event never fired -- process hung.
             if (streamClosed) return;
             try { hung.signal && hung.signal('KILL'); } catch (_) { /* ignore */ }
             try { hung.close && hung.close(); } catch (_) { /* ignore */ }
           }, killGraceMs);
-          if (kt.unref) kt.unref();
+          if (killTimerId.unref) killTimerId.unref();
         }
       }, timeoutMs);
     }
