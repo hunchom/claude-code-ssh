@@ -401,6 +401,14 @@ class SSHManager {
     return this.connected && this.client && !this.client.destroyed;
   }
 
+  // Synchronous liveness check for the connection-pool hot path. No network:
+  // a reused pooled connection must not pay an echo round-trip per command.
+  // A truly dead connection surfaces on the next command's own failure and
+  // is reconnected then. Distinct from ping() (an explicit on-wire probe).
+  isAlive() {
+    return Boolean(this.connected && this.client && !this.client.destroyed);
+  }
+
   dispose() {
     if (this._sftpHandle) {
       this._sftpHandle.end();
