@@ -12,10 +12,10 @@ import { makeCtx } from './ctx-factory.js';
 import { requireArgs } from './action-validate.js';
 
 const REQUIRED = {
-  query: ['server', 'database', 'query'],
-  list: ['server'],
-  dump: ['server', 'database'],
-  import: ['server', 'database'],
+  query: ['server', 'db_type', 'database', 'query'],
+  list: ['server', 'db_type'],
+  dump: ['server', 'db_type', 'database'],
+  import: ['server', 'db_type', 'database'],
 };
 
 // Args common to every db handler: connection-target credentials.

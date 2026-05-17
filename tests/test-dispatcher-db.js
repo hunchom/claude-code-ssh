@@ -59,7 +59,7 @@ await test('dump routes to handlers.dump', async () => {
   const dump = spy();
   await handleSshDb({
     deps: DEPS, handlers: { dump },
-    args: { server: 's', action: 'dump', database: 'app', output_path: '/tmp/a.sql' },
+    args: { server: 's', action: 'dump', database: 'app', output_path: '/tmp/a.sql', db_type: 'mysql' },
   });
   assert.strictEqual(dump.calls.length, 1);
   assert.strictEqual(dump.calls[0].args.output_path, '/tmp/a.sql');
@@ -69,7 +69,7 @@ await test('import routes to handlers.import, forwards preview', async () => {
   const importH = spy();
   await handleSshDb({
     deps: DEPS, handlers: { import: importH },
-    args: { server: 's', action: 'import', database: 'app', input_path: '/tmp/a.sql', preview: true },
+    args: { server: 's', action: 'import', database: 'app', input_path: '/tmp/a.sql', preview: true, db_type: 'mysql' },
   });
   assert.strictEqual(importH.calls.length, 1);
   assert.strictEqual(importH.calls[0].args.input_path, '/tmp/a.sql');
@@ -81,7 +81,7 @@ await test('db credential args are forwarded', async () => {
   await handleSshDb({
     deps: DEPS, handlers: { query },
     args: {
-      server: 's', action: 'query', database: 'app', query: 'SELECT 1',
+      server: 's', action: 'query', database: 'app', query: 'SELECT 1', db_type: 'mysql',
       user: 'u', password: 'p', host: 'h', port: 5432,
     },
   });
@@ -96,7 +96,7 @@ await test('query missing query -> structured fail, handler not called', async (
   const query = spy();
   const r = await handleSshDb({
     deps: DEPS, handlers: { query },
-    args: { server: 's', action: 'query', database: 'app' },
+    args: { server: 's', action: 'query', database: 'app', db_type: 'mysql' },
   });
   assert.strictEqual(query.calls.length, 0);
   assert.strictEqual(r.isError, true);
@@ -106,7 +106,7 @@ await test('query missing query -> structured fail, handler not called', async (
 await test('dump missing database -> structured fail', async () => {
   const r = await handleSshDb({
     deps: DEPS, handlers: { dump: spy() },
-    args: { server: 's', action: 'dump' },
+    args: { server: 's', action: 'dump', db_type: 'mysql' },
   });
   assert.strictEqual(r.isError, true);
   assert(r.content[0].text.includes('database'));
