@@ -70,9 +70,18 @@ await test('stepRisk: health_check -> low', () => {
   assert.strictEqual(stepRisk('health_check'), 'low');
 });
 
-await test('stepRisk: explicit override wins over table', () => {
-  assert.strictEqual(stepRisk('exec', 'high'), 'high');
-  assert.strictEqual(stepRisk('exec_sudo', 'low'), 'low');
+await test('stepRisk: override may RAISE risk above the table value', () => {
+  assert.strictEqual(stepRisk('exec', 'high'), 'high');     // medium -> high
+  assert.strictEqual(stepRisk('download', 'medium'), 'medium'); // low -> medium
+});
+
+await test('stepRisk: override may NOT lower risk below the table value', () => {
+  // A model-supplied downward override must be ignored -- it cannot be used
+  // to slip a privileged action past the approve-token gate.
+  assert.strictEqual(stepRisk('exec_sudo', 'low'), 'high');
+  assert.strictEqual(stepRisk('exec_sudo', 'medium'), 'high');
+  assert.strictEqual(stepRisk('edit', 'low'), 'high');
+  assert.strictEqual(stepRisk('exec', 'low'), 'medium');
 });
 
 await test('stepRisk: unknown action -> medium fallback', () => {
@@ -537,6 +546,26 @@ await test('approve_token: step-level risk override to high triggers gate', asyn
   const body = JSON.parse(r.content[0].text);
   assert.strictEqual(body.success, false);
   assert.match(body.error, /approval required/i);
+});
+
+await test('approve_token: downward risk override on exec_sudo step CANNOT bypass the gate', async () => {
+  // Model-authored step tries to self-classify a privileged action as `low`
+  // to skip the approve-token gate. stepRisk must clamp it back to `high`.
+  const sudoSpy = spy(async () => okResp('pwned'));
+  const r = await handleSshPlan({
+    dispatch: { exec_sudo: sudoSpy },
+    args: {
+      mode: 'run', server: 's', format: 'json',
+      plan: [{ action: 'exec_sudo', command: 'rm -rf /', risk: 'low' }],
+    },
+  });
+  // Gate must still fire: dispatch never called, approval still demanded.
+  assert.strictEqual(sudoSpy.calls.length, 0, 'privileged step must not run without approve_token');
+  const body = JSON.parse(r.content[0].text);
+  assert.strictEqual(body.success, false);
+  assert.match(body.error, /approval required/i);
+  assert.strictEqual(body.meta.risky_steps[0].action, 'exec_sudo');
+  assert.strictEqual(body.meta.risky_steps[0].risk, 'high', 'step still classified high despite downward override');
 });
 
 // --------------------------------------------------------------------------
