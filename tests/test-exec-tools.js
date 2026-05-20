@@ -10,6 +10,7 @@ import {
   handleSshExecuteSudo,
   handleSshExecuteGroup,
 } from '../src/tools/exec-tools.js';
+import { unwrapTimeout } from './util-timeout-unwrap.js';
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
@@ -33,8 +34,13 @@ class FakeClient {
     this.script = script || (() => ({ stdout: '', stderr: '', code: 0 }));
     this.streams = [];
     this.lastCommand = null;
+    this.lastRawCommand = null; // verbatim, wrapper intact -- for raw-bypass checks
   }
-  exec(cmd, cb) {
+  exec(rawCmd, cb) {
+    // Recover inner command from `timeout -k N N sh -c '<cmd>'` wrapper so
+    // script dispatch + lastCommand assertions see the real command.
+    this.lastRawCommand = rawCmd;
+    const cmd = unwrapTimeout(rawCmd);
     this.lastCommand = cmd;
     const s = new FakeStream();
     this.streams.push(s);
@@ -65,7 +71,7 @@ await test('ssh_execute: success renders [ok] marker + exit 0', async () => {
   });
   assert.strictEqual(r.isError, undefined);
   const md = r.content[0].text;
-  assert(md.startsWith('[ok] **ssh_execute**'));
+  assert(md.startsWith('[ok] ssh_execute'));
   assert(md.includes('exit 0'));
   assert(md.includes('hi'));
 });
@@ -79,6 +85,26 @@ await test('ssh_execute: cwd shell-safely quoted in remote command', async () =>
   assert.strictEqual(client.lastCommand, 'cd \'/tmp; rm -rf /\' && ls');
 });
 
+await test('ssh_execute: non-raw command IS wrapped in the OS timeout utility', async () => {
+  const client = new FakeClient({ script: () => ({ stdout: 'ok', code: 0 }) });
+  await handleSshExecute({
+    getConnection: async () => client,
+    args: { server: 's', command: 'ls' },
+  });
+  // Default exec is timed -> wrapped via `timeout -k N N sh -c '<cmd>'`.
+  assert(/^timeout -k \d+ \d+ sh -c /.test(client.lastRawCommand), 'timeout wrapper applied');
+});
+
+await test('ssh_execute: raw:true bypasses the OS timeout wrapper', async () => {
+  const client = new FakeClient({ script: () => ({ stdout: 'ok', code: 0 }) });
+  await handleSshExecute({
+    getConnection: async () => client,
+    args: { server: 's', command: 'exec mybinary', raw: true },
+  });
+  // raw:true -> command sent verbatim, no `timeout` prefix.
+  assert.strictEqual(client.lastRawCommand, 'exec mybinary', 'raw command sent verbatim');
+});
+
 await test('ssh_execute: non-zero exit renders [err] marker (not isError)', async () => {
   const client = new FakeClient({ script: () => ({ stdout: '', stderr: 'nope', code: 127 }) });
   const r = await handleSshExecute({
@@ -86,7 +112,7 @@ await test('ssh_execute: non-zero exit renders [err] marker (not isError)', asyn
     args: { server: 's', command: 'missing' },
   });
   assert.strictEqual(r.isError, undefined, 'non-zero is not tool-level error');
-  assert(r.content[0].text.startsWith('[err] **ssh_execute**'));
+  assert(r.content[0].text.startsWith('[err] ssh_execute'));
   assert(r.content[0].text.includes('exit 127'));
 });
 
@@ -107,7 +133,7 @@ await test('ssh_execute: preview:true returns dry-run card, does NOT call getCon
   });
   assert.strictEqual(called, false, 'getConnection must not be called in preview');
   assert(r.content[0].text.includes('dry run'));
-  assert(r.content[0].text.includes('"action": "exec"'));
+  assert(/^\s*action\s+exec$/m.test(r.content[0].text), 'action value is exec');
   assert(r.content[0].text.includes('prod01'));
 });
 
@@ -193,8 +219,8 @@ await test('ssh_execute_sudo: preview returns high-risk dry-run, never calls rem
   });
   assert.strictEqual(called, false);
   const md = r.content[0].text;
-  assert(md.includes('"action": "exec-sudo"'));
-  assert(md.includes('"risk": "high"'));
+  assert(/^\s*action\s+exec-sudo$/m.test(md), 'action value is exec-sudo');
+  assert(/^\s*risk\s+high$/m.test(md), 'risk value is high');
   assert(md.includes('password never enters argv'));
 });
 
@@ -288,6 +314,48 @@ await test('ssh_execute_group: empty group returns structured failure', async ()
   assert(r.content[0].text.includes('has no servers'));
 });
 
+// resolveGroup PRODUCTION shape is the object { name, servers:[...] }, not a
+// bare array (see DEPS.resolveGroup in src/index.js). A bare-array stub misses
+// this -- before the fix the object shape OOM-looped pMap and crashed the server.
+await test('ssh_execute_group: accepts the production { name, servers:[...] } object shape', async () => {
+  const clients = {
+    s1: new FakeClient({ script: () => ({ stdout: 'ok1', code: 0 }) }),
+    s2: new FakeClient({ script: () => ({ stdout: 'ok2', code: 0 }) }),
+  };
+  const r = await handleSshExecuteGroup({
+    getConnection: async (s) => clients[s],
+    // exact shape DEPS.resolveGroup returns in production
+    resolveGroup: async (g) => ({ name: g, servers: ['s1', 's2'] }),
+    args: { group: 'web', command: 'uptime', format: 'json' },
+  });
+  const parsed = JSON.parse(r.content[0].text);
+  assert.strictEqual(parsed.success, true, 'object-shape group resolves, no infinite loop');
+  assert.strictEqual(parsed.data.total, 2);
+  assert.strictEqual(parsed.data.succeeded, 2);
+  assert.deepStrictEqual(parsed.data.results.map(x => x.server), ['s1', 's2']);
+});
+
+await test('ssh_execute_group: production object with empty servers -> structured failure', async () => {
+  const r = await handleSshExecuteGroup({
+    getConnection: async () => { throw new Error('nope'); },
+    resolveGroup: async (g) => ({ name: g, servers: [] }),
+    args: { group: 'empty', command: 'x' },
+  });
+  assert.strictEqual(r.isError, true);
+  assert(r.content[0].text.includes('has no servers'));
+});
+
+// Unknown group: DEPS.resolveGroup catches getGroup's throw and returns null.
+await test('ssh_execute_group: resolveGroup returning null -> structured failure, no crash', async () => {
+  const r = await handleSshExecuteGroup({
+    getConnection: async () => { throw new Error('nope'); },
+    resolveGroup: async () => null,
+    args: { group: 'ghost', command: 'x' },
+  });
+  assert.strictEqual(r.isError, true);
+  assert(r.content[0].text.includes('has no servers'));
+});
+
 await test('ssh_execute_group: preview shows fan-out plan, never connects', async () => {
   let called = false;
   const r = await handleSshExecuteGroup({
@@ -297,7 +365,7 @@ await test('ssh_execute_group: preview shows fan-out plan, never connects', asyn
   });
   assert.strictEqual(called, false);
   assert(r.content[0].text.includes('dry run'));
-  assert(r.content[0].text.includes('"action": "exec-group"'));
+  assert(/^\s*action\s+exec-group$/m.test(r.content[0].text), 'action value is exec-group');
   assert(r.content[0].text.includes('s1, s2'));
 });
 

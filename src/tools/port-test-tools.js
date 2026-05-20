@@ -16,6 +16,9 @@ import { ok, fail, toMcp } from '../structured-result.js';
 const DEFAULT_PROBE_TIMEOUT_MS = 5000;
 const DEFAULT_CHAIN = ['dns', 'tcp', 'tls', 'http'];
 
+// target_host allowlist -- hostname / IPv4 / IPv6; no shell metachars, no leading dash.
+const SAFE_HOST_RE = /^[A-Za-z0-9:][A-Za-z0-9._:-]*$/;
+
 // --------------------------------------------------------------------------
 // Parsers -- pure, exported for tests.
 // --------------------------------------------------------------------------
@@ -130,6 +133,8 @@ export function buildDnsCommand(host) {
 }
 
 export function buildTcpCommand(host, port, timeoutMs) {
+  // /dev/tcp fallback interpolates host raw -> reject shell metacharacters first.
+  if (!SAFE_HOST_RE.test(String(host))) throw new Error('buildTcpCommand: unsafe host');
   const h = shQuote(host);
   const p = Math.max(1, Math.floor(Number(port)) || 0);
   const timeoutSecs = Math.max(1, Math.ceil(Number(timeoutMs) / 1000));
@@ -200,6 +205,9 @@ export async function handleSshPortTest(ctx = {}) {
   }
 
   const host = String(target_host);
+  if (!SAFE_HOST_RE.test(host) || host.length > 253) {
+    return toMcp(fail('ssh_port_test', 'invalid target_host -- must be a hostname or IP address', { server: server ?? null }), { format });
+  }
   const port = target_port != null ? Math.floor(Number(target_port)) : null;
 
   // Default chain: dns, tcp, and tls/http only when appropriate for the port.

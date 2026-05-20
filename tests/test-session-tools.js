@@ -73,7 +73,8 @@ class FakeShellStream extends EventEmitter {
       if (echo) this.emit('data', Buffer.from(echo));
       // Emit any scripted stdout.
       if (script.stdout) this.emit('data', Buffer.from(script.stdout));
-      if (script.stderr) this.stderr.emit('data', Buffer.from(script.stderr));
+      // PTY folds fd2 into fd1 -> scripted stderr arrives on `data`, not `.stderr`.
+      if (script.stderr) this.emit('data', Buffer.from(script.stderr));
       // Emit the sentinel line last -- unless the script wants to misbehave.
       if (!script.skipMarker) {
         this.emit('data', Buffer.from(`${marker} ${script.exit ?? 0}\n`));
@@ -312,6 +313,52 @@ await test('runCommand: timeout cancels and rejects', async () => {
   await sess.close();
 });
 
+await test('stream: stderr folds into data; one decoder stitches split chars', async () => {
+  // client.shell() gives a PTY -- fd2 multiplexes onto the same master as fd1,
+  // so stderr arrives interleaved on `data`. SSHSessionV2 wires ONE decoder on
+  // `data` and no separate `.stderr` listener; a multibyte char split across
+  // chunks (stdout/stderr interleaved) must still decode intact, none lost.
+  const stream = new FakeShellStream({ scriptFor: () => ({ stdout: '', exit: 0, skipMarker: true }) });
+  const sess = new SSHSessionV2({ id: 'sess_dec', server: 's', shell: 'bash', stream });
+  // fix removed the dead `.stderr` listener -> nothing wires it
+  assert.strictEqual(stream.stderr.listenerCount('data'), 0, 'no separate stderr listener');
+  const p = sess._waitForMarker({ timeoutMs: 1000 });
+
+  const euro = Buffer.from('€', 'utf8'); // [0xE2,0x82,0xAC] -- 3 bytes
+  // PTY interleaving: stderr text, then a stdout char split mid-byte across events.
+  stream.emit('data', Buffer.from('ERR-folded '));
+  stream.emit('data', euro.slice(0, 1));
+  stream.emit('data', Buffer.concat([euro.slice(1), Buffer.from(`done\n${sess.marker} 0\n`)]));
+
+  const r = await p;
+  assert(r.raw.includes('€'), 'split multibyte char decoded intact across data chunks');
+  assert(r.raw.includes('ERR-folded'), 'stderr folded into data is captured, not lost');
+  await sess.close();
+});
+
+await test('_drainWaiters: two sentinels in ONE data chunk both resolve', async () => {
+  // Concurrent ssh_session_send on the same session, or a fast shell, can
+  // deliver two marker lines in a single `data` event. _drainWaiters must
+  // loop and resolve BOTH waiters from that one chunk, not just the head.
+  const stream = new FakeShellStream({ scriptFor: () => ({ stdout: '', exit: 0, skipMarker: true }) });
+  const sess = new SSHSessionV2({ id: 'sess_drain', server: 's', shell: 'bash', stream });
+
+  // Two outstanding waiters (both keyed on the session's sealed marker).
+  const p1 = sess._waitForMarker({ timeoutMs: 1000 });
+  const p2 = sess._waitForMarker({ timeoutMs: 1000 });
+
+  // Single chunk carrying both sentinel lines back-to-back.
+  stream.emit('data', Buffer.from(`out-A\n${sess.marker} 0\nout-B\n${sess.marker} 7\n`));
+
+  const [r1, r2] = await Promise.all([p1, p2]);
+  assert.strictEqual(r1.exitCodeStr, '0', 'first waiter resolved with exit 0');
+  assert.strictEqual(r2.exitCodeStr, '7', 'second waiter resolved from the SAME chunk');
+  assert.strictEqual(sess._waiters.length, 0, 'both waiters drained');
+  assert(r1.raw.includes('out-A'), 'first capture holds first block');
+  assert(r2.raw.includes('out-B'), 'second capture holds second block');
+  await sess.close();
+});
+
 // --------------------------------------------------------------------------
 // Handler-level integration
 // --------------------------------------------------------------------------
@@ -349,7 +396,7 @@ await test('session_start: markdown render shows session_id + cwd + user', async
     args: { server: 'dev', format: 'markdown' },
   });
   const md = r.content[0].text;
-  assert(md.startsWith('[ok] **ssh_session_start**'), `got: ${md.slice(0, 80)}`);
+  assert(md.startsWith('[ok] ssh_session_start'), `got: ${md.slice(0, 80)}`);
   assert(md.includes('session_id'));
   assert(md.includes('/opt/app'));
   assert(md.includes('bob'));
@@ -595,6 +642,34 @@ await test('command_history ring: after 60 commands, only last 50 remembered', a
   // First retained command is cmd-10 (oldest kept).
   assert.strictEqual(parsed.data.commands[0].cmd, 'echo cmd-10');
   assert.strictEqual(parsed.data.commands[49].cmd, 'echo cmd-59');
+
+  await handleSshSessionClose({ args: { session_id } });
+});
+
+await test('session_send: markdown render indents output, emits no code fences', async () => {
+  // Payload itself contains a ``` line -- fenced blocks would break here.
+  // renderSessionSend must use indentBody like every other v4 renderer.
+  const stream = new FakeShellStream({
+    scriptFor: (cmd) => {
+      if (cmd === 'pwd' || cmd === 'whoami' || cmd === 'echo $HOME') return { stdout: 'x\n', exit: 0 };
+      return { stdout: 'line one\n```\nline three\n', exit: 0 };
+    },
+  });
+  const started = await handleSshSessionStart({
+    getConnection: async () => makeFakeClient(stream),
+    args: { server: 's', format: 'json' },
+  });
+  const { session_id } = JSON.parse(started.content[0].text).data;
+
+  const r = await handleSshSessionSend({
+    args: { session_id, command: 'cat file', format: 'markdown' },
+  });
+  const md = r.content[0].text;
+  assert(!md.includes('```text'), 'no ```text fence opener');
+  // The only ``` in the output is the payload line itself, now indented.
+  assert(md.includes('  line one'), 'stdout indented via indentBody');
+  assert(md.includes('  ```'), 'payload ``` line preserved but indented, not a fence');
+  assert(md.startsWith('[ok] **ssh_session_send**') || md.startsWith('[err]'), `header: ${md.slice(0, 40)}`);
 
   await handleSshSessionClose({ args: { session_id } });
 });

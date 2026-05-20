@@ -18,7 +18,7 @@ echo "[2/3] validate"
 echo "[3/3] apply repo metadata via gh"
 if command -v gh >/dev/null 2>&1; then
   gh repo edit "$REPO" \
-    --description "MCP server that gives Claude Code direct SSH access to your server fleet. 51 tools, connection pooled, per-user gated, ASCII output." \
+    --description "MCP server that gives Claude Code direct SSH access to your server fleet. 13 verb-tools, connection pooled, bounded output, ASCII rendering." \
     --homepage "https://github.com/$REPO" \
     --add-topic mcp \
     --add-topic claude-code \

@@ -8,7 +8,7 @@
  * Tools provide a small renderer per-type for the markdown face.
  */
 
-import { formatBytes, formatDuration } from './output-formatter.js';
+import { formatBytes, renderHeader, renderKV, indentBody } from './output-formatter.js';
 
 /**
  * Build a success result.
@@ -92,12 +92,9 @@ function strip(obj, keys) {
 
 /**
  * Package a structured result as MCP content.
- * @param {Object} result       from ok() / fail() / preview()
- * @param {Object} [opts]
- * @param {'markdown'|'json'|'both'} [opts.format='markdown']
- * @param {Function} [opts.renderer]   (result) => string. Defaults to defaultRender.
+ * format: "compact" (default) | "markdown" | "json" | "both".
  */
-export function toMcp(result, { format = 'markdown', renderer } = {}) {
+export function toMcp(result, { format = 'compact', renderer } = {}) {
   const md = (renderer || defaultRender)(result);
   if (format === 'json') {
     return { content: [{ type: 'text', text: JSON.stringify(result) }], isError: !result.success };
@@ -116,53 +113,56 @@ export function toMcp(result, { format = 'markdown', renderer } = {}) {
 
 /**
  * Default markdown renderer. Tools override for richer cards.
- * Layout:
- *   [ok] **<tool>** | `server` | <duration?>
- *   <data-as-compact-json>
- *   > elided: ... (if meta.truncated)
+ * Header line via renderHeader; data as an indented KV block; no fences.
  */
 export function defaultRender(result) {
   const { success, tool, server, data, meta, error } = result;
-  const marker = success ? '[ok]' : '[err]';
-  const badge = success ? '' : ' | **failed**';
-  const duration = meta && meta.duration_ms != null
-    ? ` | \`${formatDuration(meta.duration_ms)}\``
-    : '';
-  const srv = server ? ` | \`${server}\`` : '';
-  const header = `${marker} **${tool}**${srv}${duration}${badge}`;
-
+  const header = renderHeader({
+    marker: success ? '[ok]' : '[err]',
+    tool,
+    server,
+    status: success ? null : 'failed',
+    durationMs: meta && meta.duration_ms,
+  });
   const lines = [header];
 
   if (!success) {
-    lines.push('');
-    lines.push('```text');
-    lines.push(String(error || 'unknown error'));
-    lines.push('```');
+    lines.push(indentBody(String(error || 'unknown error')));
     return lines.join('\n');
   }
 
   if (data && data.preview) {
-    lines.push('');
-    lines.push('> **dry run** -- nothing executed');
-    lines.push('');
-    lines.push('```json');
-    lines.push(JSON.stringify(data.plan, null, 2));
-    lines.push('```');
+    lines.push('  dry run -- nothing executed');
+    const planBody = renderKV(kvRows(data.plan));
+    if (planBody) lines.push(indentBody(planBody));
     return lines.join('\n');
   }
 
   if (data != null) {
-    lines.push('');
-    lines.push('```json');
-    lines.push(JSON.stringify(data, null, 2));
-    lines.push('```');
+    const body = renderKV(kvRows(data));
+    if (body) lines.push(indentBody(body));
   }
 
-  if (meta && (meta.truncated_bytes || meta.elided_bytes)) {
-    const b = meta.truncated_bytes || meta.elided_bytes;
-    lines.push('');
-    lines.push(`> elided: ${formatBytes(b)}`);
-  }
+  const elided = meta && (meta.truncated_bytes || meta.elided_bytes);
+  if (elided) lines.push(indentBody(`elided: ${formatBytes(elided)}`));
 
   return lines.join('\n');
+}
+
+/**
+ * Flatten an object to [key, value] rows for renderKV. Nested objects/arrays
+ * collapse to compact JSON; non-objects render as a single `value` row.
+ * Scalar newlines collapse to spaces -- renderKV cells must stay single-line.
+ */
+function kvRows(obj) {
+  if (obj == null || typeof obj !== 'object') return [['value', scalar(obj)]];
+  return Object.entries(obj).map(([k, v]) => [
+    k,
+    v != null && typeof v === 'object' ? JSON.stringify(v) : scalar(v),
+  ]);
+}
+
+// Scalar -> single-line string. Newlines -> spaces.
+function scalar(v) {
+  return String(v).replace(/\r?\n/g, ' ');
 }

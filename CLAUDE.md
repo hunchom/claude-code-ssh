@@ -6,11 +6,11 @@ This file provides guidance to Claude Code when working on this repository.
 
 **claude-code-ssh** is an MCP server that gives Claude Code direct SSH access to a configured fleet of servers. The goal: Claude stops being a read-only assistant and becomes a hands-on operator — reading logs, editing configs, running backups, deploying, debugging — without a human typing commands between them.
 
-51 tools, 7 groups, opt-in per user. Connection pooling, streaming exec, head+tail output truncation, ASCII-only rendering.
+13 fat verb-tools, each covering one domain via an `action` enum. Always loaded (un-deferred). Connection pooling, streaming exec, head+tail output truncation, command-output compression, ASCII-only rendering.
 
 ## Architecture
 
-- **`src/index.js`** — MCP server entry, registers all 51 tools via `registerToolConditional()`
+- **`src/index.js`** — MCP server entry, registers the 13 v4 tools via `registerToolConditional()`; descriptions sourced from `src/tool-descriptions.js`
 - **`src/tools/*.js`** — 17 modular handler files, one per logical tool area (exec, files, backup, db, etc.)
 - **`src/tool-registry.js`** — tool metadata + group membership (core, sessions, monitoring, backup, database, advanced, gamechanger)
 - **`src/tool-config-manager.js`** — per-user enablement via `~/.ssh-manager/tools-config.json`
@@ -58,14 +58,14 @@ ssh-manager tools export-claude               # Export auto-approval config
 
 **Tool Groups**: core (5), sessions (4), monitoring (6), backup (4), database (4), advanced (14)
 
-**Modes**: all (37 tools, ~43.5k tokens), minimal (5 tools, ~3.5k tokens), custom (variable)
+**Modes**: v4 surface is always loaded (13 tools, ~5k tokens); the per-group mode system is deprecated.
 
 See [docs/TOOL_MANAGEMENT.md](docs/TOOL_MANAGEMENT.md) for complete guide.
 
 ### Development and Testing
 ```bash
 npm start                    # Start MCP server (requires stdin)
-npm test                     # Run 551 tests across 26 suites
+npm test                     # Run 1028 tests
 ./scripts/validate.sh        # Syntax + startup check
 node --check src/index.js    # JavaScript syntax only
 ```
@@ -204,10 +204,25 @@ claude mcp add ssh-manager node /absolute/path/to/claude-code-ssh/src/index.js
 
 Configuration is stored in `~/.config/claude-code/claude_code_config.json`
 
+## Using the SSH Tools
+
+**For any server configured in this MCP server, use the `ssh_*` MCP tools — not raw `ssh`, `scp`, or `rsync` through the Bash tool.**
+
+The 13 v4 tools (`ssh_run`, `ssh_file`, `ssh_find`, `ssh_logs`, `ssh_service`, `ssh_health`, `ssh_db`, `ssh_backup`, `ssh_session`, `ssh_net`, `ssh_docker`, `ssh_fleet`, `ssh_plan`) are not a read-only convenience layer — they are the intended way to operate the fleet. Reach for them first.
+
+Why they beat raw `ssh` in Bash:
+
+- **Connection pooling** — the MCP server holds persistent SSH connections, so there is no per-call handshake. Raw `ssh` in Bash reconnects every single time.
+- **Bounded output** — results are compressed and head+tail truncated, so a noisy command (`journalctl`, `ps`, a 100k-line log) will not flood the context window. Raw `ssh` dumps everything.
+- **Credential handling** — passwords and sudo passwords are passed via stdin or env, never leaked on the argv of a `ps`-visible process. Raw `ssh` with an inline password is exposed.
+- **Structured results** — per-segment exit codes for command chains, typed service/health snapshots, SFTP transfers with sha256 verification. Raw `ssh` gives an unstructured terminal dump.
+
+Raw `ssh` through Bash is acceptable only for a host that is **not** in the MCP configuration. Run `ssh_fleet action: servers` to see which servers are configured.
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **claude-code-ssh** (1340 symbols, 3668 relationships, 111 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **claude-code-ssh** (1341 symbols, 3675 relationships, 111 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

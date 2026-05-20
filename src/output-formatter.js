@@ -13,6 +13,7 @@
  */
 
 import { OUTPUT_LIMITS } from './config.js';
+import { compress } from './command-compressors.js';
 
 // ANSI CSI / OSC stripping. Covers color, cursor, title sequences.
 // eslint-disable-next-line no-control-regex
@@ -72,8 +73,11 @@ export function truncateHeadTail(s, max = OUTPUT_LIMITS.MAX_OUTPUT_LENGTH) {
 
 /**
  * Build the structured ExecResult from raw stream output.
- * Input: { server, command, cwd?, stdout, stderr, code, durationMs, maxLen? }
+ * Input: { server, command, cwd?, stdout, stderr, code, durationMs, maxLen?, raw? }
  * Output: wire-schema JSON object.
+ *
+ * stdout passes through compress() (per-command shaping) before truncation;
+ * raw:true bypasses compression. stderr is never compressed -- errors stay whole.
  */
 export function formatExecResult({
   server,
@@ -84,8 +88,10 @@ export function formatExecResult({
   code,
   durationMs,
   maxLen = OUTPUT_LIMITS.MAX_OUTPUT_LENGTH,
+  raw = false,
 }) {
-  const out = truncateHeadTail(stripAnsi(stdout), maxLen);
+  const shapedStdout = compress(command, stripAnsi(stdout), { raw });
+  const out = truncateHeadTail(shapedStdout, maxLen);
   const err = truncateHeadTail(stripAnsi(stderr), maxLen);
   return {
     server,
@@ -129,52 +135,30 @@ export function formatDuration(ms) {
 }
 
 /**
- * Render an ExecResult as cool, scannable Claude Code markdown.
- *
- * Layout:
- *   [ok] **ssh_execute** | `server` | **exit 0** | `2.34 s`
- *   `$ <command>`   *(in /some/cwd)*
- *
- *   ```
- *   <stdout>
- *   ```
- *
- *   **stderr**
- *   ```
- *   <stderr>
- *   ```
- *
- *   > elided: stdout 12.0 KB, stderr 0 B
- *
- * - Success uses [ok] marker and bold "exit 0"; failure uses [err] and bold "exit N".
- * - Empty sections are omitted. cwd suppressed when null.
- * - Language-tagged fenced blocks (`text`) render with a subtle tint in Claude Code.
+ * Render an ExecResult as compact v4 plain text.
+ * Header via renderHeader; command on a plain `$` line; stdout/stderr indented.
  */
 export function renderMarkdown(r) {
-  const ok = r.success;
-  const marker = ok ? '[ok]' : '[err]';
-  const exitText = ok ? 'exit 0' : `exit ${r.exit_code}`;
-  const duration = formatDuration(r.duration_ms);
+  const marker = r.success ? '[ok]' : '[err]';
+  const lines = [renderHeader({
+    marker,
+    tool: 'ssh_execute',
+    server: r.server,
+    status: `exit ${r.exit_code}`,
+    durationMs: r.duration_ms,
+  })];
 
-  const lines = [];
-  lines.push(`${marker} **ssh_execute** | \`${r.server}\` | ${exitText} | ${duration}`);
-
-  const cwdFragment = r.cwd ? `  *(in \`${r.cwd}\`)*` : '';
-  lines.push(`\`$ ${r.command}\`${cwdFragment}`);
+  lines.push(`$ ${r.command}${r.cwd ? `  (in ${r.cwd})` : ''}`);
 
   if (r.stdout) {
     lines.push('');
-    lines.push('```text');
-    lines.push(r.stdout);
-    lines.push('```');
+    lines.push(indentBody(r.stdout));
   }
 
   if (r.stderr) {
     lines.push('');
-    lines.push('**stderr**');
-    lines.push('```text');
-    lines.push(r.stderr);
-    lines.push('```');
+    lines.push('stderr:');
+    lines.push(indentBody(r.stderr));
   }
 
   if (r.truncated.stdout_bytes || r.truncated.stderr_bytes) {
@@ -182,7 +166,7 @@ export function renderMarkdown(r) {
     if (r.truncated.stdout_bytes) parts.push(`stdout ${formatBytes(r.truncated.stdout_bytes)}`);
     if (r.truncated.stderr_bytes) parts.push(`stderr ${formatBytes(r.truncated.stderr_bytes)}`);
     lines.push('');
-    lines.push(`> elided: ${parts.join(', ')}`);
+    lines.push(`elided: ${parts.join(', ')}`);
   }
 
   return lines.join('\n');
@@ -190,9 +174,11 @@ export function renderMarkdown(r) {
 
 /**
  * Build the MCP `content` array from an ExecResult.
- * format: "markdown" (default, human-friendly) | "json" (raw wire schema) | "both".
+ * format: "compact" (default) | "markdown" | "json" | "both".
+ * compact and markdown both use renderMarkdown -- the renderer is already
+ * fence-free and compact; the names are kept distinct for caller intent.
  */
-export function makeMcpContent(result, { format = 'markdown' } = {}) {
+export function makeMcpContent(result, { format = 'compact' } = {}) {
   if (format === 'json') {
     return [{ type: 'text', text: JSON.stringify(result) }];
   }
@@ -203,4 +189,76 @@ export function makeMcpContent(result, { format = 'markdown' } = {}) {
     ];
   }
   return [{ type: 'text', text: renderMarkdown(result) }];
+}
+
+/**
+ * Render the single v4 header line. Grammar:
+ *   <marker> <tool> · <action> · <server> · <status> · <duration>
+ * Absent slots collapse; present slots never reorder. Used by every v4 tool.
+ */
+export function renderHeader({
+  marker = '[ok]', tool, action, server, status, durationMs,
+} = {}) {
+  const slots = [];
+  if (tool) slots.push(String(tool));
+  if (action) slots.push(String(action));
+  if (server) slots.push(String(server));
+  if (status != null && status !== '') slots.push(String(status));
+  if (durationMs != null) slots.push(formatDuration(durationMs));
+  return `${marker} ${slots.join(' · ')}`;
+}
+
+/**
+ * Indent a payload block by `prefix` (default 2 spaces). Replaces fenced code
+ * blocks in v4 output -- clean as plain text, unbreakable by payload content.
+ */
+export function indentBody(text, prefix = '  ') {
+  if (text == null || text === '') return '';
+  return String(text).split('\n').map((l) => prefix + l).join('\n');
+}
+
+/**
+ * Render [key, value] pairs as a column-aligned key/value block. Keys are
+ * left-padded to the longest key; a 2-space gutter separates key and value.
+ * Cell values must be single-line; multiline payloads belong in indentBody.
+ * Malformed (non-array) rows degrade to a blank key/value, never throw.
+ */
+export function renderKV(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return '';
+  const safe = rows.map((r) => (Array.isArray(r) ? r : []));
+  const width = Math.max(0, ...safe.map(([k]) => String(k ?? '').length));
+  return safe
+    .map(([k, v]) => `${String(k ?? '').padEnd(width)}  ${v == null ? '' : String(v)}`)
+    .join('\n');
+}
+
+/**
+ * Render rows as a column-aligned ASCII table. `headers` is an array of column
+ * labels; `rows` is an array of cell arrays. With an `isFail` predicate, failed
+ * rows sort first and an `N/M failed` summary line is prepended.
+ * Cell values must be single-line; multiline payloads belong in indentBody.
+ * Malformed (non-array) rows degrade to a blank row, never throw.
+ */
+export function renderRows(headers, rows, { isFail } = {}) {
+  if (!Array.isArray(headers) || headers.length === 0) return '';
+  let ordered = (Array.isArray(rows) ? rows : []).map((r) => (Array.isArray(r) ? r : []));
+  let summary = '';
+  if (typeof isFail === 'function') {
+    const failed = ordered.filter((r) => isFail(r));
+    const rest = ordered.filter((r) => !isFail(r));
+    ordered = [...failed, ...rest];
+    if (failed.length > 0) summary = `${failed.length}/${ordered.length} failed`;
+  }
+  const widths = headers.map((h, i) =>
+    Math.max(0, String(h).length, ...ordered.map((r) => String(r[i] ?? '').length)));
+  const fmt = (cells) =>
+    cells
+      .map((c, i) => String(c ?? '').padEnd(widths[i]))
+      .join('  ')
+      .replace(/\s+$/, '');
+  const lines = [];
+  if (summary) lines.push(summary);
+  lines.push(fmt(headers));
+  for (const r of ordered) lines.push(fmt(r));
+  return lines.join('\n');
 }

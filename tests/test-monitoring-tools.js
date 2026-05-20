@@ -24,6 +24,7 @@ import {
   computeStatus,
   extractJournalLines,
 } from '../src/tools/monitoring-tools.js';
+import { unwrapTimeout } from './util-timeout-unwrap.js';
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
@@ -44,7 +45,9 @@ class FakeClient {
     this.script = script || (() => ({ stdout: '', stderr: '', code: 0 }));
     this.streams = []; this.lastCommand = null; this.commands = [];
   }
-  exec(cmd, cb) {
+  exec(rawCmd, cb) {
+    // Recover inner command from `timeout -k N N sh -c '<cmd>'` wrapper.
+    const cmd = unwrapTimeout(rawCmd);
     this.lastCommand = cmd; this.commands.push(cmd);
     const s = new FakeStream(); this.streams.push(s);
     setImmediate(() => {
@@ -445,6 +448,71 @@ await test('ssh_monitor process: typed process list sorted by cpu desc', async (
   assert.strictEqual(parsed.data.process.length, 2);
   assert.strictEqual(parsed.data.process[0].pid, 100);
   assert(parsed.data.process[0].cpu_pct >= parsed.data.process[1].cpu_pct);
+});
+
+await test('ssh_monitor overview: delegates to health_check, returns typed overview', async () => {
+  // Full health-check section output -- the overview path JSON.parses the
+  // delegated result; this exercises the parse inside the new try block.
+  const stdout = [
+    '---CPU---',
+    '%Cpu(s):  4.0 us,  2.0 sy,  0.0 ni, 93.0 id,  1.0 wa,  0.0 hi,  0.0 si,  0.0 st',
+    '---MEM---',
+    '              total        used        free      shared  buff/cache   available',
+    'Mem:      16000000     4000000     8000000       10000     4000000    11000000',
+    '---DISK---',
+    'Filesystem     1B-blocks        Used   Available Use% Mounted on',
+    '/dev/sda1    100000000000 20000000000 80000000000 20% /',
+    '---LOAD---',
+    '0.20 0.15 0.10 1/200 12345',
+    '---UPTIME---',
+    '86400.00 70000.00',
+    '---CORES---',
+    '4',
+  ].join('\n');
+  const client = new FakeClient({ script: () => ({ stdout, code: 0 }) });
+  const r = await handleSshMonitor({
+    getConnection: async () => client,
+    args: { server: 's', type: 'overview', format: 'json' },
+  });
+  assert(!r.isError, 'overview must succeed');
+  const parsed = JSON.parse(r.content[0].text);
+  assert.strictEqual(parsed.success, true);
+  assert.strictEqual(parsed.data.type, 'overview');
+  assert.strictEqual(parsed.data.overview.cpu.idle_pct, 93);
+  assert.strictEqual(parsed.data.overview.memory.used_bytes, 4000000);
+});
+
+await test('ssh_monitor overview: connection failure surfaces as isError, no crash', async () => {
+  const r = await handleSshMonitor({
+    getConnection: async () => { throw new Error('host down'); },
+    args: { server: 's', type: 'overview', format: 'json' },
+  });
+  assert.strictEqual(r.isError, true);
+  assert(r.content[0].text.includes('host down'));
+});
+
+await test('ssh_monitor overview: unparseable delegate payload degrades, never throws', async () => {
+  // Inject a health-check delegate whose successful (non-isError) result
+  // carries a non-JSON text body. Without the JSON.parse try/catch this
+  // throws an unhandled SyntaxError out of handleSshMonitor.
+  const garbageDelegate = async () => ({
+    content: [{ type: 'text', text: '<<<not json>>>' }],
+    // no isError -> the overview path falls through to JSON.parse
+  });
+  let r;
+  await assert.doesNotReject(async () => {
+    r = await handleSshMonitor({
+      getConnection: async () => { throw new Error('unused'); },
+      args: { server: 's', type: 'overview', format: 'json' },
+      _healthCheck: garbageDelegate,
+    });
+  });
+  const parsed = JSON.parse(r.content[0].text);
+  assert.strictEqual(parsed.success, false);
+  assert.strictEqual(parsed.tool, 'ssh_monitor');
+  assert(parsed.error.includes('unparseable'),
+    `expected an unparseable-payload error, got: ${parsed.error}`);
+  assert.strictEqual(r.isError, true);
 });
 
 // --- handleSshServiceStatus ---------------------------------------------

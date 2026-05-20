@@ -189,6 +189,34 @@ test('formatExecResult: negative durationMs clamps to 0', () => {
   assert.strictEqual(r.duration_ms, 0);
 });
 
+test('formatExecResult: ps stdout is compressed by default', () => {
+  const rows = Array.from({ length: 40 }, (_, i) => `r${i}`).join('\n');
+  const r = formatExecResult({
+    server: 's', command: 'ps -eo pid,args', stdout: 'HEAD\n' + rows,
+    stderr: '', code: 0, durationMs: 1,
+  });
+  assert(r.stdout.includes('compressed'), 'compressor footer present');
+  assert(r.stdout.split('\n').length < 41, 'tail rows dropped');
+});
+
+test('formatExecResult: raw:true skips compression', () => {
+  const rows = Array.from({ length: 40 }, (_, i) => `r${i}`).join('\n');
+  const r = formatExecResult({
+    server: 's', command: 'ps -eo pid,args', stdout: 'HEAD\n' + rows,
+    stderr: '', code: 0, durationMs: 1, raw: true,
+  });
+  assert(!r.stdout.includes('compressed'), 'no compression when raw');
+  assert.strictEqual(r.stdout, 'HEAD\n' + rows);
+});
+
+test('formatExecResult: non-ps/ls command output is untouched', () => {
+  const r = formatExecResult({
+    server: 's', command: 'echo hi', stdout: 'hi\nthere',
+    stderr: '', code: 0, durationMs: 1,
+  });
+  assert.strictEqual(r.stdout, 'hi\nthere');
+});
+
 // --- formatBytes ---------------------------------------------------------
 test('formatBytes: 0 -> "0 B"', () => assert.strictEqual(formatBytes(0), '0 B'));
 test('formatBytes: sub-KB stays in bytes', () => assert.strictEqual(formatBytes(512), '512 B'));
@@ -203,40 +231,37 @@ test('formatDuration: minutes', () => assert.strictEqual(formatDuration(83_000),
 test('formatDuration: negative clamps to 0 ms', () => assert.strictEqual(formatDuration(-100), '0 ms'));
 
 // --- renderMarkdown ------------------------------------------------------
-test('renderMarkdown: success header uses [ok] marker and bold exit 0', () => {
+test('renderMarkdown: success header is a renderHeader line, no bold', () => {
   const md = renderMarkdown({
     server: 'prod01', command: 'x', cwd: null, exit_code: 0, success: true,
     duration_ms: 2340, stdout: '', stderr: '',
     truncated: { stdout_bytes: 0, stderr_bytes: 0, stdout_total: 0, stderr_total: 0 },
   });
-  const firstLine = md.split('\n')[0];
-  assert(firstLine.startsWith('[ok] **ssh_execute**'), `expected [ok] marker, got: ${firstLine}`);
-  assert(firstLine.includes('`prod01`'), 'server in backticks');
-  assert(firstLine.includes('exit 0'), 'exit 0 present');
-  assert(firstLine.includes('2.34 s'), 'duration with unit');
-  assert(md.includes('`$ x`'), 'command shown with $ prefix in backticks');
+  assert.strictEqual(md.split('\n')[0], '[ok] ssh_execute · prod01 · exit 0 · 2.34 s');
+  assert(!md.includes('**'), 'no markdown bold');
+  assert(md.includes('\n$ x'), 'command on its own line with $ prefix');
 });
 
-test('renderMarkdown: failure header uses [err] marker', () => {
+test('renderMarkdown: failure header uses [err] marker and exit code', () => {
   const md = renderMarkdown({
     server: 's', command: 'false', cwd: null, exit_code: 127, success: false,
     duration_ms: 0, stdout: '', stderr: 'not found',
     truncated: { stdout_bytes: 0, stderr_bytes: 0, stdout_total: 0, stderr_total: 0 },
   });
-  const firstLine = md.split('\n')[0];
-  assert(firstLine.startsWith('[err] **ssh_execute**'), 'failure marker');
-  assert(firstLine.includes('exit 127'), 'exit 127 present');
-  assert(md.includes('**stderr**'), 'stderr label');
-  assert(md.includes('not found'));
+  assert(md.split('\n')[0].startsWith('[err] ssh_execute'), 'failure marker');
+  assert(md.includes('exit 127'), 'exit 127 in header');
+  assert(md.includes('stderr:'), 'stderr label');
+  assert(md.includes('  not found'), 'stderr indented');
 });
 
-test('renderMarkdown: cwd rendered as italic backticked path on command line', () => {
+test('renderMarkdown: cwd shown as plain (in PATH) on the command line', () => {
   const md = renderMarkdown({
     server: 's', command: 'c', cwd: '/srv/app', exit_code: 0, success: true,
     duration_ms: 100, stdout: '', stderr: '',
     truncated: { stdout_bytes: 0, stderr_bytes: 0, stdout_total: 0, stderr_total: 0 },
   });
-  assert(md.includes('*(in `/srv/app`)*'), 'cwd italic+backticked');
+  assert(md.includes('$ c  (in /srv/app)'), 'cwd shown plain');
+  assert(!md.includes('*'), 'no markdown italic');
 });
 
 test('renderMarkdown: no cwd -> no "(in ...)" fragment', () => {
@@ -248,32 +273,33 @@ test('renderMarkdown: no cwd -> no "(in ...)" fragment', () => {
   assert(!md.includes('(in '), 'no cwd fragment when null');
 });
 
-test('renderMarkdown: stdout wrapped in ```text fence', () => {
+test('renderMarkdown: stdout indented 2 spaces, no fences', () => {
   const md = renderMarkdown({
     server: 's', command: 'c', cwd: null, exit_code: 0, success: true,
-    duration_ms: 1, stdout: 'hello', stderr: '',
+    duration_ms: 1, stdout: 'hello\nworld', stderr: '',
     truncated: { stdout_bytes: 0, stderr_bytes: 0, stdout_total: 0, stderr_total: 0 },
   });
-  assert(md.includes('```text\nhello\n```'), 'stdout in fenced block');
+  assert(md.includes('\n  hello\n  world'), 'stdout indented');
+  assert(!md.includes('```'), 'no fenced block');
 });
 
-test('renderMarkdown: empty sections omitted', () => {
+test('renderMarkdown: empty output sections omitted', () => {
   const md = renderMarkdown({
     server: 's', command: 'c', cwd: null, exit_code: 0, success: true,
     duration_ms: 1, stdout: '', stderr: '',
     truncated: { stdout_bytes: 0, stderr_bytes: 0, stdout_total: 0, stderr_total: 0 },
   });
-  assert(!md.includes('```'), 'no fenced block when output empty');
-  assert(!md.includes('**stderr**'), 'no stderr label when stderr empty');
+  assert(!md.includes('stderr:'), 'no stderr label when stderr empty');
 });
 
-test('renderMarkdown: truncation rendered as blockquote with human bytes', () => {
+test('renderMarkdown: truncation rendered as plain elided footer', () => {
   const md = renderMarkdown({
     server: 's', command: 'c', cwd: null, exit_code: 0, success: true,
     duration_ms: 1, stdout: 'partial', stderr: '',
     truncated: { stdout_bytes: 12345, stderr_bytes: 0, stdout_total: 22345, stderr_total: 0 },
   });
-  assert(md.includes('> elided: stdout 12.1 KB'), `expected human-readable blockquote, got: ${md}`);
+  assert(md.includes('elided: stdout 12.1 KB'), `expected plain elided footer, got: ${md}`);
+  assert(!md.includes('>'), 'no blockquote marker');
 });
 
 test('renderMarkdown: truncation shows both streams when both elided', () => {
@@ -287,14 +313,15 @@ test('renderMarkdown: truncation shows both streams when both elided', () => {
 });
 
 // --- makeMcpContent ------------------------------------------------------
-test('makeMcpContent: markdown (default)', () => {
+test('makeMcpContent: compact is the default format', () => {
   const r = formatExecResult({
     server: 's', command: 'c', stdout: 'out', stderr: '', code: 0, durationMs: 10,
   });
   const c = makeMcpContent(r);
   assert.strictEqual(c.length, 1);
   assert.strictEqual(c[0].type, 'text');
-  assert(c[0].text.includes('ssh_execute'), 'is markdown');
+  assert(c[0].text.startsWith('[ok] ssh_execute'), 'compact render is the default');
+  assert(!c[0].text.includes('```'), 'no fences in default output');
 });
 
 test('makeMcpContent: json is parseable and round-trips the wire shape', () => {
@@ -339,9 +366,9 @@ test('integration: 100KB log with ANSI + error at tail round-trips through all h
   assert(r.truncated.stdout_bytes > 0);
 
   const md = renderMarkdown(r);
-  assert(md.includes('exit 139'), 'failure exit badge');
+  assert(md.includes('exit 139'), 'failure exit in header');
   assert(md.includes('elided'), 'truncation marker present');
-  assert(md.startsWith('[err]'), 'failure marker leads the header');
+  assert(md.startsWith('[err] ssh_execute'), 'failure marker leads the header');
 
   const c = makeMcpContent(r, { format: 'both' });
   assert.strictEqual(c.length, 2);

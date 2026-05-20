@@ -124,14 +124,19 @@ const RISK_RANK = { low: 0, medium: 1, high: 2 };
 const RISK_FROM_RANK = ['low', 'medium', 'high'];
 
 /**
- * Classify a step's risk. Honors an explicit `risk:` override on the step.
+ * Classify a step's risk. Override may only RAISE risk, never lower it --
+ * a model-supplied step cannot downgrade `exec_sudo` to `low` to slip past
+ * the approve-token gate.
  * @param {string} action
- * @param {string} [override] -- 'low' | 'medium' | 'high'
+ * @param {string} [override] -- 'low' | 'medium' | 'high', escalation only
  * @returns {'low'|'medium'|'high'}
  */
 export function stepRisk(action, override) {
-  if (override && RISK_RANK[override] != null) return override;
-  return ACTION_RISK[action] || 'medium';
+  const tableRisk = ACTION_RISK[action] || 'medium';
+  if (override && RISK_RANK[override] != null) {
+    return RISK_RANK[override] > RISK_RANK[tableRisk] ? override : tableRisk;
+  }
+  return tableRisk;
 }
 
 // --------------------------------------------------------------------------

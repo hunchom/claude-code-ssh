@@ -14,7 +14,10 @@ import {
   buildTailCommand,
   _sessionsForTest,
   _stoppedIdsForTest,
+  _reapClosedSessionsForTest,
+  _CLOSED_SESSION_GRACE_MS,
 } from '../src/tools/tail-tools.js';
+import { unwrapTimeout } from './util-timeout-unwrap.js';
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
@@ -43,7 +46,9 @@ class OneShotClient {
     this.streams = [];
     this.lastCommand = null;
   }
-  exec(cmd, cb) {
+  exec(rawCmd, cb) {
+    // Recover inner command from `timeout -k N N sh -c '<cmd>'` wrapper.
+    const cmd = unwrapTimeout(rawCmd);
     this.lastCommand = cmd;
     const s = new FakeStream();
     this.streams.push(s);
@@ -126,7 +131,7 @@ await test('handleSshTail: happy path with quoted path and default lines', async
   assert.strictEqual(r.isError, undefined);
   assert.strictEqual(client.lastCommand, 'tail -n 10 \'/var/log/app.log\'');
   const md = r.content[0].text;
-  assert(md.startsWith('[ok] **ssh_execute**'), 'uses exec markdown renderer');
+  assert(md.startsWith('[ok] ssh_execute'), 'uses exec markdown renderer');
   assert(md.includes('a'));
   assert(md.includes('c'));
 });
@@ -245,7 +250,7 @@ await test('handleSshTailStart: markdown render starts with ssh_tail_start heade
     getConnection: async () => client,
     args: { server: 's', file: '/f' },
   });
-  assert(r.content[0].text.startsWith('[ok] **ssh_tail_start**'),
+  assert(r.content[0].text.startsWith('[ok] ssh_tail_start'),
     `got: ${r.content[0].text.slice(0, 80)}`);
   const parsed = JSON.parse((await handleSshTailStart({
     getConnection: async () => client,
@@ -367,6 +372,78 @@ await test('handleSshTailStop: unknown id (never seen) -> structured fail', asyn
   assert.strictEqual(parsed.tool, 'ssh_tail_stop');
   assert(parsed.error.includes('unknown session_id'));
   assert.strictEqual(r.isError, true);
+});
+
+// --------------------------------------------------------------------------
+// Closed-session reaping -- a follow-start whose stream closes but is never
+// explicitly ssh_tail_stop'd must not linger in the registry forever.
+// --------------------------------------------------------------------------
+await test('closed + fully-read session is reaped on the next read (no explicit stop)', async () => {
+  const client = new FollowClient();
+  const started = await handleSshTailStart({
+    getConnection: async () => client,
+    args: { server: 's', file: '/f', format: 'json' },
+  });
+  const { session_id } = JSON.parse(started.content[0].text).data;
+  assert(_sessionsForTest().has(session_id), 'session registered');
+
+  client.feed('done\n');
+  await sleep(5);
+  // First read consumes the whole buffer.
+  const r1 = JSON.parse((await handleSshTailRead({ args: { session_id, format: 'json' } })).content[0].text);
+  assert.strictEqual(r1.data.chunk, 'done\n');
+  assert(_sessionsForTest().has(session_id), 'still alive while stream open');
+
+  // Stream closes (remote ended) -- no ssh_tail_stop is ever issued.
+  client.lastStream().emit('close', 0);
+  await sleep(5);
+
+  // Next read sees closed:true AND reaps the now-dead, fully-read session.
+  const r2 = JSON.parse((await handleSshTailRead({ args: { session_id, format: 'json' } })).content[0].text);
+  assert.strictEqual(r2.data.closed, true, 'caller is told the stream closed');
+  assert.strictEqual(_sessionsForTest().has(session_id), false,
+    'closed + fully-read session must be reaped, not leaked');
+  assert(_stoppedIdsForTest().has(session_id),
+    'reaped id is remembered so a later stop is a clean no-op');
+});
+
+await test('closed session past the grace period is reaped by the sweep even if unread', async () => {
+  const client = new FollowClient();
+  const started = await handleSshTailStart({
+    getConnection: async () => client,
+    args: { server: 's', file: '/f', format: 'json' },
+  });
+  const { session_id } = JSON.parse(started.content[0].text).data;
+
+  // Stream closes with buffered-but-never-read data.
+  client.feed('unread bytes\n');
+  client.lastStream().emit('close', 0);
+  await sleep(5);
+  assert(_sessionsForTest().has(session_id), 'closed-but-recent session still lingers');
+
+  // A fresh sweep does nothing yet (within grace).
+  _reapClosedSessionsForTest(Date.now());
+  assert(_sessionsForTest().has(session_id), 'not reaped within grace window');
+
+  // Backdate closedAt past the grace period; the sweep now reaps it.
+  _sessionsForTest().get(session_id).closedAt =
+    Date.now() - _CLOSED_SESSION_GRACE_MS - 1000;
+  _reapClosedSessionsForTest(Date.now());
+  assert.strictEqual(_sessionsForTest().has(session_id), false,
+    'closed session past grace must be reaped even though never read');
+});
+
+await test('an OPEN session is never reaped, no matter how old', async () => {
+  const client = new FollowClient();
+  const started = await handleSshTailStart({
+    getConnection: async () => client,
+    args: { server: 's', file: '/f', format: 'json' },
+  });
+  const { session_id } = JSON.parse(started.content[0].text).data;
+  // Stream stays open. Sweep with a far-future clock.
+  _reapClosedSessionsForTest(Date.now() + _CLOSED_SESSION_GRACE_MS * 100);
+  assert(_sessionsForTest().has(session_id), 'open session must survive any sweep');
+  await handleSshTailStop({ args: { session_id } });
 });
 
 // --------------------------------------------------------------------------

@@ -48,7 +48,7 @@ import os from 'os';
 import path from 'path';
 import { StringDecoder } from 'string_decoder';
 
-import { stripAnsi, formatDuration } from '../output-formatter.js';
+import { stripAnsi, formatDuration, renderHeader, indentBody } from '../output-formatter.js';
 import { ok, fail, toMcp, defaultRender } from '../structured-result.js';
 
 // --------------------------------------------------------------------------
@@ -219,13 +219,10 @@ export class SSHSessionV2 {
     // We strip ANSI at ingress so the marker regex doesn't need to tolerate
     // escape sequences interleaved with the marker token. (stripAnsi is
     // CSI/OSC-aware; it preserves content, including \r.)
+    // client.shell() folds stderr into the single pty stream -- only `data`
+    // is wired. No separate stderr listener -> no shared-decoder splice
+    // corruption on a multibyte char straddling a stdout/stderr boundary.
     const onData = (data) => {
-      if (this._closed) return;
-      const text = this._decoder.write(data);
-      if (text) this._appendBuffer(stripAnsi(text));
-      this._drainWaiters();
-    };
-    const onStderr = (data) => {
       if (this._closed) return;
       const text = this._decoder.write(data);
       if (text) this._appendBuffer(stripAnsi(text));
@@ -253,9 +250,6 @@ export class SSHSessionV2 {
     };
 
     this.stream.on('data', onData);
-    if (this.stream.stderr && typeof this.stream.stderr.on === 'function') {
-      this.stream.stderr.on('data', onStderr);
-    }
     this.stream.on('close', onClose);
     this.stream.on('error', onError);
   }
@@ -268,11 +262,12 @@ export class SSHSessionV2 {
   }
 
   _drainWaiters() {
-    if (this._waiters.length === 0) return;
-    // Only the head waiter is active -- commands are serialized.
-    const head = this._waiters[0];
-    const m = this._buffer.match(head.regex);
-    if (m) {
+    // Loop: one data chunk can carry >1 sentinel (concurrent sends, fast
+    // shell). Drain every head waiter whose sentinel is already buffered.
+    while (this._waiters.length > 0) {
+      const head = this._waiters[0];
+      const m = this._buffer.match(head.regex);
+      if (!m) break;
       const matchEnd = m.index + m[0].length;
       // Everything up through the sentinel line belongs to this command.
       const captured = this._buffer.slice(0, matchEnd);
@@ -541,7 +536,7 @@ function renderSessionStart(result) {
   if (!result.success) return defaultRender(result);
   const d = result.data;
   const lines = [];
-  lines.push(`[ok] **ssh_session_start** | \`${d.server}\` | \`${result.meta?.duration_ms != null ? formatDuration(result.meta.duration_ms) : ''}\``);
+  lines.push(renderHeader({ marker: '[ok]', tool: 'ssh_session_start', server: d.server, durationMs: result.meta?.duration_ms }));
   lines.push('');
   lines.push(`- **session_id**: \`${d.session_id}\``);
   lines.push(`- **shell**: \`${d.shell}\``);
@@ -619,18 +614,15 @@ function renderSessionSend(result) {
   const lines = [];
   lines.push(`${marker} **ssh_session_send** | \`${result.server}\` | ${badge} | \`${formatDuration(d.duration_ms)}\``);
   lines.push(`\`$ ${d.command}\`   *(in \`${d.cwd_after}\`)*`);
+  // indentBody, not fences -- a payload line that is itself ``` breaks fences.
   if (d.stdout && d.stdout.trim()) {
     lines.push('');
-    lines.push('```text');
-    lines.push(d.stdout);
-    lines.push('```');
+    lines.push(indentBody(d.stdout));
   }
   if (d.stderr && d.stderr.trim()) {
     lines.push('');
-    lines.push('**stderr**');
-    lines.push('```text');
-    lines.push(d.stderr);
-    lines.push('```');
+    lines.push('stderr:');
+    lines.push(indentBody(d.stderr));
   }
   return lines.join('\n');
 }

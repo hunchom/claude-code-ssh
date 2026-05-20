@@ -507,7 +507,24 @@ export async function handleSshDbList({ getConnection, args }) {
     ? (db_type === 'mongodb' ? { db_type, database, collections: filtered } : { db_type, database, tables: filtered })
     : { db_type, databases: filtered };
 
-  return toMcp(ok('ssh_db_list', data, { server, duration_ms: durationMs }), { format });
+  return toMcp(ok('ssh_db_list', data, { server, duration_ms: durationMs }), { format, renderer: renderDbList });
+}
+
+/** ssh_db list -> name-per-line list; never collapses the array. */
+function renderDbList(result) {
+  if (!result.success) return defaultRender(result);
+  const d = result.data;
+  const kind = d.tables ? 'table' : (d.collections ? 'collection' : 'database');
+  const names = d.databases || d.tables || d.collections || [];
+  const dur = result.meta?.duration_ms != null ? ` | \`${formatDuration(result.meta.duration_ms)}\`` : '';
+  const scope = d.database ? ` | \`${d.database}\`` : '';
+  const lines = [`[ok] **ssh_db_list** | \`${result.server}\` | \`${d.db_type}\`${scope}${dur}`];
+  lines.push(`${names.length} ${kind}${names.length === 1 ? '' : 's'}`);
+  if (names.length > 0) {
+    lines.push('');
+    for (const n of names) lines.push(`- ${n}`);
+  }
+  return lines.join('\n');
 }
 
 function filterSystemDbs(names, db_type) {

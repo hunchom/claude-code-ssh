@@ -66,31 +66,34 @@ function writeConfig(server, cfg) {
 
 function evaluateThresholds(metrics, cfg) {
   const alerts = [];
-  // CPU usage: metrics.cpu.usage_percent (see monitoring-tools.parseTopCpu).
-  const cpuPct = Number(metrics?.cpu?.usage_percent);
+  // CPU: monitoring-tools.parseTopCpu emits no aggregate field, only
+  // { user_pct, system_pct, idle_pct, iowait_pct } -> usage = 100 - idle_pct.
+  const idlePct = Number(metrics?.cpu?.idle_pct);
+  const cpuPct = Number.isFinite(idlePct) ? 100 - idlePct : NaN;
   if (Number.isFinite(cpuPct) && Number.isFinite(cfg.cpuThreshold) && cpuPct >= cfg.cpuThreshold) {
     alerts.push({
       metric: 'cpu', observed: cpuPct, threshold: cfg.cpuThreshold,
       message: `CPU at ${cpuPct.toFixed(1)}% >= threshold ${cfg.cpuThreshold}%`,
     });
   }
-  // Memory used%: parseFreeMem returns { total_bytes, used_bytes, free_bytes, used_percent }.
-  const memPct = Number(metrics?.memory?.used_percent);
+  // Memory: parseFreeMem emits { total_bytes, used_bytes, free_bytes, available_bytes, used_pct }.
+  const memPct = Number(metrics?.memory?.used_pct);
   if (Number.isFinite(memPct) && Number.isFinite(cfg.memoryThreshold) && memPct >= cfg.memoryThreshold) {
     alerts.push({
       metric: 'memory', observed: memPct, threshold: cfg.memoryThreshold,
       message: `memory at ${memPct.toFixed(1)}% >= threshold ${cfg.memoryThreshold}%`,
     });
   }
-  // Disk: parseDf returns an array of { filesystem, mount, used_percent, ... }.
+  // Disk: parseDf emits rows of { device, size_bytes, used_bytes, avail_bytes, used_pct, mount }.
   if (Array.isArray(metrics?.disk) && Number.isFinite(cfg.diskThreshold)) {
     for (const fs_ of metrics.disk) {
-      const pct = Number(fs_?.used_percent);
+      const pct = Number(fs_?.used_pct);
       if (Number.isFinite(pct) && pct >= cfg.diskThreshold) {
+        const where = fs_.mount || fs_.device;
         alerts.push({
-          metric: 'disk', mount: fs_.mount || fs_.filesystem,
+          metric: 'disk', mount: where,
           observed: pct, threshold: cfg.diskThreshold,
-          message: `disk ${fs_.mount || fs_.filesystem} at ${pct.toFixed(1)}% >= threshold ${cfg.diskThreshold}%`,
+          message: `disk ${where} at ${pct.toFixed(1)}% >= threshold ${cfg.diskThreshold}%`,
         });
       }
     }

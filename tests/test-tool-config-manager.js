@@ -2,7 +2,7 @@
 /**
  * Tests for src/tool-config-manager.js -- the gate that decides whether
  * each registered tool is served to the MCP client. Zero coverage prior
- * to this file; this is the gatekeeper for every one of the 50 tools.
+ * to this file; this is the gatekeeper for every one of the 12 v4 tools.
  *
  * Covers:
  *   - default config when no file exists (all enabled)
@@ -95,6 +95,35 @@ await test('load(): valid minimal config is accepted', async () => {
   assert.strictEqual(m.config.mode, 'minimal');
 });
 
+// --- getDefaultConfig group set must mirror the v4 registry --------------
+await test('getDefaultConfig().groups matches the real v4 TOOL_GROUPS exactly', () => {
+  // A stale group set (pre-v4 core/sessions/monitoring/backup/database/...)
+  // makes custom-mode isToolEnabled fall through to `return true`, silently
+  // re-enabling tools a user disabled. Default groups MUST be the 3 v4 keys.
+  const m = new ToolConfigManager();
+  const defaultGroups = Object.keys(m.getDefaultConfig().groups).sort();
+  const registryGroups = Object.keys(TOOL_GROUPS).sort();
+  assert.deepStrictEqual(defaultGroups, registryGroups,
+    `default groups ${JSON.stringify(defaultGroups)} must equal registry ${JSON.stringify(registryGroups)}`);
+  // No stale pre-v4 group names leak through.
+  for (const stale of ['sessions', 'monitoring', 'database', 'gamechanger']) {
+    assert(!(stale in m.getDefaultConfig().groups), `stale group "${stale}" must be gone`);
+  }
+});
+
+await test('upgrade path: every v4 tool resolves to a default-config group (no silent fall-through)', () => {
+  // Each tool must map to a group key present in getDefaultConfig().groups,
+  // so a custom-mode user's disable choice is actually honored post-upgrade.
+  const m = new ToolConfigManager();
+  const groups = m.getDefaultConfig().groups;
+  for (const name of getAllTools()) {
+    const g = TOOL_GROUPS.core.includes(name) ? 'core'
+      : TOOL_GROUPS.ops.includes(name) ? 'ops'
+        : TOOL_GROUPS.advanced.includes(name) ? 'advanced' : null;
+    assert(g && g in groups, `tool ${name} -> group must exist in default config`);
+  }
+});
+
 // --- isToolEnabled --------------------------------------------------------
 await test('mode=all enables every tool', () => {
   const m = new ToolConfigManager();
@@ -119,27 +148,24 @@ await test('mode=custom respects per-group enable flags', () => {
   m.config = {
     version: '1.0', mode: 'custom',
     groups: {
-      core: { enabled: true }, sessions: { enabled: false },
-      monitoring: { enabled: false }, backup: { enabled: false },
-      database: { enabled: false }, advanced: { enabled: false },
-      gamechanger: { enabled: false },
+      core: { enabled: true }, ops: { enabled: false }, advanced: { enabled: false },
     },
   };
   for (const name of TOOL_GROUPS.core) assert.strictEqual(m.isToolEnabled(name), true);
-  for (const name of TOOL_GROUPS.sessions) assert.strictEqual(m.isToolEnabled(name), false);
-  for (const name of TOOL_GROUPS.database) assert.strictEqual(m.isToolEnabled(name), false);
+  for (const name of TOOL_GROUPS.ops) assert.strictEqual(m.isToolEnabled(name), false);
+  for (const name of TOOL_GROUPS.advanced) assert.strictEqual(m.isToolEnabled(name), false);
 });
 
 await test('individual tool override wins over group disable (in custom mode)', () => {
   const m = new ToolConfigManager();
   m.config = {
     version: '1.0', mode: 'custom',
-    groups: { database: { enabled: false } },
-    tools: { ssh_db_query: true },
+    groups: { ops: { enabled: false } },
+    tools: { ssh_db: true },
   };
-  assert.strictEqual(m.isToolEnabled('ssh_db_query'), true,
+  assert.strictEqual(m.isToolEnabled('ssh_db'), true,
     'explicit tool=true must override group=false');
-  assert.strictEqual(m.isToolEnabled('ssh_db_dump'), false,
+  assert.strictEqual(m.isToolEnabled('ssh_backup'), false,
     'sibling in disabled group without override stays off');
 });
 
@@ -148,16 +174,16 @@ await test('individual tool override can disable a tool inside an enabled group'
   m.config = {
     version: '1.0', mode: 'custom',
     groups: { core: { enabled: true } },
-    tools: { ssh_execute: false },
+    tools: { ssh_run: false },
   };
-  assert.strictEqual(m.isToolEnabled('ssh_execute'), false);
-  assert.strictEqual(m.isToolEnabled('ssh_list_servers'), true);
+  assert.strictEqual(m.isToolEnabled('ssh_run'), false);
+  assert.strictEqual(m.isToolEnabled('ssh_file'), true);
 });
 
 await test('isToolEnabled defaults to true before load (first-run safety)', () => {
   const m = new ToolConfigManager();
   // Nothing loaded; this.config is null.
-  assert.strictEqual(m.isToolEnabled('ssh_execute'), true);
+  assert.strictEqual(m.isToolEnabled('ssh_run'), true);
 });
 
 // --- group / tool mutators -----------------------------------------------
@@ -168,7 +194,7 @@ await test('disableGroup("core") is refused -- core is load-bearing', async () =
   const r = await m.disableGroup('core');
   assert.strictEqual(r, false);
   // core stays enabled (disableGroup should not have mutated anything)
-  assert.strictEqual(m.isToolEnabled('ssh_execute'), true);
+  assert.strictEqual(m.isToolEnabled('ssh_run'), true);
 });
 
 await test('enableGroup / disableGroup on unknown group returns false', async () => {

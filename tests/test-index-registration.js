@@ -53,15 +53,21 @@ await test('every TOOL_GROUPS entry is registered in index.js', () => {
   const registered = registeredNames(indexSrc);
   const missing = getAllTools().filter(name => !registered.has(name));
   assert.strictEqual(missing.length, 0,
-    `tools listed in TOOL_GROUPS but never registered: ${missing.join(', ')}`);
+    `tools in TOOL_GROUPS but never registered: ${missing.join(', ')}`);
 });
 
-await test('every registerToolConditional() in index.js corresponds to a TOOL_GROUPS entry', () => {
+await test('every registerToolConditional() corresponds to a TOOL_GROUPS entry', () => {
   const registered = registeredNames(indexSrc);
   const known = new Set(getAllTools());
   const orphans = [...registered].filter(name => !known.has(name));
   assert.strictEqual(orphans.length, 0,
     `tools registered in index.js but missing from TOOL_GROUPS: ${orphans.join(', ')}`);
+});
+
+await test('exactly 13 tools are registered', () => {
+  const registered = registeredNames(indexSrc);
+  assert.strictEqual(registered.size, 13,
+    `expected 13 registered tools, got ${registered.size}: ${[...registered].join(', ')}`);
 });
 
 await test('count of registered tools matches registry exactly', () => {
@@ -77,17 +83,24 @@ await test('every registered tool has an annotations entry (drift check)', () =>
     `tools registered without annotations: ${missing.join(', ')}`);
 });
 
+await test('no legacy 51-surface tool name survives in a registration', () => {
+  const registered = registeredNames(indexSrc);
+  const legacy = ['ssh_execute', 'ssh_upload', 'ssh_cat', 'ssh_tail',
+    'ssh_systemctl', 'ssh_tunnel_create', 'ssh_deploy_artifact'];
+  const survivors = legacy.filter(name => registered.has(name));
+  assert.strictEqual(survivors.length, 0,
+    `legacy tool names still registered: ${survivors.join(', ')}`);
+});
+
 await test('TOOL_GROUPS has no duplicate names across groups', () => {
   const all = getAllTools();
-  const uniq = new Set(all);
-  assert.strictEqual(all.length, uniq.size,
-    `duplicates detected in TOOL_GROUPS: ${all.length} entries, ${uniq.size} unique`);
+  assert.strictEqual(all.length, new Set(all).size,
+    `duplicates detected in TOOL_GROUPS`);
 });
 
 await test('every group declared in TOOL_GROUPS is non-empty', () => {
   for (const [name, tools] of Object.entries(TOOL_GROUPS)) {
-    assert(Array.isArray(tools) && tools.length > 0,
-      `group ${name} is empty or not an array`);
+    assert(Array.isArray(tools) && tools.length > 0, `group ${name} is empty`);
   }
 });
 

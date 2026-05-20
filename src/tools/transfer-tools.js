@@ -151,22 +151,32 @@ function pickSyntaxChecker(filePath, override) {
   return null;
 }
 
+// regex-escape: neutralize all RegExp metacharacters in literal text
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
- * Apply `patch` regex rules to a string. Each rule: {find, replace, flags?}.
- * find is treated as a regex pattern (user supplies anchors/escapes).
+ * Apply `patch` rules to a string. Each rule: {find, replace, flags?, literal?}.
+ * find is a regex pattern unless literal:true → find is escaped, matched verbatim.
  */
 function applyPatches(current, patches) {
   let out = String(current);
   for (const p of patches || []) {
     if (!p || typeof p.find !== 'string') continue;
     const flags = typeof p.flags === 'string' ? p.flags : 'g';
+    const pattern = p.literal ? escapeRegex(p.find) : p.find;
     let re;
     try {
-      re = new RegExp(p.find, flags);
+      re = new RegExp(pattern, flags);
     } catch (e) {
       throw new Error(`invalid patch regex ${JSON.stringify(p.find)} (flags=${flags}): ${e.message}`);
     }
-    out = out.replace(re, p.replace != null ? String(p.replace) : '');
+    // $-sequences in replacement stay literal under literal mode → escape $
+    const replacement = p.replace != null
+      ? (p.literal ? String(p.replace).replace(/\$/g, '$$$$') : String(p.replace))
+      : '';
+    out = out.replace(re, replacement);
   }
   return out;
 }

@@ -18,96 +18,58 @@
  */
 
 export const TOOL_ANNOTATIONS = {
-  // Core
-  ssh_execute: {
-    title: 'Execute Remote Command',
+  ssh_run: {
+    title: 'Run Remote Command',
     annotations: { destructiveHint: true, openWorldHint: true },
   },
-  ssh_upload: {
-    title: 'Upload File to Server',
-    annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+  ssh_find: {
+    title: 'Search and List Files',
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
   },
-  ssh_download: {
-    title: 'Download File from Server',
-    annotations: { readOnlyHint: true, openWorldHint: true },
+  ssh_file: {
+    title: 'Transfer / Read / Edit Files',
+    annotations: { destructiveHint: true, openWorldHint: true },
   },
-  ssh_sync: {
-    title: 'Rsync Files',
-    annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+  ssh_logs: {
+    title: 'Read Remote Logs',
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
   },
-  ssh_list_servers: {
-    title: 'List Configured Servers',
-    annotations: { readOnlyHint: true, idempotentHint: true },
+  ssh_service: {
+    title: 'Service Control',
+    annotations: { destructiveHint: true, openWorldHint: true },
   },
-
-  // Sessions
-  ssh_session_start: { title: 'Start Interactive Session', annotations: { openWorldHint: true } },
-  ssh_session_send: { title: 'Send Command to Session', annotations: { destructiveHint: true, openWorldHint: true } },
-  ssh_session_list: { title: 'List Sessions', annotations: { readOnlyHint: true, idempotentHint: true } },
-  ssh_session_close: { title: 'Close Session', annotations: { idempotentHint: true } },
-  ssh_session_replay: { title: 'Replay Session History', annotations: { readOnlyHint: true, idempotentHint: true } },
-  ssh_session_memory: { title: 'Session State Snapshot', annotations: { readOnlyHint: true, idempotentHint: true } },
-
-  // Monitoring
-  ssh_health_check: { title: 'Server Health Check', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
-  ssh_service_status: { title: 'Check Service Status', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
-  ssh_process_manager: { title: 'Manage Remote Processes', annotations: { destructiveHint: true, openWorldHint: true } },
-  ssh_monitor: { title: 'Resource Monitor Snapshot', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
-  ssh_tail: { title: 'Tail Log File', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
-  ssh_alert_setup: {
-    title: 'Configure Health Alerts',
-    // set/get mutate local config; check is read-only against the remote.
-    // Taken together, not readOnly and not destructive -- just stateful config.
-    annotations: { idempotentHint: true },
+  ssh_health: {
+    title: 'Health, Processes, Alerts',
+    annotations: { destructiveHint: true, openWorldHint: true },
   },
-
-  // Backup
-  ssh_backup_create: { title: 'Create Backup', annotations: { destructiveHint: true, openWorldHint: true } },
-  ssh_backup_list: { title: 'List Backups', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
-  ssh_backup_restore: { title: 'Restore Backup', annotations: { destructiveHint: true, openWorldHint: true } },
-  ssh_backup_schedule: { title: 'Schedule Backup (cron)', annotations: { destructiveHint: true, openWorldHint: true } },
-
-  // Database
-  ssh_db_dump: { title: 'Dump Database', annotations: { destructiveHint: true, openWorldHint: true } },
-  ssh_db_import: { title: 'Import Database Dump', annotations: { destructiveHint: true, openWorldHint: true } },
-  ssh_db_list: { title: 'List Databases / Tables', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
-  ssh_db_query: { title: 'Run Read-Only Query', annotations: { readOnlyHint: true, openWorldHint: true } },
-
-  // Deploy
-  ssh_deploy: { title: 'Deploy Artifact', annotations: { destructiveHint: true, openWorldHint: true } },
-  ssh_deploy_artifact: { title: 'Deploy Artifact (alias)', annotations: { destructiveHint: true, openWorldHint: true } },
-  ssh_execute_sudo: { title: 'Execute With Sudo', annotations: { destructiveHint: true, openWorldHint: true } },
-  ssh_execute_group: { title: 'Execute Across Group', annotations: { destructiveHint: true, openWorldHint: true } },
-
-  // Admin / config
-  ssh_alias: { title: 'Manage Server Aliases', annotations: { idempotentHint: true } },
-  ssh_command_alias: { title: 'Manage Command Aliases', annotations: { idempotentHint: true } },
-  ssh_hooks: { title: 'Manage Automation Hooks', annotations: { idempotentHint: true } },
-  ssh_profile: { title: 'Manage Active Profile', annotations: { idempotentHint: true } },
-  ssh_group_manage: { title: 'Manage Server Groups', annotations: { idempotentHint: true } },
-  ssh_connection_status: { title: 'Connection Pool Status', annotations: { readOnlyHint: true, idempotentHint: true } },
-  ssh_history: { title: 'Command History', annotations: { readOnlyHint: true, idempotentHint: true } },
-
-  // Tunnels
-  ssh_tunnel_create: { title: 'Create SSH Tunnel', annotations: { destructiveHint: true, openWorldHint: true } },
-  ssh_tunnel_list: { title: 'List Tunnels', annotations: { readOnlyHint: true, idempotentHint: true } },
-  ssh_tunnel_close: { title: 'Close Tunnel', annotations: { idempotentHint: true } },
-
-  // Host keys / auth
-  ssh_key_manage: { title: 'Manage SSH Host Keys', annotations: { idempotentHint: true, openWorldHint: true } },
-
-  // Gamechanger
-  ssh_cat: { title: 'View Remote File', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
-  ssh_systemctl: { title: 'Systemd Unit Control', annotations: { destructiveHint: true, openWorldHint: true } },
-  ssh_journalctl: { title: 'Systemd Journal Query', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
-  ssh_docker: { title: 'Docker Control', annotations: { destructiveHint: true, openWorldHint: true } },
-  ssh_port_test: { title: 'Port / TLS / HTTP Probe', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
-  ssh_diff: { title: 'Diff Two Files', annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true } },
-  ssh_edit: { title: 'Atomic File Edit', annotations: { destructiveHint: true, openWorldHint: true } },
-  ssh_tail_start: { title: 'Start Live Tail', annotations: { openWorldHint: true } },
-  ssh_tail_read: { title: 'Read Live Tail Buffer', annotations: { readOnlyHint: true, idempotentHint: true } },
-  ssh_tail_stop: { title: 'Stop Live Tail', annotations: { idempotentHint: true } },
-  ssh_plan: { title: 'Plan + Approve Execution', annotations: { destructiveHint: true, openWorldHint: true } },
+  ssh_db: {
+    title: 'Database Operations',
+    annotations: { destructiveHint: true, openWorldHint: true },
+  },
+  ssh_backup: {
+    title: 'Backup and Restore',
+    annotations: { destructiveHint: true, openWorldHint: true },
+  },
+  ssh_docker: {
+    title: 'Docker Control',
+    annotations: { destructiveHint: true, openWorldHint: true },
+  },
+  ssh_session: {
+    title: 'Persistent SSH Sessions',
+    annotations: { destructiveHint: true, openWorldHint: true },
+  },
+  ssh_net: {
+    title: 'Tunnels and Port Probes',
+    annotations: { destructiveHint: true, openWorldHint: true },
+  },
+  ssh_fleet: {
+    title: 'Fleet and Config Metadata',
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+  },
+  ssh_plan: {
+    title: 'Multi-Step Plan Executor',
+    annotations: { destructiveHint: true, openWorldHint: true },
+  },
 };
 
 /**

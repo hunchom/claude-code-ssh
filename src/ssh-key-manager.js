@@ -4,6 +4,28 @@ import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
 import { logger } from './logger.js';
+import { parseKnownHostLine } from './tools/key-tools.js';
+
+/**
+ * Exact host+port match against one known_hosts line. Substring matching is
+ * unsafe: `example.com` would hit `notexample.com`, `example.com.evil.net`,
+ * or a coincidence inside the base64 key body. Hashed `|1|` entries can't be
+ * un-hashed -> never match (caller must fall back to ssh-keygen -F).
+ */
+function knownHostLineMatches(line, host, port) {
+  const parsed = parseKnownHostLine(line);
+  if (!parsed || parsed.hashed) return false;
+  // parseKnownHostLine splits comma-separated host specs into `hosts[]`.
+  for (const spec of parsed.hosts) {
+    const bracket = spec.match(/^\[([^\]]+)\]:(\d+)$/);
+    if (bracket) {
+      if (bracket[1] === host && (parseInt(bracket[2], 10) || 22) === port) return true;
+    } else if (spec === host && port === 22) {
+      return true;
+    }
+  }
+  return false;
+}
 
 // Path to known_hosts file
 const KNOWN_HOSTS_PATH = path.join(os.homedir(), '.ssh', 'known_hosts');
@@ -82,13 +104,8 @@ export function isHostKnown(host, port = 22) {
   }
 
   const content = fs.readFileSync(KNOWN_HOSTS_PATH, 'utf8');
-  const lines = content.split('\n');
-
-  // Format host entry as SSH does
-  const hostEntry = port === 22 ? host : `[${host}]:${port}`;
-
-  for (const line of lines) {
-    if (line.includes(hostEntry)) {
+  for (const line of content.split('\n')) {
+    if (knownHostLineMatches(line, host, port)) {
       return true;
     }
   }
@@ -105,14 +122,10 @@ export function getCurrentHostKey(host, port = 22) {
   }
 
   const content = fs.readFileSync(KNOWN_HOSTS_PATH, 'utf8');
-  const lines = content.split('\n');
-
-  // Format host entry as SSH does
-  const hostEntry = port === 22 ? host : `[${host}]:${port}`;
   const keys = [];
 
-  for (const line of lines) {
-    if (line.includes(hostEntry)) {
+  for (const line of content.split('\n')) {
+    if (knownHostLineMatches(line, host, port)) {
       const entry = parseKnownHostEntry(line);
       if (entry) {
         const keyData = Buffer.from(entry.key, 'base64');

@@ -64,17 +64,16 @@ export class ToolConfigManager {
    * @returns {Object} Default configuration
    */
   getDefaultConfig() {
+    // Groups MUST mirror the three real v4 TOOL_GROUPS (core, ops, advanced).
+    // A stale group set leaves custom-mode isToolEnabled unable to resolve a
+    // tool's group -> silent fall-through to `return true`.
     return {
       version: '1.0',
       mode: 'all',
       groups: {
         core: { enabled: true },
-        sessions: { enabled: true },
-        monitoring: { enabled: true },
-        backup: { enabled: true },
-        database: { enabled: true },
-        advanced: { enabled: true },
-        gamechanger: { enabled: true }
+        ops: { enabled: true },
+        advanced: { enabled: true }
       },
       tools: {},
       _comment: 'Tool configuration for claude-code-ssh. Run "ssh-manager tools configure" to customize.'

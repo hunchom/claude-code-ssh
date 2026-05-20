@@ -17,7 +17,9 @@
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
+import { EventEmitter } from 'node:events';
 import { handleSshAlertSetup, __internals } from '../src/tools/alerts-tools.js';
+import { handleSshHealthCheck } from '../src/tools/monitoring-tools.js';
 
 const { configPathFor, writeConfig, evaluateThresholds } = __internals;
 
@@ -150,27 +152,32 @@ await test('check: disabled config returns status=disabled, alert_count=0', asyn
 });
 
 // --- evaluateThresholds unit tests ---------------------------------------
+// IMPORTANT: these feed the REAL field shape that monitoring-tools emits --
+// cpu has only { user_pct, system_pct, idle_pct, iowait_pct } (NO aggregate
+// usage field; usage is derived 100 - idle_pct), memory has used_pct, and
+// disk rows have used_pct + device + mount. The pre-fix tests fed fabricated
+// usage_percent/used_percent names that the producer never emits.
 await test('evaluateThresholds: all metrics below thresholds -> no alerts', () => {
   const alerts = evaluateThresholds(
-    { cpu: { usage_percent: 30 }, memory: { used_percent: 40 }, disk: [{ mount: '/', used_percent: 20 }] },
+    { cpu: { idle_pct: 70 }, memory: { used_pct: 40 }, disk: [{ mount: '/', used_pct: 20 }] },
     { cpuThreshold: 80, memoryThreshold: 80, diskThreshold: 80 },
   );
   assert.strictEqual(alerts.length, 0);
 });
 
-await test('evaluateThresholds: CPU breach surfaces', () => {
+await test('evaluateThresholds: CPU breach surfaces (usage derived from idle_pct)', () => {
   const alerts = evaluateThresholds(
-    { cpu: { usage_percent: 95 }, memory: { used_percent: 10 }, disk: [] },
+    { cpu: { idle_pct: 5 }, memory: { used_pct: 10 }, disk: [] },
     { cpuThreshold: 80, memoryThreshold: 80, diskThreshold: 80 },
   );
   assert.strictEqual(alerts.length, 1);
   assert.strictEqual(alerts[0].metric, 'cpu');
-  assert.strictEqual(alerts[0].observed, 95);
+  assert.strictEqual(alerts[0].observed, 95);   // 100 - idle_pct(5)
 });
 
 await test('evaluateThresholds: memory breach surfaces', () => {
   const alerts = evaluateThresholds(
-    { memory: { used_percent: 92 } },
+    { memory: { used_pct: 92 } },
     { memoryThreshold: 90 },
   );
   assert.strictEqual(alerts.length, 1);
@@ -180,9 +187,9 @@ await test('evaluateThresholds: memory breach surfaces', () => {
 await test('evaluateThresholds: per-mount disk breach surfaces each mount', () => {
   const alerts = evaluateThresholds(
     { disk: [
-      { mount: '/', used_percent: 50 },
-      { mount: '/var', used_percent: 97 },
-      { mount: '/tmp', used_percent: 99 },
+      { device: '/dev/sda1', mount: '/', used_pct: 50 },
+      { device: '/dev/sda2', mount: '/var', used_pct: 97 },
+      { device: '/dev/sda3', mount: '/tmp', used_pct: 99 },
     ] },
     { diskThreshold: 95 },
   );
@@ -192,10 +199,116 @@ await test('evaluateThresholds: per-mount disk breach surfaces each mount', () =
 
 await test('evaluateThresholds: missing threshold suppresses that metric', () => {
   const alerts = evaluateThresholds(
-    { cpu: { usage_percent: 99 }, memory: { used_percent: 99 } },
+    { cpu: { idle_pct: 1 }, memory: { used_pct: 99 } },
     { diskThreshold: 50 },   // only disk threshold set
   );
   assert.strictEqual(alerts.length, 0, 'without cpu/memory thresholds, those metrics ignore');
+});
+
+await test('evaluateThresholds: a genuinely-missing metric still skips cleanly', () => {
+  // cpu absent entirely -> idle_pct undefined -> NaN -> skipped, no throw.
+  const alerts = evaluateThresholds(
+    { memory: { used_pct: 99 }, disk: [] },
+    { cpuThreshold: 80, memoryThreshold: 90, diskThreshold: 80 },
+  );
+  assert.strictEqual(alerts.length, 1);
+  assert.strictEqual(alerts[0].metric, 'memory');
+});
+
+// --- end-to-end: REAL handleSshHealthCheck output through evaluateThresholds.
+// This is the regression guard for the CRITICAL bug: the producer's field
+// names (idle_pct / used_pct) must match what evaluateThresholds reads. A
+// fabricated fixture would not catch a producer/consumer field-name drift.
+class HealthFakeStream extends EventEmitter {
+  constructor() { super(); this.stderr = new EventEmitter(); }
+  write() { return true; }
+  end() {}
+  close() {}
+}
+function healthClient(stdout) {
+  return {
+    exec(_cmd, cb) {
+      const s = new HealthFakeStream();
+      setImmediate(() => {
+        cb(null, s);
+        setImmediate(() => { s.emit('data', Buffer.from(stdout)); s.emit('close', 0); });
+      });
+    },
+  };
+}
+
+await test('evaluateThresholds: real handleSshHealthCheck output above thresholds fires alerts', async () => {
+  // top/free/df output exactly as the remote command in handleSshHealthCheck
+  // produces it -- a busy host at ~98% CPU, 96% memory, 97% disk.
+  const stdout = [
+    '---CPU---',
+    'top - 12:00:00 up 1 day,  load average: 8.0, 7.5, 7.0',
+    'Tasks: 200 total, 5 running',
+    '%Cpu(s): 80.0 us, 15.0 sy,  0.0 ni,  2.0 id,  3.0 wa,  0.0 hi,  0.0 si,  0.0 st',
+    '---MEM---',
+    '              total        used        free      shared  buff/cache   available',
+    'Mem:      16000000    15360000      200000       10000      440000      300000',
+    'Swap:      2000000           0     2000000',
+    '---DISK---',
+    'Filesystem     1B-blocks        Used   Available Use% Mounted on',
+    '/dev/sda1    100000000000 97000000000  3000000000 97% /',
+    '---LOAD---',
+    '8.00 7.50 7.00 5/200 12345',
+    '---UPTIME---',
+    '86400.00 70000.00',
+    '---CORES---',
+    '4',
+  ].join('\n');
+
+  const hc = await handleSshHealthCheck({
+    getConnection: async () => healthClient(stdout),
+    args: { server: 'busybox', format: 'json' },
+  });
+  assert(!hc.isError, 'health check should succeed');
+  const payload = JSON.parse(hc.content[0].text);
+  assert.strictEqual(payload.success, true);
+
+  // Sanity-check the producer really emits the field names we depend on.
+  assert.strictEqual(payload.data.cpu.idle_pct, 2, 'producer emits cpu.idle_pct');
+  assert(typeof payload.data.memory.used_pct === 'number', 'producer emits memory.used_pct');
+  assert(typeof payload.data.disk[0].used_pct === 'number', 'producer emits disk[].used_pct');
+
+  const alerts = evaluateThresholds(payload.data, {
+    cpuThreshold: 90, memoryThreshold: 90, diskThreshold: 90,
+  });
+  const metrics = alerts.map(a => a.metric).sort();
+  assert.deepStrictEqual(metrics, ['cpu', 'disk', 'memory'],
+    `expected all 3 metrics to fire, got ${JSON.stringify(alerts)}`);
+  const cpuAlert = alerts.find(a => a.metric === 'cpu');
+  assert.strictEqual(cpuAlert.observed, 98, 'cpu usage = 100 - idle_pct(2)');
+});
+
+await test('evaluateThresholds: real handleSshHealthCheck output below thresholds -> no alerts', async () => {
+  const stdout = [
+    '---CPU---',
+    '%Cpu(s):  3.0 us,  1.0 sy,  0.0 ni, 95.0 id,  1.0 wa,  0.0 hi,  0.0 si,  0.0 st',
+    '---MEM---',
+    '              total        used        free      shared  buff/cache   available',
+    'Mem:      16000000     4000000     8000000       10000     4000000    11000000',
+    '---DISK---',
+    'Filesystem     1B-blocks        Used   Available Use% Mounted on',
+    '/dev/sda1    100000000000 20000000000 80000000000 20% /',
+    '---LOAD---',
+    '0.20 0.15 0.10 1/200 12345',
+    '---UPTIME---',
+    '86400.00 70000.00',
+    '---CORES---',
+    '4',
+  ].join('\n');
+  const hc = await handleSshHealthCheck({
+    getConnection: async () => healthClient(stdout),
+    args: { server: 'idlebox', format: 'json' },
+  });
+  const payload = JSON.parse(hc.content[0].text);
+  const alerts = evaluateThresholds(payload.data, {
+    cpuThreshold: 90, memoryThreshold: 90, diskThreshold: 90,
+  });
+  assert.strictEqual(alerts.length, 0, `quiet host must not alert: ${JSON.stringify(alerts)}`);
 });
 
 // --- path traversal guard -------------------------------------------------

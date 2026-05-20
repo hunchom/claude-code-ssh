@@ -7,7 +7,10 @@
 
 import assert from 'assert';
 import { EventEmitter } from 'events';
-import { streamExecCommand, shQuote, buildRemoteCommand } from '../src/stream-exec.js';
+import {
+  streamExecCommand, shQuote, buildRemoteCommand, wrapWithTimeout,
+} from '../src/stream-exec.js';
+import { unwrapTimeout } from './util-timeout-unwrap.js';
 
 let passed = 0;
 let failed = 0;
@@ -236,6 +239,91 @@ await test('debounce: pending chunk flushed on close before resolve', async () =
   assert.strictEqual(chunks[0].text, 'late-arriving');
 });
 
+// --- streamExecCommand applies the OS timeout wrapper -------------------
+await test('streamExecCommand: non-raw timed command gets the OS timeout wrapper', async () => {
+  const client = new FakeClient();
+  const p = streamExecCommand(client, 'make all', { timeoutMs: 5000, debounceMs: 5 });
+  await sleep(5);
+  client.streams[0].finish(0);
+  await p;
+  // Wrapped form: timeout bounds `sh -c '<cmd>'`, NOT the bare cmd.
+  assert(/^timeout -k \d+ \d+ sh -c /.test(client.lastCommand), 'timeout -> sh -c wrapper');
+  assert.strictEqual(unwrapTimeout(client.lastCommand), 'make all', 'inner command intact');
+});
+
+await test('streamExecCommand: raw:true command is NOT wrapped', async () => {
+  const client = new FakeClient();
+  const p = streamExecCommand(client, 'make all', {
+    timeoutMs: 5000, debounceMs: 5, raw: true,
+  });
+  await sleep(5);
+  client.streams[0].finish(0);
+  await p;
+  assert.strictEqual(client.lastCommand, 'make all', 'raw command sent verbatim');
+});
+
+await test('streamExecCommand: no timeout -> not wrapped even when non-raw', async () => {
+  const client = new FakeClient();
+  const p = streamExecCommand(client, 'echo hi', { debounceMs: 5 });
+  await sleep(5);
+  client.streams[0].finish(0);
+  await p;
+  assert.strictEqual(client.lastCommand, 'echo hi', 'untimed command not wrapped');
+});
+
+await test('streamExecCommand: timeout wrapper composes with the cwd prefix', async () => {
+  const client = new FakeClient();
+  const p = streamExecCommand(client, 'ls', { cwd: '/srv/app', timeoutMs: 3000, debounceMs: 5 });
+  await sleep(5);
+  client.streams[0].finish(0);
+  await p;
+  // timeout outermost; the cd && cmd runs INSIDE `sh -c` so the shell -- not
+  // timeout -- parses `&&`. Unwrapped, the inner command is the cd prefix.
+  assert(/^timeout -k \d+ \d+ sh -c /.test(client.lastCommand), 'timeout -> sh -c outermost');
+  assert.strictEqual(unwrapTimeout(client.lastCommand), "cd '/srv/app' && ls", 'cd prefix runs in shell');
+});
+
+// --- wrapWithTimeout -----------------------------------------------------
+await test('wrapWithTimeout: wraps via sh -c so a shell parses the command', () => {
+  const w = wrapWithTimeout('make build', 30000);
+  // 30000 ms -> 30 s wall. timeout runs `sh -c '<cmd>'`, never the bare cmd.
+  assert(/^timeout -k \d+ \d+ sh -c /.test(w), 'timeout -k <kill> <wall> sh -c prefix');
+  assert.strictEqual(unwrapTimeout(w), 'make build', 'inner command recoverable');
+});
+
+await test('wrapWithTimeout: shell metachars survive into the sh -c argument', () => {
+  // The whole reason for sh -c: &&, |, env-prefix, set -e must reach a shell.
+  const cmd = "SSH_MGR_DB_PASS='p' mysql -e 'show databases' | head";
+  const w = wrapWithTimeout(cmd, 5000);
+  assert(/^timeout -k \d+ \d+ sh -c /.test(w), 'sh -c wrapper');
+  assert.strictEqual(unwrapTimeout(w), cmd, 'env-prefix + pipe preserved verbatim');
+});
+
+await test('wrapWithTimeout: -k grace lets the OS escalate to KILL itself', () => {
+  const w = wrapWithTimeout('cmd', 10000);
+  // `timeout -k N` sends KILL N seconds after the initial TERM.
+  const m = w.match(/^timeout -k (\d+) (\d+) sh -c /);
+  assert(m, 'wrapped');
+  assert(Number(m[1]) >= 1, 'a non-zero kill grace');
+});
+
+await test('wrapWithTimeout: rounds sub-second timeouts up to at least 1 s', () => {
+  const w = wrapWithTimeout('cmd', 200);
+  const m = w.match(/^timeout -k \d+ (\d+) sh -c /);
+  assert(m, 'wrapped');
+  assert(Number(m[1]) >= 1, 'wall is at least 1 s -- timeout rejects 0');
+});
+
+await test('wrapWithTimeout: no timeout (0 / undefined) returns the command unchanged', () => {
+  assert.strictEqual(wrapWithTimeout('cmd', 0), 'cmd');
+  assert.strictEqual(wrapWithTimeout('cmd', undefined), 'cmd');
+  assert.strictEqual(wrapWithTimeout('cmd'), 'cmd');
+});
+
+await test('wrapWithTimeout: empty command returned unchanged (nothing to wrap)', () => {
+  assert.strictEqual(wrapWithTimeout('', 5000), '');
+});
+
 // --- Abort semantics -----------------------------------------------------
 await test('abort: already-aborted signal rejects immediately', async () => {
   const ac = new AbortController();
@@ -293,6 +381,51 @@ await test('timeout: command finishes before deadline -> resolves normally', asy
   assert.strictEqual(r.code, 0);
   // Clean up any timer leak
   await sleep(10);
+});
+
+await test('timeout: escalates to KILL when the stream ignores INT', async () => {
+  const client = new FakeClient();
+  const p = streamExecCommand(client, 'sleep 9999', {
+    timeoutMs: 30, debounceMs: 5, killGraceMs: 20,
+  });
+  await sleep(5);
+  const s = client.streams[0];
+  // The fake stream's signal() records signals but its close() is NOT
+  // auto-driven here, so the stream stays "open" past the grace window.
+  await assert.rejects(() => p, /timeout after 30ms/);
+  assert(s.signals.includes('INT'), 'INT sent first');
+  // Wait out the kill grace; KILL must follow.
+  await sleep(40);
+  assert(s.signals.includes('KILL'), 'KILL escalation after the grace window');
+  assert(s.signals.indexOf('INT') < s.signals.indexOf('KILL'), 'INT precedes KILL');
+});
+
+await test('timeout: a stream that closes within grace is never sent KILL', async () => {
+  const client = new FakeClient();
+  const p = streamExecCommand(client, 'sleep 1', {
+    timeoutMs: 20, debounceMs: 5, killGraceMs: 60,
+  });
+  await sleep(5);
+  const s = client.streams[0];
+  await assert.rejects(() => p, /timeout after 20ms/);
+  // Stream closes promptly after the INT (well within the 60ms grace).
+  s.finish(0, 'INT');
+  await sleep(80);
+  assert(s.signals.includes('INT'), 'INT was sent');
+  assert(!s.signals.includes('KILL'), 'no KILL -- stream closed within grace');
+});
+
+await test('timeout: a normal completion arms no kill timer', async () => {
+  const client = new FakeClient();
+  const p = streamExecCommand(client, 'ok', {
+    timeoutMs: 500, debounceMs: 5, killGraceMs: 20,
+  });
+  await sleep(5);
+  client.streams[0].finish(0);
+  const r = await p;
+  await sleep(40);
+  assert.strictEqual(r.code, 0);
+  assert(!client.streams[0].signals.includes('KILL'), 'no KILL on a clean finish');
 });
 
 // --- Error surfaces ------------------------------------------------------

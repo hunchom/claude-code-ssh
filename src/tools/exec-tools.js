@@ -34,6 +34,7 @@ export async function handleSshExecute({ getConnection, args }) {
     maxLen = DEFAULT_MAX_LEN,
     format = 'markdown',
     preview: isPreview = false,
+    raw = false,
     onChunk,
     abortSignal,
   } = args;
@@ -61,7 +62,7 @@ export async function handleSshExecute({ getConnection, args }) {
   let result, error;
   try {
     result = await streamExecCommand(client, command, {
-      cwd, timeoutMs: timeout, debounceMs: DEFAULT_DEBOUNCE_MS, onChunk, abortSignal,
+      cwd, timeoutMs: timeout, debounceMs: DEFAULT_DEBOUNCE_MS, raw, onChunk, abortSignal,
     });
   } catch (e) { error = e; }
 
@@ -98,6 +99,7 @@ export async function handleSshExecuteSudo({ getConnection, getServerConfig, arg
     maxLen = DEFAULT_MAX_LEN,
     format = 'markdown',
     preview: isPreview = false,
+    raw = false,
     abortSignal,
   } = args;
 
@@ -140,6 +142,7 @@ export async function handleSshExecuteSudo({ getConnection, getServerConfig, arg
       cwd,
       timeoutMs: timeout,
       debounceMs: DEFAULT_DEBOUNCE_MS,
+      raw,
       // Write password + newline to stream.stdin. `sudo -S` consumes it.
       // When pw is empty/undefined, send an empty line so passwordless sudo still works.
       stdin: (pw || '') + '\n',
@@ -173,10 +176,16 @@ export async function handleSshExecuteGroup({ getConnection, resolveGroup, args 
     format = 'markdown',
     stopOnError = false,
     preview: isPreview = false,
+    raw = false,
     abortSignal,
   } = args;
 
-  const servers = await resolveGroup(group);
+  // resolveGroup yields either a bare array or the production object
+  // { name, servers:[...] } (or null). Accept both, normalize to array.
+  const resolved = await resolveGroup(group);
+  const servers = Array.isArray(resolved)
+    ? resolved
+    : (resolved && Array.isArray(resolved.servers) ? resolved.servers : null);
   if (!servers || servers.length === 0) {
     return toMcp(fail('ssh_execute_group', `group "${group}" has no servers`), { format });
   }
@@ -211,7 +220,7 @@ export async function handleSshExecuteGroup({ getConnection, resolveGroup, args 
     }
     try {
       const r = await streamExecCommand(client, command, {
-        cwd, timeoutMs: timeout, debounceMs: DEFAULT_DEBOUNCE_MS, abortSignal,
+        cwd, timeoutMs: timeout, debounceMs: DEFAULT_DEBOUNCE_MS, raw, abortSignal,
       });
       const formatted = formatExecResult({
         server: srv, command, cwd,

