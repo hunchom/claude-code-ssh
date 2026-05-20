@@ -46,9 +46,12 @@ export function buildScriptCommand(commands, { isolate = false } = {}) {
       throw new Error(`ssh_run script: command ${i} must be a string`);
     }
     // isolate => run the segment in a child shell; $? is the child's exit.
+    // non-isolate: brace group with the cmd on its own line so a trailing
+    // `# comment` cannot eat the close. `}` after a newline is valid; a `;`
+    // there is NOT (`bash: syntax error near ';'`), so no `;` before `}`.
     const body = isolate
       ? `sh -c ${shQuote(c)}`
-      : `{ ${c}\n; }`;
+      : `{ ${c}\n}`;
     parts.push(`${body}; printf '\\n##SEG-${nonce} %d %d##\\n' ${i} $?`);
   });
   return { command: parts.join('\n'), nonce };

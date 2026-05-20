@@ -4,6 +4,7 @@
  * Run: node tests/test-script-runner.js
  */
 import assert from 'assert';
+import { execSync } from 'child_process';
 import {
   buildScriptCommand,
   parseScriptSegments,
@@ -148,6 +149,108 @@ test('parseScriptSegments: a forged ##SEG line in stdout does NOT corrupt the pa
     segs[0].stdout.includes(`##SEG-${wrong} 0 0##`),
     'forged line stays as plain stdout',
   );
+});
+
+// --- integration: generated command must be valid shell -----------------
+// The remote side runs `bash -c <command>`. Unit tests above only assert the
+// string shape; this runs it through a real bash so a syntax error in the
+// segment wrapper cannot ship green. Skipped on win32 (remote shell is bash).
+test('buildScriptCommand: generated command executes in bash and parses to segments', () => {
+  if (process.platform === 'win32') return;
+  const cmds = ['echo alpha', 'false', 'echo bravo'];
+  const { command, nonce } = buildScriptCommand(cmds);
+  let out;
+  try {
+    out = execSync(command, { shell: '/bin/bash', encoding: 'utf8' });
+  } catch (e) {
+    // syntax error => non-zero exit, empty stdout => 0 segments below
+    out = e.stdout != null ? String(e.stdout) : '';
+  }
+  const segs = parseScriptSegments(out, nonce, cmds);
+  assert.strictEqual(segs.length, 3, 'all three segments ran and parsed');
+  assert.strictEqual(segs[0].stdout.trim(), 'alpha');
+  assert.strictEqual(segs[0].exitCode, 0);
+  assert.strictEqual(segs[1].exitCode, 1, 'false exit captured, chain not aborted');
+  assert.strictEqual(segs[2].stdout.trim(), 'bravo');
+  assert.strictEqual(segs[2].exitCode, 0);
+});
+
+test('buildScriptCommand: shared state (cd carries) executes in bash', () => {
+  if (process.platform === 'win32') return;
+  const cmds = ['cd /tmp', 'pwd'];
+  const { command, nonce } = buildScriptCommand(cmds);
+  let out;
+  try {
+    out = execSync(command, { shell: '/bin/bash', encoding: 'utf8' });
+  } catch (e) {
+    out = e.stdout != null ? String(e.stdout) : '';
+  }
+  const segs = parseScriptSegments(out, nonce, cmds);
+  assert.strictEqual(segs.length, 2, 'both segments parsed');
+  assert(segs[1].stdout.includes('tmp'), 'cd carried into the next segment');
+});
+
+// --- integration: robustness battery (real bash) ------------------------
+// Generate via buildScriptCommand, run through bash exactly as the remote
+// does, parse back. Catches any shell-syntax fragility in the wrapper.
+function runScript(cmds, opts) {
+  const { command, nonce } = buildScriptCommand(cmds, opts);
+  let out;
+  try {
+    out = execSync(command, { shell: '/bin/bash', encoding: 'utf8' });
+  } catch (e) {
+    out = e.stdout != null ? String(e.stdout) : '';
+  }
+  return parseScriptSegments(out, nonce, cmds);
+}
+
+test('script robustness: a trailing # comment does not eat the segment close', () => {
+  if (process.platform === 'win32') return;
+  const segs = runScript(['echo visible # trailing comment', 'echo next']);
+  assert.strictEqual(segs.length, 2, 'comment did not break the wrapper');
+  assert.strictEqual(segs[0].stdout.trim(), 'visible');
+  assert.strictEqual(segs[1].stdout.trim(), 'next');
+});
+
+test('script robustness: a multi-line command (embedded newlines) runs as one segment', () => {
+  if (process.platform === 'win32') return;
+  const segs = runScript(['echo line1\necho line2', 'echo tail']);
+  assert.strictEqual(segs.length, 2);
+  assert.strictEqual(segs[0].stdout.trim(), 'line1\nline2');
+  assert.strictEqual(segs[1].stdout.trim(), 'tail');
+});
+
+test('script robustness: ; and } in command output are not mistaken for sentinels', () => {
+  if (process.platform === 'win32') return;
+  const segs = runScript(['printf "%s\\n" "a;b}c{d"']);
+  assert.strictEqual(segs.length, 1);
+  assert.strictEqual(segs[0].stdout.trim(), 'a;b}c{d');
+  assert.strictEqual(segs[0].exitCode, 0);
+});
+
+test('script robustness: exact non-zero exit codes are captured, chain continues', () => {
+  if (process.platform === 'win32') return;
+  const segs = runScript(['(exit 3)', 'nosuchcmd_zzz', 'echo recovered']);
+  assert.strictEqual(segs.length, 3);
+  assert.strictEqual(segs[0].exitCode, 3, 'explicit exit 3 captured');
+  assert.strictEqual(segs[1].exitCode, 127, 'command-not-found is 127');
+  assert.strictEqual(segs[2].stdout.trim(), 'recovered', 'chain survived two failures');
+  assert.strictEqual(segs[2].exitCode, 0);
+});
+
+test('script robustness: pipelines and shell vars carry across segments', () => {
+  if (process.platform === 'win32') return;
+  const segs = runScript(['echo hello | tr a-z A-Z', 'FOO=bar', 'echo $FOO']);
+  assert.strictEqual(segs.length, 3);
+  assert.strictEqual(segs[0].stdout.trim(), 'HELLO', 'pipeline works');
+  assert.strictEqual(segs[2].stdout.trim(), 'bar', 'var set in seg 1 visible in seg 2');
+});
+
+test('script robustness: isolate:true runs valid shell and does NOT share state', () => {
+  if (process.platform === 'win32') return;
+  const segs = runScript(['cd /tmp', 'pwd'], { isolate: true });
+  assert.strictEqual(segs.length, 2, 'isolated segments parse');
+  assert(!segs[1].stdout.includes('/tmp'), 'cd did not carry across isolated shells');
 });
 
 // --- Summary -------------------------------------------------------------
